@@ -1,17 +1,24 @@
 # app.py
-import base64
+# ──────────────────────────────────────────────────────────────────────────────
+# SelektIA – Evaluación de CVs (sin IA externa)
+# - Colores y estilos corporativos
+# - Análisis automático cuando se suben archivos
+# - Gráfico con colores: base #E9F3FF y ≥60% en #33FFAC
+# - Visor de PDF compacto y nítido (zoom configurable)
+# ──────────────────────────────────────────────────────────────────────────────
+
 import io
+import base64
 from pathlib import Path
 
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
-import streamlit.components.v1 as components
 from PyPDF2 import PdfReader
 
-# =========================
-# Paleta / tema (colores)
-# =========================
+# =============================================================================
+# Colores / tema
+# =============================================================================
 PRIMARY_GREEN = "#00CD78"
 SIDEBAR_BG = "#10172A"
 BOX_DARK = "#132840"
@@ -22,13 +29,22 @@ BOX_LIGHT = "#F1F7FD"
 BOX_LIGHT_B = "#E3EDF6"
 TITLE_DARK = "#142433"
 
-# Colores del gráfico
+# Colores del gráfico solicitados
 BAR_BASE = "#E9F3FF"
-BAR_HIGHLIGHT = "#33FFAC"  # >= 60
+BAR_HIGHLIGHT = "#33FFAC"  # ≥60%
 
-# ==========
-#   ESTILO
-# ==========
+# =============================================================================
+# Configuración de página
+# =============================================================================
+st.set_page_config(
+    page_title="SelektIA – Resultados de evaluación",
+    page_icon="🧠",
+    layout="wide",
+)
+
+# =============================================================================
+# CSS
+# =============================================================================
 CSS = f"""
 :root {{
   --green: {PRIMARY_GREEN};
@@ -41,256 +57,329 @@ CSS = f"""
   --box-light-border: {BOX_LIGHT_B};
   --title-dark: {TITLE_DARK};
 }}
-html, body, [data-testid="stAppViewContainer"] {{ background: var(--main-bg) !important; }}
-.block-container {{ background: transparent !important; }}
 
-/* Sidebar */
-[data-testid="stSidebar"] {{ background: var(--sidebar-bg) !important; color: var(--text) !important; }}
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] h4,[data-testid="stSidebar"] h5,[data-testid="stSidebar"] h6,
-[data-testid="stSidebar"] .stMarkdown p strong {{ color: var(--green) !important; }}
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] span {{ color: var(--text) !important; }}
-
-/* Inputs sidebar */
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
-[data-testid="stSidebar"] [data-baseweb="select"] {{
-  background: var(--box) !important; color: var(--text) !important;
-  border: 1.5px solid var(--box) !important; border-radius: 12px !important; box-shadow: none !important;
+html, body, [data-testid="stAppViewContainer"] {{
+  background: var(--main-bg) !important;
 }}
+.block-container {{
+  background: transparent !important;
+  padding-top: 1rem !important;
+}}
+
+[data-testid="stSidebar"] {{
+  background: var(--sidebar-bg) !important;
+  color: var(--text) !important;
+}}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 {{
+  color: var(--green) !important;
+}}
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span {{
+  color: var(--text) !important;
+}}
+
+/* Inputs del sidebar */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
+[data-testid="stSidebar"] [data-baseweb="select"],
 [data-testid="stSidebar"] [data-testid="stTextInput"] input,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
-  background: var(--box) !important; color: var(--text) !important;
-  border: 1.5px solid var(--box) !important; border-radius: 12px !important; box-shadow: none !important;
+  background: var(--box) !important;
+  color: var(--text) !important;
+  border: 1.5px solid var(--box) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
 }}
 [data-testid="stSidebar"] [data-testid="stTextInput"] input:hover,
 [data-testid="stSidebar"] [data-testid="stTextInput"] input:focus,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea:hover,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea:focus,
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{ border-color: var(--box-hover) !important; }}
-
-/* Dropzone */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
+  border-color: var(--box-hover) !important;
+}}
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
-  background: var(--box) !important; border: 1.5px dashed var(--box) !important; border-radius: 14px !important;
+  background: var(--box) !important;
+  border: 1.5px dashed var(--box) !important;
+  border-radius: 14px !important;
 }}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{ color: var(--text) !important; }}
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
+  color: var(--text) !important;
+}}
 [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
-  background: var(--box) !important; border: 1px solid var(--box) !important; color: var(--text) !important;
+  background: var(--box) !important;
+  border: 1px solid var(--box) !important;
+  color: var(--text) !important;
 }}
 
-/* Botón */
+/* Botones */
 .stButton > button {{
-  background: var(--green) !important; color: #082017 !important;
-  border-radius: 10px !important; border: none !important; padding: .45rem .9rem !important; font-weight: 600 !important;
+  background: var(--green) !important;
+  color: #082017 !important;
+  border-radius: 10px !important;
+  border: none !important;
+  padding: .45rem .9rem !important;
+  font-weight: 600 !important;
 }}
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* Títulos cuerpo */
+/* Títulos en el cuerpo */
 h1, h2, h3 {{ color: var(--title-dark); }}
 h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Inputs cuerpo */
+/* Controles del área principal */
 .block-container [data-testid="stSelectbox"] > div > div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
 .block-container [data-testid="stTextArea"] textarea {{
-  background: var(--box-light) !important; color: var(--title-dark) !important;
-  border: 1.5px solid var(--box-light-border) !important; border-radius: 10px !important;
+  background: var(--box-light) !important;
+  color: var(--title-dark) !important;
+  border: 1.5px solid var(--box-light-border) !important;
+  border-radius: 10px !important;
 }}
 
-/* Tabla */
-.block-container table {{ background: #fff !important; border: 1px solid var(--box-light-border) !important; border-radius: 8px !important; }}
-.block-container thead th {{ background: var(--box-light) !important; color: var(--title-dark) !important; }}
+/* Tabla clara */
+.block-container table {{
+  background: #fff !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-radius: 8px !important;
+}}
+.block-container thead th {{
+  background: var(--box-light) !important;
+  color: var(--title-dark) !important;
+}}
 
-/* Expander */
+/* Expander claro */
 [data-testid="stExpander"] {{
-  background: #fff !important; border: 1px solid var(--box-light-border) !important; border-radius: 12px !important;
+  background: #fff !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-radius: 12px !important;
 }}
-[data-testid="stExpander"] [data-testid="stExpanderHeader"] p {{ color: var(--title-dark) !important; }}
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] p {{
+  color: var(--title-dark) !important;
+}}
 
-/* Selectores visor PDF */
-#pdf_candidate, #pdf_candidate_alt {{
-  background: var(--box-light) !important; border: 1.5px solid var(--box-light-border) !important; color: var(--title-dark) !important; border-radius: 10px !important;
+/* Select de visor */
+#pdf_candidate {{
+  background: var(--box-light) !important;
+  border: 1.5px solid var(--box-light-border) !important;
+  color: var(--title-dark) !important;
+  border-radius: 10px !important;
 }}
 """
-
-st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-# ======================
-# utilidades de lectura
-# ======================
-def extract_text_from_file(uploaded_file) -> str:
-    """Extrae texto de un PDF (PyPDF2) o un TXT sin perder los bytes en session_state."""
+# =============================================================================
+# Utilidades
+# =============================================================================
+def extract_text(uploaded_file) -> str:
+    """Extrae texto de PDF o TXT."""
     try:
-        data = uploaded_file.getvalue()
-        if Path(uploaded_file.name).suffix.lower() == ".pdf":
-            reader = PdfReader(io.BytesIO(data))
-            txt = ""
-            for p in reader.pages:
-                txt += p.extract_text() or ""
-            return txt
-        return data.decode("utf-8", errors="ignore")
+        suffix = Path(uploaded_file.name).suffix.lower()
+        content = uploaded_file.read()
+        uploaded_file.seek(0)
+        if suffix == ".pdf":
+            reader = PdfReader(io.BytesIO(content))
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() or ""
+            return text
+        else:
+            return content.decode("utf-8", errors="ignore")
     except Exception as e:
         st.error(f"Error al leer '{uploaded_file.name}': {e}")
         return ""
 
-def analyze_locally(jd: str, kw_text: str, files):
-    """Puntaje simple por coincidencia de palabras clave."""
-    cands = []
-    kw = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
-    total = max(len(kw), 1)
+def score_and_reasons(text: str, keywords: list[str]) -> tuple[int, str]:
+    """Puntaje simple por coincidencias de keywords + razones."""
+    if not text:
+        return 0, "Sin texto extraído."
+    text_low = text.lower()
+    kws = [k.strip().lower() for k in keywords if k.strip()]
+    hits = [k for k in kws if k in text_low]
+    n_hits = len(hits)
+    n_total = max(len(kws), 1)
+    # Score 0..100
+    score = round(100 * n_hits / n_total)
+    reasons = f"{n_hits}/{n_total} keywords encontradas — Coincidencias: {', '.join(hits) if hits else '—'}"
+    return score, reasons
+
+def analyze(files, jd_text, kw_text):
+    """Devuelve DataFrame + caché de bytes para visor."""
+    data = []
+    cache = {}  # name -> dict(bytes,is_pdf)
+    kw_list = [k.strip() for k in kw_text.split(",") if k.strip()]
+
     for f in files:
-        raw = f.getvalue()
-        text = extract_text_from_file(f).lower()
-        matched = [k for k in kw if k in text]
-        score = int(round(100 * len(matched) / total))
-        reasons = f"{len(matched)}/{total} keywords encontradas — Coincidencias: {', '.join(matched[:12]) if matched else 'sin coincidencias'}"
-        cands.append({
-            "Nombre": f.name,
+        raw = f.read()
+        f.seek(0)
+        is_pdf = Path(f.name).suffix.lower() == ".pdf"
+        txt = extract_text(f)
+        score, reasons = score_and_reasons(txt, kw_list)
+        data.append({
+            "Name": f.name,
             "Score": score,
-            "Razones": reasons,
-            "PDF_text": len(text),
-            "_bytes": raw,
-            "_is_pdf": Path(f.name).suffix.lower() == ".pdf",
+            "Reasons": reasons,
+            "PDF_text": len(txt),
         })
-    return cands
+        cache[f.name] = {"_bytes": raw, "_is_pdf": is_pdf}
 
-# --------- Visor PDF con pdf.js (sin iframes, sin data URI) ----------
-def show_pdf_pdfjs(b64: str, height: int = 750):
-    """
-    Renderiza todas las páginas con pdf.js en <canvas>.
-    Carga pdf.js desde cdnjs (solo los scripts; el PDF viene en memoria).
-    """
-    html = f"""
-    <div id="pdf_container" style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; background:#fff; padding:8px; max-height:{height}px; overflow:auto;">
-      <div id="status" style="font:14px/1.4 sans-serif;color:#444;">Cargando PDF…</div>
-    </div>
+    df = pd.DataFrame(data) if data else pd.DataFrame(columns=["Name","Score","Reasons","PDF_text"])
+    return df, cache
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-      (function() {{
-        // Decodifica base64 a bytes
-        const b64 = "{b64}";
-        function b64ToUint8(b64) {{
-          const bin = atob(b64);
-          const len = bin.length;
-          const bytes = new Uint8Array(len);
-          for (let i=0; i<len; i++) bytes[i] = bin.charCodeAt(i);
-          return bytes;
-        }}
-        const data = b64ToUint8(b64);
-
-        const container = document.getElementById("pdf_container");
-        const status = document.getElementById("status");
-
-        // Configura el worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
-        // Carga documento desde bytes
-        const task = pdfjsLib.getDocument({{ data }});
-        task.promise.then(async function(pdf) {{
-          status.textContent = "Páginas: " + pdf.numPages;
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
-            const page = await pdf.getPage(pageNum);
-
-            // Escala en función del ancho disponible
-            const viewport = page.getViewport({{ scale: 1.5 }});
-            const scale = Math.min(container.clientWidth / viewport.width, 1.5);
-            const vp = page.getViewport({{ scale }});
-
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            canvas.width = vp.width;
-            canvas.height = vp.height;
-            canvas.style.width = "100%";
-            canvas.style.height = "auto";
-            canvas.style.display = "block";
-            canvas.style.margin = "0 auto 12px auto";
-            container.appendChild(canvas);
-
-            await page.render({{ canvasContext: ctx, viewport: vp }}).promise;
-          }}
-          status.remove();
-        }}).catch(function(err) {{
-          status.textContent = "No se pudo mostrar el PDF embebido. " + err;
-        }});
-      }})();
-    </script>
-    """
-    components.html(html, height=height + 20, scrolling=True)
-
-# ======================
-#        SIDEBAR
-# ======================
+# =============================================================================
+# Sidebar (oscuro)
+# =============================================================================
 with st.sidebar:
-    st.image("assets/logo-wayki.png", width=170)
+    st.image("assets/logo-wayki.png", use_column_width=True)
+
     st.markdown("### Definición del puesto")
     puesto = st.selectbox(
         "Puesto",
-        ["Enfermera/o Asistencial", "Tecnólogo/a Médico", "Recepcionista de Admisión", "Médico/a General", "Químico/a Farmacéutico/a"],
+        ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
         index=0,
         key="puesto",
     )
-    st.markdown("### Descripción del puesto (texto libre)")
-    jd_text = st.text_area("Describe objetivo, responsabilidades y protocolos.", height=120, key="jd", label_visibility="collapsed")
 
-    st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
+    st.markdown("### Descripción del puesto (texto libre)")
+    jd_text = st.text_area(
+        "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
+        height=120,
+        label_visibility="collapsed",
+        key="jd",
+    )
+
+    st.markdown("### Palabras clave del perfil *(ajústalas si es necesario)*")
     kw_text = st.text_area(
-        "Ej.: HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
+        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         height=110,
-        key="kw",
         label_visibility="collapsed",
+        key="kw",
     )
 
     st.markdown("### Subir CVs (PDF o TXT)")
-    files = st.file_uploader("Arrastra y suelta (PDF/TXT)", type=["pdf", "txt"], accept_multiple_files=True, label_visibility="collapsed")
+    files = st.file_uploader(
+        "Drag and drop files here",
+        type=["pdf", "txt"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+        key="files",
+    )
 
-    st.divider()
     if st.button("Limpiar Lista", use_container_width=True):
-        st.session_state.pop("candidates", None)
+        st.session_state.pop("df", None)
+        st.session_state.pop("blob_cache", None)
         st.rerun()
 
-# ======================
-#      CUERPO (UI)
-# ======================
+# =============================================================================
+# Área principal
+# =============================================================================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Resultados de evaluación</span>", unsafe_allow_html=True)
+st.info("Define el puesto/JD, edita palabras clave y sube CVs (PDF o TXT) para evaluar.")
 
-# Análisis automático
-if files and (jd_text.strip() or kw_text.strip()):
-    st.session_state.candidates = analyze_locally(jd_text, kw_text, files)
+# Análisis automático cuando se suben archivos
+if files:
+    df, blob_cache = analyze(files, jd_text, kw_text)
+    st.session_state["df"] = df
+    st.session_state["blob_cache"] = blob_cache
 
-if "candidates" not in st.session_state or not st.session_state.candidates:
-    st.info("Define el puesto, ajusta las palabras clave y sube 1 o más CVs (PDF/TXT). El análisis se hace automáticamente.")
+if "df" not in st.session_state or st.session_state["df"].empty:
+    st.warning("Sube algunos CVs para ver el ranking, el gráfico y el visor.")
+    st.stop()
+
+df = st.session_state["df"].copy()
+blob_cache = st.session_state["blob_cache"]
+
+# ===================== Tabla Ranking =====================
+st.markdown("### Ranking de candidatos")
+show = df[["Name", "Score", "Reasons", "PDF_text"]].rename(
+    columns={"Name": "Nombre", "Score": "Score", "Reasons": "Razones", "PDF_text": "PDF_text"}
+)
+st.dataframe(
+    show,
+    use_container_width=True,
+    hide_index=True
+)
+
+# ===================== Gráfico =====================
+st.markdown("### Comparación de puntajes")
+
+# Construir colores barra a barra
+bar_colors = [BAR_HIGHLIGHT if s >= 60 else BAR_BASE for s in df["Score"].tolist()]
+
+fig = px.bar(
+    df,
+    x="Name",
+    y="Score",
+)
+fig.update_traces(marker_color=bar_colors, hovertemplate="<b>%{x}</b><br>Score: %{y}")
+fig.update_layout(
+    title=None,
+    plot_bgcolor="#FFFFFF",
+    paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(color=TITLE_DARK),
+    xaxis_title=None,
+    yaxis_title="Score",
+    margin=dict(l=10, r=10, t=10, b=10),
+)
+st.plotly_chart(fig, use_container_width=True)
+
+# ===================== Visor compactado de PDF/TXT =====================
+st.markdown("### Visor de CV (PDF/TXT)  <sup>↪</sup>", unsafe_allow_html=True)
+
+all_names = df["Name"].tolist()
+selected_name = st.selectbox("Elige un candidato", all_names, index=0, key="pdf_candidate")
+
+candidate_meta = blob_cache.get(selected_name, {})
+is_pdf = candidate_meta.get("_is_pdf", False)
+blob = candidate_meta.get("_bytes", b"")
+
+PDF_BORDER = BOX_LIGHT_B
+VIEW_HEIGHT = 520  # altura más compacta
+# Opciones de zoom mayor para una percepción de nitidez sin ocupar todo el alto
+PDF_ZOOM = 125  # 125%
+
+if is_pdf and blob:
+    b64 = base64.b64encode(blob).decode("utf-8")
+    # Intentamos forzar un zoom cómodo y vista adaptada al ancho
+    pdf_src = f"data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH&toolbar=0&navpanes=0"
+    st.markdown(
+        f"""
+        <div style="border:1px solid {PDF_BORDER}; border-radius:12px; overflow:hidden; background:#fff;">
+          <iframe src="{pdf_src}"
+                  style="width:100%; height:{VIEW_HEIGHT}px; border:0;"
+                  title="Visor PDF"></iframe>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.download_button(
+        f"Descargar {selected_name}",
+        data=blob,
+        file_name=selected_name,
+        mime="application/pdf",
+        use_container_width=False,
+    )
 else:
-    df = pd.DataFrame(st.session_state.candidates)
-    df_sorted = df.sort_values("Score", ascending=False)
-
-    st.markdown("### Ranking de candidatos")
-    st.dataframe(df_sorted[["Nombre", "Score", "Razones", "PDF_text"]], use_container_width=True, height=240)
-
-    st.markdown("### Comparación de puntajes")
-    colors = [BAR_HIGHLIGHT if s >= 60 else BAR_BASE for s in df_sorted["Score"]]
-    fig = px.bar(df_sorted, x="Nombre", y="Score", title="")
-    fig.update_traces(marker_color=colors, marker_line_color="#CBE2FF", marker_line_width=1.5)
-    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("### Visor de CV (PDF/TXT)  ↪️")
-    nombres = df_sorted["Nombre"].tolist()
-    selected_name = st.selectbox("Elige:", nombres, key="pdf_candidate", label_visibility="collapsed")
-
-    cand = next(c for c in st.session_state.candidates if c["Nombre"] == selected_name)
-    if cand["_is_pdf"] and cand["_bytes"]:
-        b64 = base64.b64encode(cand["_bytes"]).decode("utf-8")
-        # Visor con pdf.js (render a canvases)
-        show_pdf_pdfjs(b64, height=750)
-        # Botón de descarga
-        st.download_button(f"Descargar {selected_name}", data=cand["_bytes"], file_name=selected_name, mime="application/pdf")
-    else:
-        st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
+    # Fallback para TXT u otros
+    if blob:
         try:
-            txt = cand["_bytes"].decode("utf-8", errors="ignore")
+            txt = blob.decode("utf-8", errors="ignore")
         except Exception:
-            txt = "(No se pudo decodificar el contenido del TXT)"
-        st.text_area("Contenido del TXT:", value=txt, height=600, disabled=True)
+            txt = "(No se pudo decodificar el archivo como texto)."
+    else:
+        txt = "(No hay datos del archivo en memoria)."
+
+    st.text_area("Contenido del archivo:", value=txt, height=VIEW_HEIGHT, disabled=True)
+    st.download_button(
+        f"Descargar {selected_name}",
+        data=blob,
+        file_name=selected_name,
+        mime="text/plain",
+        use_container_width=False,
+    )
