@@ -12,29 +12,41 @@ from PyPDF2 import PdfReader  # Para extraer texto de PDFs
 # Variables de tema/colores
 # =========================
 PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG = "#10172A"        # fondo columna izquierda
-BOX_DARK = "#132840"          # fondo y borde de boxes del sidebar
-BOX_DARK_HOV = "#193355"      # borde en hover/focus del sidebar
-TEXT_LIGHT = "#FFFFFF"        # texto blanco
-MAIN_BG = "#F7FBFF"           # fondo del cuerpo (claro)
-BOX_LIGHT = "#F1F7FD"         # (lo dejamos para compatibilidad)
-BOX_LIGHT_B = "#E3EDF6"       # borde claro de inputs principales
-TITLE_DARK = "#142433"        # texto títulos principales
+
+# Sidebar oscuro (se mantiene)
+SIDEBAR_BG = "#10172A"
+BOX_DARK = "#132840"
+BOX_DARK_HOV = "#193355"
+TEXT_LIGHT = "#FFFFFF"
+
+# Panel derecho (nuevo esquema claro azul – como tu captura)
+MAIN_BG = "#F7FBFF"          # fondo general
+TITLE_DARK = "#0F2B46"       # títulos en azul profundo
+PANEL_STRIP = "#E7F0FF"      # franja/avisos celeste
+PANEL_STRIP_BORDER = "#BFD6FF"  # borde celeste
+TABLE_HEAD_BG = "#EAF3FF"    # cabecera tabla celeste claro
+TABLE_BORDER = "#D7E6FF"     # borde suave
+SURFACE_LIGHT = "#FFFFFF"    # tarjetas/fondos blancos
 
 # ==========
 #   ESTILO
 # ==========
 CSS = f"""
 :root {{
-  --green: {PRIMARY_GREEN};        /* #00CD78 */
-  --sidebar-bg: {SIDEBAR_BG};      /* #10172A */
-  --box: {BOX_DARK};               /* #132840 */
-  --box-hover: {BOX_DARK_HOV};     /* #193355 */
-  --text: {TEXT_LIGHT};            /* #FFFFFF */
-  --main-bg: {MAIN_BG};            /* #F7FBFF */
-  --box-light: #FFFFFF;            /* superficie clara aún más blanca */
-  --box-light-border: {BOX_LIGHT_B};/* #E3EDF6 */
-  --title-dark: {TITLE_DARK};      /* #142433 */
+  --green: {PRIMARY_GREEN};
+  --sidebar-bg: {SIDEBAR_BG};
+  --box: {BOX_DARK};
+  --box-hover: {BOX_DARK_HOV};
+  --text: {TEXT_LIGHT};
+
+  --main-bg: {MAIN_BG};
+  --title-dark: {TITLE_DARK};
+
+  --panel-strip: {PANEL_STRIP};
+  --panel-strip-border: {PANEL_STRIP_BORDER};
+  --table-head-bg: {TABLE_HEAD_BG};
+  --table-border: {TABLE_BORDER};
+  --surface: {SURFACE_LIGHT};
 }}
 
 /* ====== Lienzo general ====== */
@@ -64,7 +76,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] span {{
   color: var(--text) !important;
 }}
-/* Inputs/Select/Area en sidebar */
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
 [data-testid="stSidebar"] [data-baseweb="select"],
 [data-testid="stSidebar"] [data-testid="stTextInput"] input,
@@ -82,7 +93,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
 }}
-/* Dropzone/pills en sidebar */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background: var(--box) !important;
   border: 1.5px dashed var(--box) !important;
@@ -108,21 +118,29 @@ html, body, [data-testid="stAppViewContainer"] {{
 }}
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* ====== TITULOS CUERPO ====== */
-h1, h2, h3 {{ color: var(--title-dark); }}
-h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
+/* ====== Títulos y franja del panel derecho ====== */
+h1, h2, h3 {{ color: var(--title-dark) !important; }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
 
-/* ====== PANEL DERECHO (claro) ======
-   Inputs, selects, multiselects, tabs, expanders, tablas */
+/* Franja informativa bajo el título */
+.section-strip {{
+  background: var(--panel-strip);
+  border: 1px solid var(--panel-strip-border);
+  color: var(--title-dark);
+  padding: .5rem .75rem;
+  border-radius: 8px;
+}}
+
+/* ====== Componentes claros del panel derecho ====== */
 .block-container [data-testid="stTextInput"] input,
 .block-container [data-testid="stTextArea"] textarea,
 .block-container [data-testid="stSelectbox"] > div > div,
 .block-container [data-baseweb="select"],
 .block-container [data-baseweb="textarea"],
 .block-container [data-baseweb="input"] {{
-  background: var(--box-light) !important;
+  background: var(--surface) !important;
   color: var(--title-dark) !important;
-  border: 1.5px solid var(--box-light-border) !important;
+  border: 1.5px solid var(--table-border) !important;
   border-radius: 10px !important;
   box-shadow: none !important;
 }}
@@ -135,56 +153,40 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   border-color: var(--green) !important;
 }}
 
-/* Tabs */
-.stTabs [data-baseweb="tab"] {{
-  background: var(--box-light) !important;
-  color: var(--title-dark) !important;
-  border: 1px solid var(--box-light-border) !important;
-  border-bottom: none !important;
-  margin-right: .25rem !important;
-  border-top-left-radius: 10px !important;
-  border-top-right-radius: 10px !important;
+/* Tabla clara con header celeste */
+.block-container table {{
+  background: var(--surface) !important;
+  border: 1px solid var(--table-border) !important;
+  border-radius: 8px !important;
 }}
-.stTabs [aria-selected="true"] {{
-  border-color: var(--green) !important;
+.block-container thead th {{
+  background: var(--table-head-bg) !important;
   color: var(--title-dark) !important;
-  font-weight: 600 !important;
+  border-bottom: 1px solid var(--table-border) !important;
+}}
+.block-container tbody td {{
+  border-top: 1px solid var(--table-border) !important;
 }}
 
-/* Expander */
+/* Expander claro */
 [data-testid="stExpander"] {{
-  background: var(--box-light) !important;
-  border: 1px solid var(--box-light-border) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--table-border) !important;
   border-radius: 12px !important;
 }}
 [data-testid="stExpander"] [data-testid="stExpanderHeader"] p {{
   color: var(--title-dark) !important;
 }}
 
-/* Tabla/Dataframe */
-.block-container table {{
-  background: var(--box-light) !important;
-  border: 1px solid var(--box-light-border) !important;
-  border-radius: 8px !important;
-}}
-.block-container thead th {{
-  background: #FAFCFF !important;
-  color: var(--title-dark) !important;
-}}
-
 /* Scrollbar claro */
-.block-container ::-webkit-scrollbar {{
-  height: 10px; width: 10px;
-}}
+.block-container ::-webkit-scrollbar {{ height: 10px; width: 10px; }}
 .block-container ::-webkit-scrollbar-thumb {{
-  background: var(--box-light-border);
+  background: var(--table-border);
   border-radius: 8px;
 }}
-.block-container ::-webkit-scrollbar-thumb:hover {{
-  background: var(--green);
-}}
+.block-container ::-webkit-scrollbar-thumb:hover {{ background: var(--green); }}
 
-/* Slider (verde) */
+/* Slider umbral (verde) */
 [data-testid="stSlider"] [role="slider"] {{
   background: var(--green) !important;
   border: 2px solid #089f5e !important;
@@ -193,16 +195,16 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background: linear-gradient(90deg, var(--green), var(--green)) !important;
 }}
 
-/* Selector del visor de PDF (claro) */
+/* Select del visor PDF (claro) */
 #pdf_candidate, #pdf_candidate_alt {{
-  background: var(--box-light) !important;
-  border: 1.5px solid var(--box-light-border) !important;
+  background: var(--surface) !important;
+  border: 1.5px solid var(--table-border) !important;
   color: var(--title-dark) !important;
   border-radius: 10px !important;
 }}
 """
 
-# Inyectar CSS (antes de set_page_config para evitar parpadeos)
+# Inyectar CSS
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 st.set_page_config(
@@ -212,7 +214,7 @@ st.set_page_config(
 )
 
 # =================================
-#  FUNCIONES DE PROCESAMIENTO
+#  FUNCIONES (sin IA, por keywords)
 # =================================
 def extract_text_from_file(uploaded_file) -> str:
     """Extrae texto de PDF (PyPDF2) o TXT."""
@@ -231,20 +233,17 @@ def extract_text_from_file(uploaded_file) -> str:
         return ""
 
 def normalize_text(s: str) -> str:
-    """Normaliza texto para comparación simple."""
     return " ".join(s.lower().split())
 
 def analyze_cvs_by_keywords(jd_text: str, kw_text: str, cv_files):
     """
-    Analiza coincidencias de keywords simples (separadas por coma)
-    y genera un listado de candidatos con Score (proporción de keywords encontradas).
+    Analiza coincidencias simples de keywords separadas por comas.
+    Score = % de keywords encontradas en el texto.
     """
     st.session_state.candidates = []
 
-    # Normalizar keywords (lista única, sin vacíos)
     kws = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
-    kws = list(dict.fromkeys(kws))  # quitar duplicados manteniendo orden
-
+    kws = list(dict.fromkeys(kws))
     if not kws:
         st.warning("No hay palabras clave válidas. Escribe algunas separadas por comas.")
         return
@@ -253,17 +252,11 @@ def analyze_cvs_by_keywords(jd_text: str, kw_text: str, cv_files):
 
     for i, file in enumerate(cv_files):
         file_bytes = file.read()
-        file.seek(0)  # para que extract_text_from_file pueda leerlo
+        file.seek(0)
         text = extract_text_from_file(file)
         plain = normalize_text(text)
 
-        # Conteo de coincidencias simples por aparición de término
-        found = []
-        for kw in kws:
-            if kw and kw in plain:
-                found.append(kw)
-
-        # Score proporcional
+        found = [kw for kw in kws if kw in plain]
         score = round(100 * (len(found) / len(kws))) if kws else 0
 
         reasons = (
@@ -287,10 +280,9 @@ def analyze_cvs_by_keywords(jd_text: str, kw_text: str, cv_files):
     st.success(f"¡Listo! {len(st.session_state.candidates)} CV(s) procesado(s).")
 
 # ================
-#  SIDEBAR (oscuro)
+#  SIDEBAR
 # ================
 with st.sidebar:
-    # Logo (evitamos use_column_width deprecado)
     st.image("assets/logo-wayki.png", use_container_width=True)
 
     st.markdown("### Definición del puesto")
@@ -327,13 +319,12 @@ with st.sidebar:
 
     st.markdown("### Subir CVs (PDF o TXT)")
     files = st.file_uploader(
-        "Drag and drop files here",
+        "Arrastra y suelta archivos aquí",
         type=["pdf", "txt"],
         accept_multiple_files=True,
         label_visibility="collapsed",
     )
 
-    # Botón de análisis (keyword matching)
     if st.button("Analizar CVs", type="primary", use_container_width=True):
         if not files:
             st.error("¡Por favor, sube al menos un CV!")
@@ -342,50 +333,47 @@ with st.sidebar:
 
     st.divider()
 
-    # Limpiar
     if 'candidates' in st.session_state and st.session_state.candidates:
-        if st.button("Limpiar Lista", use_container_width=True):
+        if st.button("Limpiar lista", use_container_width=True):
             st.session_state.candidates = []
             st.success("Resultados limpiados.")
             st.rerun()
 
 # ===================
-#  UI PRINCIPAL (claro)
+#  PANEL DERECHO
 # ===================
-st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Results</span>", unsafe_allow_html=True)
+st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Resultados de evaluación</span>", unsafe_allow_html=True)
 st.markdown(
-    "Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar."
+    "<div class='section-strip'>Define el puesto/JD, edita las palabras clave y sube CVs (PDF o TXT) para evaluar.</div>",
+    unsafe_allow_html=True
 )
+st.write("")  # pequeño respiro
 
 if 'candidates' not in st.session_state or not st.session_state.candidates:
     st.info("Carga CVs en la barra lateral y pulsa **Analizar CVs** para ver el ranking.")
 else:
-    # DataFrame y orden
     df = pd.DataFrame(st.session_state.candidates)
     df_sorted = df.sort_values("Score", ascending=False)
 
-    # =======================
-    # Ranking (tabla)
-    # =======================
-    st.markdown("### Ranking de Candidatos")
+    # Ranking tabla
+    st.markdown("### Ranking de candidatos")
     show = df_sorted[["Name", "Score", "Reasons", "PDF_text_chars"]].rename(
-        columns={"Name": "Nombre", "Score": "Score", "Reasons": "Razones", "PDF_text_chars": "PDF_text (chars)"}
+        columns={{
+            "Name": "Nombre",
+            "Score": "Puntaje",
+            "Reasons": "Razones",
+            "PDF_text_chars": "PDF_texto (caracteres)"
+        }}
     )
-    st.dataframe(
-        show,
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(show, use_container_width=True, hide_index=True)
 
-    # =======================
-    # Barra: comparativa
-    # =======================
-    st.markdown("### Score Comparison")
+    # Gráfico
+    st.markdown("### Comparación de puntajes")
     fig = px.bar(
         df_sorted,
         x="Name",
         y="Score",
-        title="Score Comparison (Todos los candidatos)",
+        title="Comparación de puntajes (todos los candidatos)",
         color="Score",
         color_continuous_scale=px.colors.sequential.Greens_r
     )
@@ -394,13 +382,11 @@ else:
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(color=TITLE_DARK),
         xaxis_title=None,
-        yaxis_title="Score",
+        yaxis_title="Puntaje",
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # =======================
-    # Visor de CV (PDF/TXT)
-    # =======================
+    # Visor de CV
     st.markdown(f"### <span style='color:{PRIMARY_GREEN}'>Visor de CV (PDF)</span>", unsafe_allow_html=True)
     st.caption("Elige un candidato para ver su CV original.")
 
@@ -418,7 +404,7 @@ else:
             data_b64 = base64.b64encode(cand["file_bytes"]).decode("utf-8")
             st.markdown(
                 f"""
-                <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
+                <div style="border:1px solid var(--table-border); border-radius:12px; overflow:hidden; background:var(--surface);">
                   <iframe src="data:application/pdf;base64,{data_b64}"
                           style="width:100%; height:750px; border:0;"
                           title="PDF Viewer"></iframe>
@@ -435,4 +421,4 @@ else:
         else:
             st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
             txt_content = cand["file_bytes"].decode("utf-8", errors="ignore")
-            st.text_area("Contenido del TXT:", value=txt_content, height=600, disabled=True)
+            st.text_area("Contenido del TXT", value=txt_content, height=600, disabled=True)
