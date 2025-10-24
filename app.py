@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import io
+import re
 import base64
 from pathlib import Path
 from datetime import date, datetime
@@ -11,370 +12,660 @@ import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
 
-# ======================================================================================
-# COLORES / ESTILO (igual al aprobado)
-# ======================================================================================
-PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG = "#10172A"
-BOX_DARK = "#132840"
-BOX_DARK_HOV = "#193355"
-TEXT_LIGHT = "#FFFFFF"
-MAIN_BG = "#F7FBFF"
-BOX_LIGHT = "#F1F7FD"
-BOX_LIGHT_B = "#E3EDF6"
-TITLE_DARK = "#142433"
-BAR_DEFAULT = "#E9F3FF"
-BAR_GOOD = "#33FFAC"
+# ==========================================================
+# THEME / COLORS
+# ==========================================================
+PRIMARY_GREEN = "#00CD78"   # <- requerido
+SIDEBAR_BG     = "#10172A"
+TEXT_LIGHT     = "#FFFFFF"
+TITLE_DARK     = "#142433"
+MAIN_BG        = "#F7FBFF"
+BOX_LIGHT      = "#F1F7FD"
+BOX_LIGHT_B    = "#E3EDF6"
+BAR_DEFAULT    = "#E9F3FF"
+BAR_GOOD       = "#33FFAC"
 
 CSS = f"""
 :root {{
   --green: {PRIMARY_GREEN};
   --sidebar-bg: {SIDEBAR_BG};
-  --box: {BOX_DARK};
-  --box-hover: {BOX_DARK_HOV};
   --text: {TEXT_LIGHT};
-  --main-bg: {MAIN_BG};
-  --box-light: {BOX_LIGHT};
-  --box-light-border: {BOX_LIGHT_B};
-  --title-dark: {TITLE_DARK};
+  --title: {TITLE_DARK};
+  --main: {MAIN_BG};
+  --boxl: {BOX_LIGHT};
+  --boxlb: {BOX_LIGHT_B};
 }}
+
 html, body, [data-testid="stAppViewContainer"] {{
-  background: var(--main-bg) !important;
+  background: var(--main) !important;
 }}
-.block-container {{
-  background: transparent !important;
-}}
-/* SIDEBAR visual */
+
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
+  border-right: 1px solid #0f1424;
 }}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6,
-[data-testid="stSidebar"] .stMarkdown p strong {{
+[data-testid="stSidebar"] * {{
+  color: var(--text) !important;
+}}
+
+.sidebar-section-title {{
+  font-weight: 800;
+  color: var(--green);
+  margin: 18px 0 6px 0;
+  letter-spacing: .2px;
+  font-size: 14px;
+}}
+
+.sidebar-link {{
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  margin: 6px 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #dde6f7 !important;
+  border: 1px solid transparent;
+  cursor: pointer;
+}}
+.sidebar-link:hover {{
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+}}
+
+.sidebar-link-strong {{
   color: var(--green) !important;
+  font-weight: 800;
 }}
-[data-testid="stSidebar"] label, 
-[data-testid="stSidebar"] p, 
-[data-testid="stSidebar"] span {{
-  color: var(--text) !important;
-}}
-/* Inputs sidebar */
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
-[data-testid="stSidebar"] [data-baseweb="select"],
-[data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
-  background: var(--box) !important;
-  color: var(--text) !important;
-  border: 1.5px solid var(--box) !important;
-  border-radius: 14px !important;
-}}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
-  color: var(--text) !important;
-}}
-/* Botón global */
-.stButton > button {{
+
+.stButton > button, button[kind="secondary"], .stDownloadButton button {{
   background: var(--green) !important;
   color: #082017 !important;
-  border-radius: 10px !important;
   border: none !important;
-  padding: .45rem .9rem !important;
-  font-weight: 600 !important;
+  border-radius: 10px !important;
+  padding: .5rem .9rem !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
 }}
-/* Títulos */
-h1, h2, h3 {{
-  color: var(--title-dark);
+.stButton > button:hover, .stDownloadButton button:hover {{
+  filter: brightness(.96);
+}}
+
+h1, h2, h3, h4 {{
+  color: var(--title);
 }}
 h1 strong, h2 strong, h3 strong {{
   color: var(--green);
 }}
-/* Pestañas (pill) – encabezado superior */
-.nav-pill {{
-  padding: 8px 14px;
-  border-radius: 10px;
-  margin-right: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--title-dark);
-  font-weight: 600;
-  cursor: pointer;
+
+.block-container [data-testid="stSelectbox"] > div > div,
+.block-container [data-testid="stTextInput"] input,
+.block-container [data-testid="stTextArea"] textarea {{
+  background: var(--boxl) !important;
+  color: var(--title) !important;
+  border: 1.5px solid var(--boxlb) !important;
+  border-radius: 10px !important;
 }}
-.nav-pill.active {{
-  background: #E6FFF5;
-  border-color: var(--green);
-  color: var(--green);
+table {{
+  border: 1px solid var(--boxlb) !important;
+  border-radius: 6px !important;
 }}
-/* Tabla y panel */
-.card {{
-  background: #fff;
-  border: 1px solid var(--box-light-border);
+thead th {{
+  background: var(--boxl) !important;
+}}
+.pdf-frame {{
+  border: 1px solid var(--boxlb);
   border-radius: 12px;
-  padding: 10px 12px;
+  overflow: hidden;
+  background: #fff;
 }}
-.badge {{
-  display:inline-block;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #ECF5FF;
-  color: #26559D;
-  font-size: 12px;
-  margin-right: 6px;
+.topbar {{
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:18px;margin-bottom:8px;
 }}
-.badge-green {{
-  background: #E8FFF5;
-  color: #0D5A43;
-}}
-.badge-amber {{
-  background: #FFF6E5;
-  color: #7A4C00;
-}}
-.badge-red {{
-  background: #FFEAEA;
-  color: #7A0000;
+.topbar img {{
+  max-height: 34px;
 }}
 """
 
-st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="Selektia", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-# ======================================================================================
-# ESTADO GLOBAL (router + datos)
-# ======================================================================================
-TABS = [
-    "Asistente IA",
-    "Definición & Carga",
-    "Puestos",
-    "Evaluación de CVs",
-    "Pipeline de Candidatos",
-    "Entrevista (Gerencia)",
-    "Tareas del Headhunter",
-    "Oferta",
-    "Onboarding",
-    "Analytics",
-]
+# ==========================================================
+# STATE
+# ==========================================================
+if "page" not in st.session_state:
+    st.session_state.page = "Asistente IA"
 
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "Asistente IA"
+if "assistant_config" not in st.session_state:
+    st.session_state.assistant_config = {
+        "role": "Headhunter",
+        "goal": "Identificar a los mejores profesionales para el cargo definido en el JD",
+        "backstory": "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.",
+        "guardrails": "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.",
+        "tools": ["Parser de PDF", "Recomendador de candidatos"]
+    }
 
-# Datos mínimos de ejemplo (puedes conectar a tu fuente real)
+if "candidates" not in st.session_state:
+    st.session_state.candidates = []
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = "u1"
+
 if "positions" not in st.session_state:
     st.session_state.positions = pd.DataFrame([
-        {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Ubicación":"Lima, Perú","Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,"Entrevista Telefónica":14,"Entrevista Presencial":15,"Días Abierto":3,"Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
-        {"ID":"10,376,415","Puesto":"VP de Marketing","Ubicación":"Santiago, Chile","Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,"Entrevista Telefónica":5,"Entrevista Presencial":7,"Días Abierto":28,"Hiring Manager":"Angela Cruz","Estado":"Abierto"},
-        {"ID":"10,376,646","Puesto":"Planner de Demanda","Ubicación":"Ciudad de México, MX","Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,"Entrevista Telefónica":6,"Entrevista Presencial":3,"Días Abierto":28,"Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
+        {
+            "ID": "10,645,194", "Puesto": "Desarrollador/a Backend (Python)","Días Abierto": 3,
+            "Leads": 1800, "Nuevos": 115, "Recruiter Screen": 35, "HM Screen": 7,
+            "Entrevista Telefónica": 14,"Entrevista Presencial": 15, "Ubicación": "Lima, Perú",
+            "Hiring Manager": "Rivers Brykson", "Estado": "Abierto", "Creado": date.today()
+        },
+        {
+            "ID": "10,376,415","Puesto": "VP de Marketing","Días Abierto": 28,
+            "Leads": 8100, "Nuevos": 1, "Recruiter Screen": 15, "HM Screen": 35,
+            "Entrevista Telefónica": 5, "Entrevista Presencial": 7, "Ubicación": "Santiago, Chile",
+            "Hiring Manager": "Angela Cruz", "Estado": "Abierto", "Creado": date.today()
+        },
+        {
+            "ID": "10,376,646","Puesto": "Planner de Demanda","Días Abierto": 28,
+            "Leads": 2300, "Nuevos": 26, "Recruiter Screen": 3, "HM Screen": 8,
+            "Entrevista Telefónica": 6, "Entrevista Presencial": 3, "Ubicación": "Ciudad de México, MX",
+            "Hiring Manager": "Rivers Brykson", "Estado": "Abierto", "Creado": date.today()
+        },
     ])
 
-# Candidatos simulados
-if "candidates" not in st.session_state:
-    # nombre, score, tags para panel derecho
-    st.session_state.candidates = pd.DataFrame([
-        {"Name":"CV_01_Valeria_Rojas.pdf","Score":70,"validated":["HIS"],"likely":["—"],"to_validate":["HIS","SAP IS-H","BLS","ACLS","IAAS","educación al paciente"]},
-        {"Name":"CV_02_Mariana_Gutierrez.pdf","Score":70,"validated":["HIS"],"likely":["—"],"to_validate":["HIS","SAP IS-H","BLS","ACLS","IAAS","educación al paciente"]},
-        {"Name":"CV_03_Karla_Mendoza.pdf","Score":70,"validated":["HIS"],"likely":["—"],"to_validate":["HIS","SAP IS-H","BLS","ACLS","IAAS","educación al paciente"]},
-        {"Name":"CV_04_Lucia_Paredes.pdf","Score":70,"validated":["HIS"],"likely":["—"],"to_validate":["HIS","SAP IS-H","BLS","ACLS","IAAS","educación al paciente"]},
-    ])
+# ==========================================================
+# UTILS
+# ==========================================================
+def extract_text_from_file(f) -> str:
+    try:
+        suf = Path(f.name).suffix.lower()
+        if suf == ".pdf":
+            data = f.read()
+            f.seek(0)
+            reader = PdfReader(io.BytesIO(data))
+            txt = ""
+            for p in reader.pages:
+                txt += p.extract_text() or ""
+            return txt
+        else:
+            return f.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        st.error(f"Error leyendo {f.name}: {e}")
+        return ""
 
-# Entrevista (Gerencia) – lista de candidatos asignados
-if "gerencia_queue" not in st.session_state:
-    st.session_state.gerencia_queue = []
+def guess_last_university_and_year(text):
+    # Busca líneas tipo: Universidad ... Bachelors, 1998  / University ... 2018
+    uline = None
+    uy = None
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    uni_pat = re.compile(r"(Universidad|University)[^\n]*", re.IGNORECASE)
+    year_pat = re.compile(r"(19|20)\d{2}")
+    for l in lines:
+        if uni_pat.search(l):
+            years = year_pat.findall(l)
+            y = None
+            # extrae último año presente en la línea
+            yy = re.findall(r"(19|20)\d{2}", l)
+            if yy:
+                y = max(int(x) for x in re.findall(r"(?:19|20)\d{2}", l))
+            uline = l
+            uy = y
+    return uline, uy
 
-# ======================================================================================
-# FUNCIONES DE UTILIDAD
-# ======================================================================================
-def nav_pills():
-    cols = st.columns(len(TABS))
-    for i, t in enumerate(TABS):
-        with cols[i]:
-            is_active = (st.session_state.active_tab == t)
-            cls = "nav-pill active" if is_active else "nav-pill"
-            if st.button(t, key=f"pill_{t}", use_container_width=True):
-                st.session_state.active_tab = t
-                st.rerun()
-            st.markdown(
-                f'<div class="{cls}" style="display:none">{t}</div>', 
-                unsafe_allow_html=True
-            )
+def guess_experience_years(text):
+    # patrones típicos: 20+ years of total experience, 7 years, (6 years)
+    m = re.search(r"(\d{1,2})\+?\s*(?:años|years)\s*(?:de\s*experiencia|of total experience)?", text, re.IGNORECASE)
+    if m:
+        try:
+            return int(m.group(1))
+        except:
+            pass
+    # intenta sumar roles con (7 years), 2015-Current (6 years)
+    years = [int(x) for x in re.findall(r"\((\d{{1,2}})\s*years?\)", text, re.IGNORECASE)]
+    if years:
+        return max(years)
+    return None
 
-def sidebar_router():
-    st.sidebar.image("assets/logo-wayki.png", use_column_width=True)
-    st.sidebar.markdown("### Navegación rápida")
-    for t in TABS:
-        if st.sidebar.button(t, key=f"nav_{t}"):
-            st.session_state.active_tab = t
-            st.rerun()
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Ayuda**")
-    st.sidebar.markdown("1. Define JD y sube CVs en **Definición & Carga**.")
-    st.sidebar.markdown("2. Revisa **Evaluación de CVs**.")
-    st.sidebar.markdown("3. Gestiona **Pipeline** y **Entrevista**.")
-    st.sidebar.markdown("4. Avanza a **Oferta** y **Onboarding**.")
-    # (dejo tus 4 boxes del sidebar como están si los necesitas aquí)
+def guess_roles(text):
+    # extrae líneas de títulos habituales
+    roles = []
+    role_kw = ["Engineer", "Developer", "Architect", "Enfermera", "Tecnólogo", "Medico", "Recepcionista",
+               "Químico", "Farmacéutico", "Manager", "Consultant", "Analyst", "Especialista"]
+    for line in [l.strip() for l in text.splitlines() if l.strip()]:
+        if any(k.lower() in line.lower() for k in role_kw):
+            roles.append(line)
+    return roles[:6]
 
-def score_badge(s:int) -> str:
-    if s >= 70:   return '<span class="badge badge-green">Alto</span>'
-    if s >= 60:   return '<span class="badge badge-amber">Medio</span>'
-    return '<span class="badge badge-red">Bajo</span>'
+def guess_skills(text):
+    # heurística: lista separada por comas tras palabras como Java, SQL, GIS, etc.
+    # también agarra línea que empieza con skills o contiene varios tokens técnicos
+    skills = set()
+    # tokens técnicos más comunes
+    tokens = ["java", "python", "sql", "gis", "postgis", "geoserver", "oracle", "css", "html", "sap", "sap is-h",
+              "his", "bls", "acls", "iaas", "protocolos", "educación al paciente", "seguridad del paciente"]
+    for line in [l.strip() for l in text.splitlines() if l.strip()]:
+        # usa coma como delimitador
+        if "," in line and sum(1 for t in tokens if t in line.lower()) >= 1:
+            parts = [p.strip() for p in line.split(",")]
+            for p in parts:
+                if len(p) <= 40:
+                    skills.add(p)
+    # fallback: agrega tokens que aparezcan en texto
+    found = [t for t in tokens if t in text.lower()]
+    skills.update(found)
+    return list(dict.fromkeys(skills))[:12]
 
-# ======================================================================================
-# PESTAÑAS (VISTAS)
-# ======================================================================================
+def guess_last_update(text):
+    # "Updated Jan 12, 2022" o "Actualizado 2023-07-15"
+    m = re.search(r"Updated\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    m = re.search(r"(?:Actualizado|Actualizada)\s+(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
 
-def view_asistente():
-    st.markdown("## SelektIA – **Asistente IA**")
-    st.caption("Configura el rol del asistente que guiará la evaluación en *Evaluación de CVs* (respeta RLS y auditoría).")
-    c1, c2 = st.columns([1.15, .85])
-    with c1:
-        role = st.selectbox("Rol*", ["Headhunter","Coordinador RR.HH.","Hiring Manager","Gerencia/Comité","Legal","Finanzas","TI/Onboarding"], index=0)
-        goal = st.text_input("Goal*", "Identificar a los mejores profesionales para el cargo que se define en el JD")
-        backstory = st.text_area("Backstory*", "Eres un analista de recursos humanos con amplia experiencia en análisis de documentos, CV y currículums...")
-        guardrails = st.text_area("Guardrails", "No compartas datos sensibles. Cita siempre la fuente (CV o JD) al argumentar.")
-        st.write("**Herramientas habilitadas**")
-        _ = st.multiselect("Selecciona", ["Parser de PDF","Recomendador de skills","Generador de entrevista guía"], default=["Parser de PDF","Recomendador de skills"])
-        if st.button("Crear/Actualizar Asistente", use_container_width=True):
-            st.session_state.ai_profile = dict(role=role, goal=goal, backstory=backstory, guardrails=guardrails)
-            st.success("Asistente configurado y listo para guiar en *Evaluación de CVs*.")
-
-    with c2:
-        st.markdown("### Permisos y alcance")
-        st.markdown("- **RLS** por puesto: el asistente solo ve candidatos del puesto/rol asignado.")
-        st.markdown("- Acciones según rol (p. ej., HH no aprueba ofertas).")
-        st.markdown("- **Auditoría** total (usuario/rol, objeto, timestamp).")
-        st.info("Tip: usa esta configuración para guiar evaluaciones en la pestaña **Evaluación de CVs**.")
-
-def view_definicion_carga():
-    st.markdown("## SelektIA – **Definición & Carga**")
-    st.caption("Mantengo tu diseño/inputs anteriores (JD + keywords + carga de archivos). Añade aquí tu bloque existente.")
-
-def view_puestos():
-    st.markdown("## SelektIA – **Puestos**")
-    st.dataframe(
-        st.session_state.positions[
-            ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]
-        ],
-        use_container_width=True,
-        height=360,
+def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
+    b64 = base64.b64encode(file_bytes).decode("utf-8")
+    pdfjs = "https://mozilla.github.io/pdf.js/web/viewer.html?file="
+    src = f"{pdfjs}data:application/pdf;base64,{b64}#zoom={int(scale*100)}"
+    st.markdown(
+        f"""
+        <div class="pdf-frame">
+          <iframe src="{src}" style="width:100%; height:{height}px; border:0;" title="PDF Viewer"></iframe>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-def view_evaluacion():
-    st.markdown("## SelektIA – **Resultados de evaluación**")
-    df = st.session_state.candidates.copy().sort_values("Score", ascending=False)
+# ==========================================================
+# TOP RIGHT LOGOS
+# ==========================================================
+def top_right_logos():
+    c1, c2 = st.columns([8, 1.2])
+    with c2:
+        # Selektia logo si está disponible
+        sele_path = Path("assets/logo-selektia.png")
+        if sele_path.exists():
+            st.image(str(sele_path))
+        # Wayki logo
+        wayki_path = Path("assets/logo-wayki.png")
+        if wayki_path.exists():
+            st.image(str(wayki_path))
+
+# ==========================================================
+# SIDEBAR NAVIGATION
+# ==========================================================
+def sidebar_nav():
+    st.sidebar.markdown("### ")  # espacio
+    # DASHBOARD
+    st.sidebar.markdown('<div class="sidebar-section-title">DASHBOARD</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Bienvenido a Selektia", key="nav_dash", use_container_width=True, help="", type="secondary"):
+        st.session_state.page = "Bienvenido"
+
+    # ANALYTICS
+    st.sidebar.markdown('<div class="sidebar-section-title">Analytics</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Abrir Analytics", key="nav_analytics", use_container_width=True, type="secondary"):
+        st.session_state.page = "Analytics"
+
+    # ACCIONES
+    st.sidebar.markdown('<div class="sidebar-section-title">Acciones</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Crear tarea", key="nav_task", use_container_width=True, type="secondary"):
+        st.session_state.page = "Crear tarea"
+
+    # ASISTENTE IA (primero en orden funcional)
+    st.sidebar.markdown('<div class="sidebar-section-title">Asistente IA</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Flujos", key="nav_flujos", use_container_width=True, type="secondary"):
+        st.session_state.page = "Flujos"
+    if st.sidebar.button("Agentes", key="nav_agentes", use_container_width=True, type="secondary"):
+        st.session_state.page = "Asistente IA"
+    if st.sidebar.button("Tareas de Agente", key="nav_tareas_ag", use_container_width=True, type="secondary"):
+        st.session_state.page = "Tareas de Agente"
+
+    # TAREAS
+    st.sidebar.markdown('<div class="sidebar-section-title">Tareas</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Todas las tareas", key="nav_todas", use_container_width=True, type="secondary"):
+        st.session_state.page = "Todas las tareas"
+    if st.sidebar.button("Asignadas a mí", key="nav_mi", use_container_width=True, type="secondary"):
+        st.session_state.page = "Asignadas a mí"
+    if st.sidebar.button("Asignado a mi equipo", key="nav_equipo", use_container_width=True, type="secondary"):
+        st.session_state.page = "Asignado a mi equipo"
+
+    # Archivo
+    st.sidebar.markdown('<div class="sidebar-section-title">Archivo</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Ver archivo", key="nav_archivo", use_container_width=True, type="secondary"):
+        st.session_state.page = "Archivo"
+
+    # Páginas del flujo ATS ya implementadas
+    st.sidebar.markdown('<div class="sidebar-section-title">Páginas ATS</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Definición & Carga", key="nav_def", use_container_width=True, type="secondary"):
+        st.session_state.page = "Definición & Carga"
+    if st.sidebar.button("Puestos", key="nav_puestos", use_container_width=True, type="secondary"):
+        st.session_state.page = "Puestos"
+    if st.sidebar.button("Evaluación de CVs", key="nav_eval", use_container_width=True, type="secondary"):
+        st.session_state.page = "Evaluación de CVs"
+    if st.sidebar.button("Pipeline de Candidatos", key="nav_pipe", use_container_width=True, type="secondary"):
+        st.session_state.page = "Pipeline de Candidatos"
+    if st.sidebar.button("Entrevista (Gerencia)", key="nav_ger", use_container_width=True, type="secondary"):
+        st.session_state.page = "Entrevista (Gerencia)"
+    if st.sidebar.button("Tareas del Headhunter", key="nav_hh", use_container_width=True, type="secondary"):
+        st.session_state.page = "Tareas del Headhunter"
+    if st.sidebar.button("Oferta", key="nav_oferta", use_container_width=True, type="secondary"):
+        st.session_state.page = "Oferta"
+    if st.sidebar.button("Onboarding", key="nav_onboard", use_container_width=True, type="secondary"):
+        st.session_state.page = "Onboarding"
+
+# ==========================================================
+# PAGES
+# ==========================================================
+def page_bienvenido():
+    top_right_logos()
+    st.markdown("## Bienvenido a Selektia")
+    st.info("Aquí podrás ver KPIs clave y accesos rápidos (placeholder).")
+
+def page_analytics():
+    top_right_logos()
+    st.markdown("## Analytics")
+    st.info("Espacio de dashboards/BI (placeholder).")
+
+def page_crear_tarea():
+    top_right_logos()
+    st.markdown("## Crear tarea")
+    with st.form("nueva_tarea"):
+        t1, t2 = st.columns(2)
+        with t1:
+            tt = st.text_input("Título*", "")
+        with t2:
+            due = st.date_input("Fecha límite", value=date.today())
+        desc = st.text_area("Descripción")
+        ok = st.form_submit_button("Crear")
+        if ok:
+            st.success("Tarea creada (placeholder).")
+
+def page_flujos():
+    top_right_logos()
+    st.markdown("## Flujos")
+    st.info("Configura automatizaciones y flujos (placeholder).")
+
+def page_tareas_agente():
+    top_right_logos()
+    st.markdown("## Tareas de Agente")
+    st.info("Listado de tareas del agente IA (placeholder).")
+
+def page_tareas_listado(nombre):
+    top_right_logos()
+    st.markdown(f"## {nombre}")
+    st.info("Listado de tareas (placeholder).")
+
+def page_archivo():
+    top_right_logos()
+    st.markdown("## Archivo")
+    st.info("Histórico/archivo de procesos (placeholder).")
+
+def page_asistente_ia():
+    top_right_logos()
+    st.markdown("## Asistente IA")
+
+    c1, c2 = st.columns([2,1])
+    with c1:
+        role = st.selectbox("Rol*", ["Headhunter","Coordinador RR.HH.","Hiring Manager","Admin"], index=0)
+        goal = st.text_input("Objetivo*", st.session_state.assistant_config.get("goal",""))
+        backstory = st.text_area("Backstory*", st.session_state.assistant_config.get("backstory",""), height=120)
+        guardrails = st.text_area("Guardrails", st.session_state.assistant_config.get("guardrails",""), height=80)
+
+        tools = st.multiselect("Herramientas habilitadas", 
+                               ["Parser de PDF","Recomendador de candidatos","Buscador web"],
+                               default=st.session_state.assistant_config.get("tools",["Parser de PDF","Recomendador de candidatos"]))
+        if st.button("Crear/Actualizar Asistente", use_container_width=True):
+            st.session_state.assistant_config = {
+                "role": role, "goal": goal, "backstory": backstory,
+                "guardrails": guardrails, "tools": tools
+            }
+            st.success("Asistente guardado. Esta configuración guiará la evaluación de CVs.")
+    with c2:
+        st.markdown("### Permisos y alcance")
+        st.write("- **RLS** por puesto: el asistente ve candidatos del puesto/rol asignado.")
+        st.write("- Acciones según rol (HH no aprueba ofertas).")
+        st.write("- **Auditoría**: toda acción queda registrada.")
+
+def page_definicion_carga():
+    top_right_logos()
+    st.markdown("## Definición & Carga")
+
+    st.markdown("#### Definición del puesto")
+    puesto = st.selectbox(
+        "Puesto",
+        ["Enfermera/o Asistencial","Tecnólogo/a Médico","Recepcionista de Admisión","Médico/a General","Químico/a Farmacéutico/a"],
+        index=0,
+        key="puesto_def"
+    )
+
+    st.markdown("#### Descripción del puesto (texto libre)")
+    jd_text = st.text_area("Descripción / JD", key="jd_def", height=140)
+
+    st.markdown("#### Palabras clave (coma separada)")
+    kw_text = st.text_area("Keywords", value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos", key="kw_def", height=110)
+
+    st.markdown("#### Subir CVs (PDF o TXT)")
+    files = st.file_uploader("Arrastra aquí o haz clic para subir", type=["pdf","txt"], accept_multiple_files=True, key=st.session_state.uploader_key)
+    if files:
+        st.session_state.candidates = []
+        for f in files:
+            bytes_ = f.read()
+            f.seek(0)
+            txt = extract_text_from_file(f)
+            # scoring muy simple por keywords
+            score = 0
+            hits = 0
+            kws = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
+            low = txt.lower()
+            for k in kws:
+                if k and k in low:
+                    hits += 1
+            if kws:
+                score = int((hits/len(kws))*100)
+            st.session_state.candidates.append({
+                "Name": f.name,
+                "Score": score,
+                "Reasons": f"{hits}/{len(kws)} keywords encontradas — Coincidencias: {', '.join([k for k in kws if k in low])[:120]}",
+                "_bytes": bytes_,
+                "_is_pdf": Path(f.name).suffix.lower()==".pdf",
+                "_text": txt
+            })
+        st.success("CVs procesados ✔️")
+
+def page_puestos():
+    top_right_logos()
+    st.markdown("## Puestos")
+
+    q = st.text_input("Buscar (puesto, ubicación, ID, hiring manager…)", placeholder="Ej: Lima, 10645194, Angela Cruz")
+    show_filters = st.checkbox("Mostrar filtros", value=False)
+    st.metric("Puestos totales", len(st.session_state.positions))
+
+    df_pos = st.session_state.positions.copy()
+    if q:
+        ql = q.lower()
+        df_pos = df_pos[
+            df_pos["Puesto"].str.lower().str.contains(ql) |
+            df_pos["Ubicación"].str.lower().str.contains(ql) |
+            df_pos["Hiring Manager"].str.lower().str.contains(ql) |
+            df_pos["ID"].astype(str).str.contains(ql)
+        ]
+
+    if show_filters:
+        with st.expander("Filtros", expanded=True):
+            colf1, colf2, colf3, colf4 = st.columns(4)
+            with colf1:
+                ubic = st.multiselect("Ubicación", sorted(df_pos["Ubicación"].unique().tolist()))
+            with colf2:
+                hm = st.multiselect("Hiring Manager", sorted(df_pos["Hiring Manager"].unique().tolist()))
+            with colf3:
+                estado = st.multiselect("Estado", sorted(df_pos["Estado"].unique().tolist()))
+            with colf4:
+                dias_abierto = st.slider("Días abierto (máx)", 0, 120, 60)
+        if 'ubic' in locals() and ubic:
+            df_pos = df_pos[df_pos["Ubicación"].isin(ubic)]
+        if 'hm' in locals() and hm:
+            df_pos = df_pos[df_pos["Hiring Manager"].isin(hm)]
+        if 'estado' in locals() and estado:
+            df_pos = df_pos[df_pos["Estado"].isin(estado)]
+        df_pos = df_pos[df_pos["Días Abierto"] <= dias_abierto]
+
+    st.dataframe(
+        df_pos[["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]],
+        use_container_width=True, height=420
+    )
+
+def page_eval():
+    top_right_logos()
+    st.markdown("## Resultados de evaluación")
+
+    if not st.session_state.candidates:
+        st.info("Sube CVs en **Definición & Carga** para iniciar.")
+        return
+
+    df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False)
     st.markdown("### Ranking de Candidatos")
-    st.dataframe(df[["Name","Score"]], use_container_width=True, height=240)
-    st.markdown("### Comparación de puntajes (todos los candidatos)")
-    colors = [BAR_GOOD if s>=60 else BAR_DEFAULT for s in df["Score"]]
-    fig = px.bar(df, x="Name", y="Score")
-    fig.update_traces(marker_color=colors)
+    st.dataframe(df[["Name","Score","Reasons"]], use_container_width=True, height=240)
+
+    st.markdown("### Comparación de puntajes")
+    bar_colors = [BAR_GOOD if s>=60 else BAR_DEFAULT for s in df["Score"]]
+    fig = px.bar(df, x="Name", y="Score", title="Comparación de puntajes (todos los candidatos)")
+    fig.update_traces(marker_color=bar_colors, hovertemplate="%{x}<br>Score: %{y}")
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
     st.plotly_chart(fig, use_container_width=True)
 
-def view_pipeline():
-    st.markdown("## SelektIA – **Pipeline de Candidatos**")
-    st.caption("Tabla a la izquierda (ranking) y detalle a la derecha, con derivación a **Entrevista (Gerencia)**.")
-    c_left, c_right = st.columns([1.25,.75], gap="large")
+    st.markdown("### Visor de CV (PDF/TXT)")
+    selected = st.selectbox("Elige un candidato", df["Name"].tolist(), index=0, label_visibility="collapsed")
+    cand = df[df["Name"]==selected].iloc[0]
+    if cand["_is_pdf"] and cand["_bytes"]:
+        pdf_viewer_pdfjs(cand["_bytes"], height=480, scale=1.1)
+        st.download_button(f"Descargar {selected}", data=cand["_bytes"], file_name=selected, mime="application/pdf")
+    else:
+        st.info(f"'{selected}' es un TXT. Mostrando contenido abajo:")
+        with st.expander("Contenido TXT", expanded=True):
+            try:
+                txt = cand["_bytes"].decode("utf-8", errors="ignore")
+            except Exception:
+                txt = "(No se pudo decodificar)"
+            st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
-    df = st.session_state.candidates.copy().sort_values("Score", ascending=False)
-    with c_left:
+def page_pipeline():
+    top_right_logos()
+    st.markdown("## Pipeline de Candidatos")
+
+    if not st.session_state.candidates:
+        st.info("Sube CVs en **Definición & Carga** para ver el pipeline.")
+        return
+
+    df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False)
+
+    left, right = st.columns([1.2, 1])
+    with left:
         st.markdown("#### Candidatos detectados")
-        # Solo lectura
-        st.dataframe(
-            df.assign(Match=df["Score"].map(lambda s: score_badge(s) ).astype(str)),
-            column_config={"Match": st.column_config.TextColumn("Match (estimado)", help="Badge según score")},
-            use_container_width=True,
-            height=380
-        )
+        st.dataframe(df[["Name","Score"]], use_container_width=True, height=360)
+        selected = st.selectbox("Selecciona un candidato", df["Name"].tolist(), index=0)
+        st.session_state._pipeline_selected = selected
 
-        # selector
-        selected = st.selectbox("Selecciona para ver detalle", df["Name"].tolist())
-        st.session_state.selected_candidate = selected
-
-    with c_right:
-        st.markdown("#### Detalle del candidato")
-        cand = df[df["Name"] == st.session_state.get("selected_candidate", df.iloc[0]["Name"])].iloc[0]
-        st.markdown(f"**{cand['Name']}**  {score_badge(cand['Score'])}", unsafe_allow_html=True)
-        st.markdown("**Match estimado**: " + ("Alto" if cand["Score"]>=70 else "Medio" if cand["Score"]>=60 else "Bajo"))
-
-        st.markdown("**Validated Skills**")
-        if cand["validated"]:
-            st.markdown(" ".join([f'<span class="badge">{t}</span>' for t in cand["validated"]]), unsafe_allow_html=True)
-        else:
-            st.caption("—")
-
-        st.markdown("**Likely Skills**")
-        if cand["likely"]:
-            st.markdown(" ".join([f'<span class="badge">{t}</span>' for t in cand["likely"]]), unsafe_allow_html=True)
-        else:
-            st.caption("—")
-
-        st.markdown("**Skills to Validate**")
-        st.markdown(" ".join([f'<span class="badge">{t}</span>' for t in cand["to_validate"]]), unsafe_allow_html=True)
-
-        st.markdown("---")
+        st.markdown("### Acciones rápidas")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("➜ Mover a Entrevista (Gerencia)", use_container_width=True):
-                name = cand["Name"]
-                if name not in st.session_state.gerencia_queue:
-                    st.session_state.gerencia_queue.append(name)
-                st.success(f"{name} enviado a 'Entrevista (Gerencia)'.")
+            st.button("Marcar contacto hoy (en Contactado)", use_container_width=True)
         with c2:
-            if st.button("✖ Descartar", use_container_width=True):
-                st.session_state.candidates = st.session_state.candidates[st.session_state.candidates["Name"]!=cand["Name"]]
-                st.success("Candidato descartado del pipeline.")
-                st.rerun()
+            st.button("Mover a Leads → Contactado", use_container_width=True)
 
-def view_gerencia():
-    st.markdown("## SelektIA – **Entrevista (Gerencia)**")
-    if not st.session_state.gerencia_queue:
-        st.info("Aún no hay candidatos asignados desde Pipeline.")
-        return
-    st.markdown("**Candidatos en entrevista (cola):**")
-    for n in st.session_state.gerencia_queue:
-        st.markdown(f"- {n}")
+    with right:
+        st.markdown("### Detalle del candidato")
+        cand = df[df["Name"]==st.session_state._pipeline_selected].iloc[0]
+        text = cand["_text"]
 
-def view_hh_tasks():
-    st.markdown("## SelektIA – **Tareas del Headhunter**")
-    st.caption("Mantengo tu diseño de checklist y adjuntos. (No lo reescribo para respetar tu código aprobado.)")
+        # ---- Heurísticas de extracción a partir del CV ----
+        exp_years = guess_experience_years(text)
+        uni_line, uni_year = guess_last_university_and_year(text)
+        roles = guess_roles(text)
+        skills = guess_skills(text)
+        last_update = guess_last_update(text)
 
-def view_oferta():
-    st.markdown("## SelektIA – **Oferta**")
-    st.caption("Formulario de oferta aprobado (mantener).")
+        st.write(f"**Archivo:** {cand['Name']}")
+        st.write(f"**Match estimado:** {'Alto' if cand['Score']>=60 else 'Medio' if cand['Score']>=40 else 'Bajo'}")
+        st.write("**Resumen de perfil**")
+        st.caption("Perfil detectado a partir del CV (heurística).")
 
-def view_onboarding():
-    st.markdown("## SelektIA – **Onboarding**")
-    st.caption("Checklist aprobado (mantener).")
+        s1, s2 = st.columns(2)
+        with s1:
+            st.write(f"**Años de experiencia:** {exp_years if exp_years is not None else 'N/D'}")
+            st.write("**Cargos (últimos):**")
+            if roles:
+                for r in roles[:4]:
+                    st.write(f"- {r}")
+            else:
+                st.write("- N/D")
+        with s2:
+            st.write(f"**Universidad (última referencia):** {uni_line or 'N/D'}")
+            st.write(f"**Año:** {uni_year if uni_year else 'N/D'}")
+            st.write(f"**Actualizado en CV:** {last_update or 'N/D'}")
 
-def view_analytics():
-    st.markdown("## SelektIA – **Analytics**")
-    st.info("Espacio reservado para dashboards/KPIs finales.")
+        st.write("**Skills**")
+        if skills:
+            st.write(", ".join(skills))
+        else:
+            st.write("N/D")
 
-# ======================================================================================
+        st.markdown("---")
+        st.markdown("#### Acciones")
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.button("Añadir nota 'Buen encaje'", use_container_width=True)
+        with cc2:
+            st.button("Mover a ‘Entrevista (Gerencia)’", use_container_width=True)
+
+def page_entrevista():
+    top_right_logos()
+    st.markdown("## Entrevista (Gerencia)")
+    st.info("Rúbrica de gerencia (placeholder).")
+
+def page_hh_tasks():
+    top_right_logos()
+    st.markdown("## Tareas del Headhunter")
+    st.info("Checklist, adjuntos y ‘Enviar a Comité’ (placeholder).")
+
+def page_oferta():
+    top_right_logos()
+    st.markdown("## Oferta")
+    st.info("Generar/Enviar/Seguimiento de oferta (placeholder).")
+
+def page_onboarding():
+    top_right_logos()
+    st.markdown("## Onboarding")
+    st.info("Checklist con fechas, responsables, adjuntos y recordatorios (placeholder).")
+
+# ==========================================================
 # RENDER
-# ======================================================================================
-sidebar_router()
-nav_pills()
+# ==========================================================
+sidebar_nav()
 
-active = st.session_state.active_tab
+# Render page selected
+PAGES = {
+    "Bienvenido": page_bienvenido,
+    "Analytics": page_analytics,
+    "Crear tarea": page_crear_tarea,
+    "Flujos": page_flujos,
+    "Asistente IA": page_asistente_ia,
+    "Tareas de Agente": page_tareas_agente,
+    "Todas las tareas": lambda: page_tareas_listado("Todas las tareas"),
+    "Asignadas a mí": lambda: page_tareas_listado("Asignadas a mí"),
+    "Asignado a mi equipo": lambda: page_tareas_listado("Asignado a mi equipo"),
+    "Archivo": page_archivo,
+    "Definición & Carga": page_definicion_carga,
+    "Puestos": page_puestos,
+    "Evaluación de CVs": page_eval,
+    "Pipeline de Candidatos": page_pipeline,
+    "Entrevista (Gerencia)": page_entrevista,
+    "Tareas del Headhunter": page_hh_tasks,
+    "Oferta": page_oferta,
+    "Onboarding": page_onboarding,
+}
 
-if active == "Asistente IA":
-    view_asistente()
-elif active == "Definición & Carga":
-    view_definicion_carga()
-elif active == "Puestos":
-    view_puestos()
-elif active == "Evaluación de CVs":
-    view_evaluacion()
-elif active == "Pipeline de Candidatos":
-    view_pipeline()
-elif active == "Entrevista (Gerencia)":
-    view_gerencia()
-elif active == "Tareas del Headhunter":
-    view_hh_tasks()
-elif active == "Oferta":
-    view_oferta()
-elif active == "Onboarding":
-    view_onboarding()
-elif active == "Analytics":
-    view_analytics()
+PAGES.get(st.session_state.page, page_asistente_ia)()
