@@ -1,4 +1,3 @@
-# Al inicio de app.py (o donde tengas set_page_config)
 st.set_page_config(page_title="SelektIA", page_icon="assets/logo-wayki.png", layout="wide")
 
 # Logo en el sidebar
