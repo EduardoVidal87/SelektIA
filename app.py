@@ -295,13 +295,13 @@ with st.sidebar:
         index=0, key="puesto",
     )
 
-    st.markdown("### Descripción del puesto (texto libre)")
+    st.markdown("### Descripción del puesto")
     jd_text = st.text_area(
         "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
         height=120, label_visibility="collapsed", key="jd",
     )
 
-    st.markdown("### Palabras clave del perfil *(ajústalas si es necesario)*")
+    st.markdown("### Palabras clave del perfil")
     kw_text = st.text_area(
         "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
