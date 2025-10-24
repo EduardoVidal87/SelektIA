@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 PRIMARY = "#00CD78"
-SIDEBAR_BG = "#10172A"      # columna izquierda
+SIDEBAR_BG = "#132840"      # columna izquierda
 BOX_BG = "#132840"          # fondo + borde de TODOS los boxes izquierda
 LIGHT_BG = "#F5F7FA"        # fondo derecha
 TEXT = "#FFFFFF"            # texto blanco
