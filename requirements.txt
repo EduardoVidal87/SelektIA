@@ -3,3 +3,4 @@ pandas
 plotly
 PyMuPDF
 google-generativeai
+5.  Guarda los cambios (**"Commit changes"**).
