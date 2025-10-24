@@ -3,4 +3,3 @@ pandas
 plotly
 PyPDF2
 google-generativeai
-5.  Guarda los cambios (**"Commit changes"**).
