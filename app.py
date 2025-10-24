@@ -15,6 +15,59 @@ st.set_page_config(page_title="SelektIA", page_icon=LOGO_PATH, layout="wide")
 
 # Header con color y logo (bonito y simple)
 def header_bar(logo_path: str, title: str, bg=PRIMARY):
+    # === Estilos finos: sidebar oscuro, main claro, títulos verdes ===
+st.markdown("""
+<style>
+/* Sidebar: fondo oscuro y texto blanco */
+[data-testid="stSidebar"] {
+  background-color: #10172A !important;
+  color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] * {
+  color: #FFFFFF !important;
+}
+
+/* Inputs / selects del sidebar con texto blanco y fondo más oscuro */
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] textarea,
+[data-testid="stSidebar"] select,
+[data-testid="stSidebar"] .stTextInput input,
+[data-testid="stSidebar"] .stTextArea textarea,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
+[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {
+  background-color: #0F1629 !important;
+  color: #FFFFFF !important;
+  border: 1px solid #22314d !important;
+}
+
+/* Área principal clara */
+.stApp, .main, section.main .block-container {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* Títulos en el área principal (H1/H2/H3) en verde #00CD78 */
+section.main h1, section.main h2, section.main h3 {
+  color: #00CD78 !important;
+}
+
+/* Botones en verde marca */
+.stButton button, .stDownloadButton button {
+  background: #00CD78 !important;
+  color: #0B1220 !important;
+  border: 0 !important;
+}
+
+/* Encabezados de tablas un poquito resaltados */
+[data-testid="stStyledTable"] th {
+  background: #E6FFF3 !important;  /* verde muy suave */
+  color: #0F172A !important;
+}
+
+/* Quitar aviso deprecado si aún hubiera algo heredado */
+</style>
+""", unsafe_allow_html=True)
+
     p = pathlib.Path(logo_path)
     try:
         b64 = base64.b64encode(p.read_bytes()).decode()
