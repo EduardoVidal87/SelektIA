@@ -8,22 +8,20 @@ import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
 
-
 # =========================
 # Variables de tema/colores
 # =========================
-PRIMARY_GREEN = "#00CD78"       # verde Wayki (títulos/accent)
+PRIMARY_GREEN = "#00CD78"       # verde Wayki (acento)
 SIDEBAR_BG     = "#10172A"       # sidebar oscuro
 SIDEBAR_BOX    = "#132840"
 
-# ---- Colores del panel derecho (como la 2da imagen) ----
+# ---- Colores del panel derecho como la 2da imagen ----
 MAIN_BG        = "#F6FBFF"       # fondo general claro
-CARD_BG        = "#E9F3FF"       # barras/headers celestes
+CARD_BG        = "#E9F3FF"       # headers celestes
 CARD_BORDER    = "#D1E6FF"       # borde celeste
-BOX_LIGHT      = "#F4FAFF"       # inputs claros del contenido
+BOX_LIGHT      = "#F4FAFF"       # inputs claros
 BOX_LIGHT_B    = "#CBE2FF"       # borde inputs claros
-TITLE_DARK     = "#142433"       # texto títulos
-
+TITLE_DARK     = "#142433"       # títulos
 
 # ==========
 #   ESTILO
@@ -50,7 +48,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   padding-top: 1.2rem !important;
 }}
 
-/* Sidebar oscuro (lo mantenemos) */
+/* Sidebar oscuro */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: #FFFFFF !important;
@@ -97,7 +95,7 @@ h1 strong, h2 strong {{
   color: var(--title-dark) !important;
 }}
 
-/* Tabla clara con header celeste */
+/* Tablas (st.table) claras con header celeste */
 .block-container table {{
   background: #FFFFFF !important;
   border: 1px solid var(--card-border) !important;
@@ -143,14 +141,11 @@ h1 strong, h2 strong {{
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-
 # =================================
 #  FUNCIONES DE PROCESAMIENTO
 # =================================
 def extract_text_from_file(uploaded_file) -> tuple[str, bytes, bool]:
-    """
-    Devuelve (texto, bytes, es_pdf)
-    """
+    """Devuelve (texto, bytes, es_pdf)"""
     raw = uploaded_file.read()
     suffix = Path(uploaded_file.name).suffix.lower()
     if suffix == ".pdf":
@@ -161,7 +156,6 @@ def extract_text_from_file(uploaded_file) -> tuple[str, bytes, bool]:
                 txt += page.extract_text() or ""
             return txt, raw, True
         except Exception:
-            # Si fallara PyPDF2, devolvemos sin texto
             return "", raw, True
     else:  # .txt
         try:
@@ -172,43 +166,30 @@ def extract_text_from_file(uploaded_file) -> tuple[str, bytes, bool]:
 
 
 def analyze_candidates(jd_text: str, kw_text: str, files):
-    """
-    Análisis simple por coincidencias de palabras clave.
-    - score = % de keywords encontradas * 100 (redondeado)
-    - reasons: lista de keywords encontradas
-    """
+    """Scoring simple por coincidencia de keywords."""
     keywords = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
-    if not keywords:
-        keywords = []
-
     results = []
     for f in files:
-        # re-lee en cada vuelta (streamlit entrega un buffer vivo)
         f.seek(0)
         text, file_bytes, is_pdf = extract_text_from_file(f)
-
-        # conteo
         text_l = text.lower()
-        found = [k for k in keywords if k in text_l]
+        found = [k for k in keywords if k in text_l] if keywords else []
         score = round(100 * (len(found) / len(keywords))) if keywords else 0
-
         reasons = (
             f"{len(found)}/{len(keywords)} keywords encontradas — "
             + ("Coincidencias: " + ", ".join(found[:10]) if found else "Sin coincidencias")
         )
-
         results.append(
             {
                 "Name": f.name,
                 "Score": score,
                 "Reasons": reasons,
-                "PDF_text": len(text),  # chars como referencia
+                "PDF_text": len(text),
                 "_bytes": file_bytes,
                 "_is_pdf": is_pdf,
                 "_text": text,
             }
         )
-
     return results
 
 
@@ -216,6 +197,7 @@ def analyze_candidates(jd_text: str, kw_text: str, files):
 #  SIDEBAR (oscuro)
 # ================
 with st.sidebar:
+    # Si moviste el logo dentro de /assets, apunta a "assets/logo-wayki.png"
     st.image("logo-wayki.png", use_column_width=True)
     st.markdown("### Definición del puesto")
 
@@ -257,7 +239,6 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    # Limpia resultados
     if st.button("Limpiar Lista", use_container_width=True):
         st.session_state.pop("candidates", None)
         st.success("Resultados limpiados.")
@@ -270,46 +251,39 @@ with st.sidebar:
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Resultados de evaluación</span>", unsafe_allow_html=True)
 st.info("Define el puesto/JD, edita las palabras clave y sube CVs (PDF o TXT) para evaluar.")
 
-# Analiza automáticamente si hay CVs subidos y aún no hay resultados o cambió la data
-if files and ("_last_files_snapshot" not in st.session_state or st.session_state.get("_last_kw") != kw_text or st.session_state.get("_last_jd") != jd_text):
-    # snapshot filenames para detectar cambios
+# Analiza automáticamente cuando hay cambios
+if files and ("_last_files_snapshot" not in st.session_state
+              or st.session_state.get("_last_kw") != kw_text
+              or st.session_state.get("_last_jd") != jd_text
+              or st.session_state.get("_last_files_snapshot") != [f.name for f in files]):
     st.session_state["_last_files_snapshot"] = [f.name for f in files]
     st.session_state["_last_kw"] = kw_text
     st.session_state["_last_jd"] = jd_text
-
     st.session_state["candidates"] = analyze_candidates(jd_text, kw_text, files)
 
 if "candidates" not in st.session_state or not st.session_state["candidates"]:
     st.warning("Sube al menos un CV (PDF o TXT) para ver resultados.", icon="⚠️")
     st.stop()
 
-
-# Mostrar ranking/tabla
+# Tabla (usamos st.table para que el CSS funcione)
 df = pd.DataFrame(st.session_state["candidates"])
 df_sorted = df.sort_values("Score", ascending=False)
+
 st.markdown(f"### <span style='color:{TITLE_DARK}'>Ranking de candidatos</span>", unsafe_allow_html=True)
-
 show = df_sorted[["Name", "Score", "Reasons", "PDF_text"]].rename(
-    columns={
-        "Name": "Nombre",
-        "Score": "Score",
-        "Reasons": "Razones",
-        "PDF_text": "PDF_text",
-    }
+    columns={"Name": "Nombre", "Score": "Score", "Reasons": "Razones", "PDF_text": "PDF_text"}
 )
-st.dataframe(show, use_container_width=True, height=260)
+st.table(show)  # <- clave: st.table en vez de st.dataframe
 
-
-# Gráfico
+# Gráfico (paleta celeste)
 st.markdown(f"### <span style='color:{TITLE_DARK}'>Comparación de puntajes</span>", unsafe_allow_html=True)
 fig = px.bar(
     df_sorted,
     x="Name",
     y="Score",
-    color="Score",
-    color_continuous_scale=px.colors.sequential.Greens,
     title="",
 )
+fig.update_traces(marker_color="#2A8BF2")  # celeste Wayki-like
 fig.update_layout(
     plot_bgcolor="#FFFFFF",
     paper_bgcolor="rgba(0,0,0,0)",
@@ -319,25 +293,10 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-
-# Visor
+# Visor de CV
 st.markdown(f"### <span style='color:{TITLE_DARK}'>Visor de CV (PDF/TXT)</span>", unsafe_allow_html=True)
-
 all_names = df_sorted["Name"].tolist()
-col1, col2 = st.columns([1, 1])
-with col1:
-    selected_name = st.selectbox(
-        "Elige un candidato",
-        all_names,
-        index=0,
-        key="pdf_candidate",
-        label_visibility="collapsed",
-    )
-
-with col2:
-    st.write("")  # espacio para respirar
-    st.write("")
-
+selected_name = st.selectbox("Elige un candidato", all_names, index=0, key="pdf_candidate", label_visibility="collapsed")
 
 candidate = df.loc[df["Name"] == selected_name].iloc[0]
 if candidate["_is_pdf"] and candidate["_bytes"]:
