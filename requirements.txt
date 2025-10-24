@@ -1,8 +1,5 @@
-
 streamlit
 pandas
 plotly
-pdfminer.six
-openpyxl
 PyMuPDF
-streamlit-pdf-viewer
+google-generativeai
