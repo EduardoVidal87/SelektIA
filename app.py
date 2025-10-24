@@ -1,335 +1,322 @@
-import streamlit as st
+import io
+import re
+import base64
+import fitz  # PyMuPDF
 import pandas as pd
-import plotly.express as px
-from io import BytesIO
+import streamlit as st
 from pdfminer.high_level import extract_text
-import base64, unicodedata, re, pathlib
+from streamlit_pdf_viewer import pdf_viewer
 
-# ===================== BRAND / RUTAS =====================
-LOGO_PATH  = "assets/logo-wayki.png"     # asegúrate de que exista
-PRIMARY    = "#00CD78"                   # verde marca (títulos, botones, barras Seleccionado)
-ACCENT     = "#1F77B4"                   # color secundario para barras Revisión
-SIDEBAR_BG = "#10172A"                   # fondo sidebar
-MAIN_BG    = "#F8FAFC"                   # fondo área principal (claro)
-MAIN_TEXT  = "#0F172A"                   # texto en área principal
+# -----------------------------
+# Configuración general y tema
+# -----------------------------
+LOGO_PATH = "assets/logo-wayki.png"  # si lo cambias, ajusta aquí
 
-# ===================== CONFIG APP =====================
-st.set_page_config(page_title="SelektIA", page_icon=LOGO_PATH, layout="wide")
+st.set_page_config(
+    page_title="SelektIA",
+    page_icon=LOGO_PATH,
+    layout="wide",
+)
 
-# ======= ESTILOS: Sidebar oscuro, main claro, labels/títulos del sidebar en verde =======
+# === Brand / Theme colors ===
+PRIMARY     = "#00CD78"   # títulos y acentos
+SIDEBAR_BG  = "#10172A"
+BOX_BG      = "#132840"   # tono más claro que el sidebar
+BOX_BORDER  = "#132840"   # mismo color que la caja
+BODY_BG     = "#F6F8FC"   # fondo claro del body
+LIGHT_INPUT = "#F3F7FB"   # inputs claros en el main
+LIGHT_BRDR  = "#D0D7E2"   # bordes claros en el main
+TEXT_COLOR  = "#0B1220"   # texto principal
+
+# -----------------------------
+# Estilos
+# -----------------------------
 st.markdown(f"""
 <style>
-/* Sidebar: fondo oscuro */
+
+/* Fondo general del body */
+main blockquote, .stApp {{
+  background: {BODY_BG};
+}}
+
+/* Sidebar bg */
 [data-testid="stSidebar"] {{
-  background-color: {SIDEBAR_BG} !important;
-  color: #FFFFFF !important;
-}}
-/* Texto por defecto del sidebar en blanco */
-[data-testid="stSidebar"] * {{
-  color: #FFFFFF !important;
+  background: {SIDEBAR_BG};
 }}
 
-/* Títulos y labels del sidebar en VERDE */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] [data-testid="stFileUploader"] label,
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p {{
+/* Títulos del sidebar y del body */
+[data-testid="stSidebar"] h1, 
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3, 
+h1, h2, h3 {{
   color: {PRIMARY} !important;
 }}
 
-/* Inputs del sidebar con fondo oscuro y texto blanco */
-[data-testid="stSidebar"] input,
+/* Etiquetas/labels SOLO en el sidebar */
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{
+  color: {PRIMARY} !important;
+  font-weight: 600;
+}}
+
+/* Etiquetas del body (zona principal) */
+section [data-testid="stWidgetLabel"] p {{
+  color: {TEXT_COLOR} !important;
+  font-weight: 600;
+}}
+
+/* Inputs del sidebar: select, text, textarea, number */
+[data-testid="stSidebar"] .stTextInput>div>div>input,
 [data-testid="stSidebar"] textarea,
-[data-testid="stSidebar"] select,
-[data-testid="stSidebar"] .stTextInput input,
-[data-testid="stSidebar"] .stTextArea textarea,
-[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
-[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {{
-  background-color: #0F1629 !important;
+[data-testid="stSidebar"] .stNumberInput input,
+[data-testid="stSidebar"] .stSelectbox > div > div,
+[data-testid="stSidebar"] .stMultiSelect > div > div {{
+  background-color: {BOX_BG} !important;
+  border: 1px solid {BOX_BORDER} !important;
   color: #FFFFFF !important;
-  border: 1px solid #22314d !important;
+  border-radius: 8px !important;
 }}
-/* Botón del sidebar */
-[data-testid="stSidebar"] .stButton button {{
+
+/* Placeholder en sidebar */
+[data-testid="stSidebar"] ::placeholder {{
+  color: #C9D1D9 !important;
+  opacity: .9 !important;
+}}
+
+/* Focus halo en inputs del sidebar */
+[data-testid="stSidebar"] input:focus,
+[data-testid="stSidebar"] textarea:focus {{
+  outline: none !important;
+  box-shadow: 0 0 0 2px {PRIMARY}33 !important;
+}}
+
+/* Botones del sidebar */
+[data-testid="stSidebar"] .stButton > button {{
   background: {PRIMARY} !important;
   color: #0B1220 !important;
-  border: 0 !important;
+  border: 1px solid {PRIMARY} !important;
+  font-weight: 700;
+  border-radius: 10px;
+}}
+[data-testid="stSidebar"] .stButton > button:hover {{
+  filter: brightness(1.05);
 }}
 
-/* Área principal clara */
-.stApp, .main, section.main .block-container {{
-  background-color: {MAIN_BG} !important;
-  color: {MAIN_TEXT} !important;
+/* --- ZONA PRINCIPAL (body) --- */
+
+/* Selects/inputs del body en fondo CLARO */
+section .stSelectbox > div > div,
+section .stTextInput>div>div>input,
+section textarea,
+section .stNumberInput input {{
+  background: {LIGHT_INPUT} !important;
+  border: 1px solid {LIGHT_BRDR} !important;
+  color: {TEXT_COLOR} !important;
+  border-radius: 8px !important;
 }}
 
-/* Títulos en el área principal */
-section.main h1, section.main h2, section.main h3 {{
-  color: {PRIMARY} !important;
+/* Expander header claro */
+section .streamlit-expanderHeader {{
+  background: {LIGHT_INPUT} !important;
+  border: 1px solid {LIGHT_BRDR} !important;
+  color: {TEXT_COLOR} !important;
+  border-radius: 8px !important;
 }}
 
-/* Botones en el área principal */
-.stButton button, .stDownloadButton button {{
-  background: {PRIMARY} !important;
-  color: #0B1220 !important;
-  border: 0 !important;
-}}
-
-/* Encabezados de tablas */
-[data-testid="stStyledTable"] th {{
-  background: #E6FFF3 !important;
-  color: {MAIN_TEXT} !important;
-}}
-
-/* Ensanchar selectbox principal de candidatos */
-.select-wide > div[data-baseweb="select"] {{
-  min-width: 100% !important;
-}}
 </style>
 """, unsafe_allow_html=True)
 
-# Logo en sidebar
-st.sidebar.image(LOGO_PATH, use_container_width=True)
+# -----------------------------
+# Utilidades
+# -----------------------------
+def clean_text(s: str) -> str:
+    s = s.replace("\n", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
 
-# ===================== UTILIDADES DE TEXTO =====================
-def _norm(s: str) -> str:
-    s = s.lower()
-    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
-    return s
-
-SYNONYMS = {
-    "his": ["sistema hospitalario", "registro clinico", "erp salud"],
-    "sap is-h": ["sap ish", "sap is h", "sap hospital"],
-    "bombas de infusion": ["infusion pumps"],
-    "bls": ["soporte vital basico"],
-    "acls": ["soporte vital avanzado"],
-    "uci intermedia": ["uci", "cuidados intermedios"],
-    "educacion al paciente": ["educacion a pacientes", "educacion al usuario"],
-}
-
-DOMAIN_DICTIONARY = [
-    "HIS","SAP IS-H","bombas de infusión","5 correctos","IAAS","bundles VAP","BRC","CAUTI",
-    "curación avanzada","educación al paciente","BLS","ACLS","hospitalización","UCI intermedia",
-    "LIS","laboratorio clínico","control de calidad","Westgard","TAT","validación","verificación",
-    "bioseguridad","calibración","preanalítica","postanalítica","auditoría","trazabilidad",
-    "admisión","recepción","caja","facturación","conciliación","verificación de seguros",
-    "telemedicina","triage","rutas clínicas","HTA","DM2","dispensación segura","farmacovigilancia",
-    "FEFO","cadena de frío","interacciones","stock crítico"
-]
-
-def expand_keywords(kws):
-    out = []
-    for k in kws:
-        k2 = _norm(k)
-        if not k2:
-            continue
-        out.append(k2)
-        for syn in SYNONYMS.get(k2, []):
-            out.append(_norm(syn))
-    return list(dict.fromkeys(out))
-
-# ===================== EXTRACCIÓN TEXTO PDF =====================
-def pdf_to_text_from_bytes(data: bytes) -> str:
-    """PyMuPDF primero; pdfminer como respaldo."""
+def pdf_to_text_bytes(pdf_bytes: bytes) -> str:
+    """Extrae texto de un PDF (bytes) usando PyMuPDF; si falla, intenta pdfminer."""
     try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(stream=data, filetype="pdf")
-        text_pages = [page.get_text("text") for page in doc]
-        text = "\n".join(text_pages).strip()
-        if len(text) > 20:
-            return text
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            text = []
+            for page in doc:
+                text.append(page.get_text())
+        return clean_text(" ".join(text))
     except Exception:
-        pass
-    try:
-        return (extract_text(BytesIO(data)) or "").strip()
-    except Exception:
-        return ""
+        # fallback
+        try:
+            text = extract_text(io.BytesIO(pdf_bytes))
+            return clean_text(text or "")
+        except Exception:
+            return ""
 
-# ===================== PARSE / SUGERIR KEYWORDS =====================
-def smart_keywords_parse(jd_text: str) -> list[str]:
-    parts = [x.strip() for x in re.split(r'[,\n;]+', jd_text) if x.strip()]
-    out = []
-    for p in parts:
-        sub = [s.strip() for s in re.split(r'/|\by\b', p, flags=re.IGNORECASE) if s.strip()]
-        out.extend(sub if sub else [p])
-    STOP = ["manejo de","manejo","uso de","uso","vigente","vigentes","conocimiento de"]
-    cleaned = []
-    for k in out:
-        kk = k
-        for sp in STOP:
-            kk = re.sub(rf'\b{sp}\b', '', kk, flags=re.I)
-        kk = kk.strip(" .-/")
-        if kk:
-            cleaned.append(kk)
-    return cleaned
+def get_keywords_from_text(text: str) -> list[str]:
+    """Divide por coma o salto de línea; normaliza a minúsculas y quita vacíos."""
+    raw = re.split(r"[,\n]", text)
+    words = [w.strip().lower() for w in raw if w.strip()]
+    # eliminar duplicados respetando orden
+    seen, out = set(), []
+    for w in words:
+        if w not in seen:
+            seen.add(w)
+            out.append(w)
+    return out
 
-def suggest_keywords_from_text(role_title: str, jd_free_text: str) -> list[str]:
-    text = jd_free_text + " " + role_title
-    text_norm = _norm(text)
-    acronyms = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}(?:-[A-Z]{1,})?\b', jd_free_text)
-    acronyms = [a.strip() for a in acronyms]
-    dict_hits = [t for t in DOMAIN_DICTIONARY if _norm(t) in text_norm]
-    words = [w for w in re.findall(r'[a-záéíóúñ]{3,}', text_norm)
-             if w not in {"para","con","por","del","los","las","una","uno","unos","unas",
-                          "que","de","al","la","el","y","en","se","su"}]
-    ngrams = []
-    for n in (2,3):
-        for i in range(len(words)-n+1):
-            ngrams.append(" ".join(words[i:i+n]))
-    candidates = acronyms + dict_hits + ngrams
-    uniq, seen = [], set()
-    for c in candidates:
-        key = _norm(c)
-        if key not in seen and len(c) >= 3:
-            uniq.append(c)
-            seen.add(key)
-    return uniq[:25]
+def score_cv(cv_text: str, keywords: list[str]) -> tuple[int, list[str]]:
+    """Devuelve (score_normalizado_0_100, coincidencias_encontradas)."""
+    if not keywords:
+        return 0, []
+    found = []
+    text_l = " " + cv_text.lower() + " "
+    for kw in keywords:
+        # búsqueda simple por palabra/frase
+        if kw and kw.lower() in text_l:
+            found.append(kw)
+    score = round(100 * len(found) / len(keywords))
+    return score, found
 
-# ===================== SCORING & EXPORT =====================
-def score_candidate(raw_text: str, jd_keywords: list) -> tuple[int, str, list]:
-    text = _norm(" ".join(raw_text.split()))
-    base_kws = [k.strip() for k in jd_keywords if k.strip()]
-    matched = [k for k in base_kws if re.search(rf"\b{re.escape(_norm(k))}\b", text)]
-    hits = len(matched)
-    score = round(100 * min(hits / max(1, len(base_kws)), 1.0))
-    reasons = f"{hits}/{len(base_kws)} keywords encontradas"
-    return score, reasons, matched
+# -----------------------------
+# SIDEBAR
+# -----------------------------
+with st.sidebar:
+    st.image(LOGO_PATH, use_container_width=True)
 
-def build_excel(shortlist_df: pd.DataFrame, all_df: pd.DataFrame) -> bytes:
-    buf = BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
-        shortlist_df.to_excel(xw, index=False, sheet_name="Selected")
-        all_df.to_excel(xw, index=False, sheet_name="All_Scores")
-    buf.seek(0); return buf.read()
+    st.header("Definición del puesto")
 
-# ===================== VISOR PDF (pdf.js + fallback) =====================
-def show_pdf(file_bytes: bytes, height: int = 820):
-    try:
-        from streamlit_pdf_viewer import pdf_viewer
-        pdf_viewer(file_bytes, height=height)
-    except Exception:
-        b64 = base64.b64encode(file_bytes).decode()
-        html_code = f"""
-        <object data="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}">
-            <p>No se pudo previsualizar el PDF.
-            <a download="cv.pdf" href="data:application/pdf;base64,{b64}">Descargar CV</a></p>
-        </object>
-        """
-        st.components.v1.html(html_code, height=height, scrolling=True)
+    puesto = st.selectbox(
+        "Puesto",
+        options=[
+            "Enfermera/o Asistencial – Hospitalización/UCI intermedia",
+            "Enfermera/o UCI",
+            "Enfermera/o Emergencias",
+            "Otro",
+        ],
+        index=0,
+    )
 
-# ===================== UI LATERAL =====================
-st.sidebar.header("Definición del puesto")
-role_title = st.sidebar.text_input("Puesto", "Enfermera/o Asistencial – Hospitalización / UCI intermedia")
-jd_free_text = st.sidebar.text_area(
-    "Job Description (texto libre)",
-    "Brindar atención segura. Administración de medicamentos (5 correctos), curación avanzada, manejo de bombas de infusión, "
-    "educación al paciente/familia, registro en HIS (SAP IS-H), cumplimiento de bundles VAP/BRC/CAUTI. BLS/ACLS vigentes.",
-    height=110
+    jd_text = st.text_area(
+        "Descripción del puesto (texto libre)",
+        height=110,
+        placeholder=(
+            "Resume el objetivo del puesto, responsabilidades clave, protocolos, "
+            "y contexto del servicio…"
+        ),
+        value=st.session_state.get("jd_text", ""),
+    )
+
+    keywords_text = st.text_area(
+        "Palabras clave del perfil (ajústalas si es necesario)",
+        height=110,
+        placeholder=(
+            "Ej.: HIS, SAP IS-H, 5 correctos, IAAS, bundles VAP/BRC/CAUTI, "
+            "curación avanzada, bombas de infusión, educación al paciente…"
+        ),
+        value=st.session_state.get("keywords_text", "HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP/BRC/CAUTI"),
+    )
+
+    st.caption("Arrastra y suelta los CVs en PDF o TXT para evaluar")
+    files = st.file_uploader(
+        "Upload CVs (PDF o TXT)", 
+        type=["pdf", "txt"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
+
+# Guardar en sesión lo escrito por si recarga
+st.session_state["jd_text"] = jd_text
+st.session_state["keywords_text"] = keywords_text
+
+# -----------------------------
+# CUERPO
+# -----------------------------
+st.markdown(
+    f"<h1 style='margin-top:0'>SelektIA – Evaluation Results</h1>",
+    unsafe_allow_html=True
 )
 
-if "kw_text" not in st.session_state:
-    st.session_state.kw_text = ("HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, "
-                                "curación avanzada, educación al paciente, BLS, ACLS, hospitalización, UCI intermedia")
+st.info("Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.")
 
-def _fill_keywords():
-    sugg = suggest_keywords_from_text(role_title, jd_free_text)
-    st.session_state.kw_text = ", ".join(sugg)
+# Construcción de keywords a partir del JD + input explícito
+jd_kw = get_keywords_from_text(jd_text)
+extra_kw = get_keywords_from_text(keywords_text)
+all_keywords = jd_kw + [k for k in extra_kw if k not in jd_kw]
 
-st.sidebar.button("Sugerir keywords", on_click=_fill_keywords)
-kw_text = st.sidebar.text_area("Keywords (edítalas si quieres)", key="kw_text", height=110)
-jd_keywords = smart_keywords_parse(kw_text)
-
-st.sidebar.header("Upload CVs (PDF o TXT)")
-files = st.sidebar.file_uploader("Arrastra aquí", type=["pdf","txt"], accept_multiple_files=True)
-
-# ===================== CUERPO =====================
-st.title("SelektIA – Evaluation Results")
-
-rows, file_store = [], {}
-
+# Procesamiento de CVs
+rows = []
+file_store = {}  # name -> dict(bytes, text)
 if files:
     for f in files:
-        data = f.read()
-        file_store[f.name] = {"bytes": data, "type": f.type}
-
         if f.type == "text/plain":
-            raw = data.decode("utf-8", errors="ignore")
+            raw_text = f.getvalue().decode("utf-8", errors="ignore")
+            cv_text = clean_text(raw_text)
+            pdf_bytes = None
         else:
-            raw = pdf_to_text_from_bytes(data)
+            pdf_bytes = f.getvalue()
+            cv_text = pdf_to_text_bytes(pdf_bytes)
 
-        raw_len = len(raw)
-        pdf_status = "PDF sin texto (posible escaneo)" if raw_len < 20 else f"{raw_len} chars"
-
-        score, reasons, matched = score_candidate(raw, jd_keywords)
-
+        sc, hits = score_cv(cv_text, all_keywords)
         rows.append({
-            "Name": f.name.replace(".pdf","").replace("_"," ").title(),
-            "FileName": f.name,
-            "Score": score,
-            "Reasons": reasons + (f" — Coincidencias: {', '.join(matched)}" if matched else ""),
-            "PDF_text": pdf_status
+            "Name": f.name.replace("_", " ").replace("-", " "),
+            "Score": sc,
+            "Reasons": f"{len(hits)}/{len(all_keywords)} keywords encontradas — Coincidencias: {', '.join(hits) if hits else '—'}",
+            "PDF_text": f"{len(cv_text)} chars",
         })
+        file_store[f.name] = {"bytes": pdf_bytes, "text": cv_text}
 
-    df = pd.DataFrame(rows).sort_values("Score", ascending=False)
+# Tabla de resultados
+if rows:
+    df = pd.DataFrame(rows).sort_values(by="Score", ascending=False).reset_index(drop=True)
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
 
-    left, right = st.columns([0.58, 0.42])
-    with left:
-        st.dataframe(df[["Name","Score","Reasons","PDF_text"]], use_container_width=True)
+    # Gráfico simple
+    st.subheader("Score Comparison")
+    import plotly.express as px
+    fig = px.bar(
+        df, x="Name", y="Score",
+        color=df["Score"] >= 50,
+        color_discrete_map={True: PRIMARY, False: "#6E7B8B"},
+        labels={"color": "color"}
+    )
+    fig.add_hline(y=50, line_dash="dot", line_color="#566370")
+    fig.update_layout(showlegend=False, height=300, margin=dict(l=8,r=8,b=30,t=10))
+    st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("Score Comparison")
-        threshold = st.slider("Umbral de selección", 0, 100, 50, 1)
+    st.markdown("----")
 
-        fig = px.bar(
-            df, x="Name", y="Score", text="Score",
-            color=(df["Score"] >= threshold).map({True: "Seleccionado", False: "Revisión"}),
-            color_discrete_map={"Seleccionado": PRIMARY, "Revisión": ACCENT}
+    # ---------------- PDF VIEWER ----------------
+    st.subheader("Visor de CV (PDF)")
+    col_left, col_right = st.columns([1, 2], gap="large")
+
+    with col_left:
+        st.write("Elige un candidato")
+        # Nombre de archivo -> lista
+        pdf_candidates = [n for n, meta in file_store.items() if meta["bytes"]]
+        # El select ahora es CLARO por CSS (zona principal)
+        selected_name = st.selectbox(
+            label="",
+            options=pdf_candidates,
+            index=0 if pdf_candidates else None,
+            placeholder="Selecciona un CV en PDF…",
+            label_visibility="collapsed"
         )
-        fig.update_traces(
-            textposition="outside",
-            customdata=df[["Reasons"]].values,
-            hovertemplate="<b>%{x}</b><br>Score: %{y}<br>%{customdata[0]}<extra></extra>"
-        )
-        fig.add_hline(y=threshold, line_dash="dot", opacity=0.6)
-        fig.update_layout(yaxis_title="Score", xaxis_title=None, margin=dict(t=70, r=20, b=80, l=40))
-        st.plotly_chart(fig, use_container_width=True)
 
-        selected_df = df[df["Score"] >= threshold]
-        excel_bytes = build_excel(selected_df, df)
-        st.download_button(
-            "⬇️ Descargar Excel (Selected + All)",
-            data=excel_bytes,
-            file_name=f"SelektIA_{_norm(role_title).replace(' ','_')}_Selection.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        st.caption(f"Puesto: {role_title} — Seleccionados: {len(selected_df)} / {len(df)}")
+        with st.expander("Elegir candidato (opción alternativa)"):
+            alt = st.radio("Candidatos PDF:", pdf_candidates, label_visibility="collapsed") if pdf_candidates else None
+            if alt:
+                selected_name = alt
 
-    with right:
-        st.subheader("Visor de CV (PDF)")
+    with col_right:
+        if selected_name:
+            st.caption(f"Mostrando: **{selected_name}**")
+            b = file_store[selected_name]["bytes"]
+            if b:
+                # Visor PDF
+                pdf_viewer(input=b, width=900, height=780)
+            else:
+                st.warning("Este CV no es PDF o no tiene bytes disponibles.")
 
-        cand_names = df["Name"].tolist()
-        # Selector ancho (selectbox)
-        st.markdown('<div class="select-wide">', unsafe_allow_html=True)
-        sel_name = st.selectbox("Elige un candidato", options=cand_names, index=0, key="cand_selectbox")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Alternativa visible: radio (por si el select se comporta mal en algún navegador)
-        with st.expander("Elegir candidato (opción alternativa)", expanded=False):
-            sel_name_radio = st.radio("Candidatos", options=cand_names, index=cand_names.index(sel_name))
-            if sel_name_radio != sel_name:
-                sel_name = sel_name_radio
-
-        file_name = df.loc[df["Name"] == sel_name, "FileName"].iloc[0]
-        meta = file_store.get(file_name)
-
-        if meta and meta["type"] == "application/pdf":
-            show_pdf(meta["bytes"])
-        elif meta:
-            st.info("Este archivo no es PDF; muestro el texto:")
-            try:
-                st.text(meta["bytes"][:2000].decode("utf-8","ignore"))
-            except Exception:
-                st.write("No se pudo mostrar el contenido.")
 else:
-    st.info("Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.")
+    st.warning("Sube algunos CVs (PDF o TXT) para ver resultados y el visor de PDF.")
