@@ -1,7 +1,13 @@
 # app.py
+# ======================================================================================
+# SelektIA – Evaluación de CVs (sin IA externa)
+# - Analiza PDFs/TXTs por coincidencia de keywords del JD (score 0–100)
+# - Ranking + gráfico + visor PDF
+# - Tema con sidebar oscuro y cuerpo claro
+# ======================================================================================
+
 import io
 import base64
-import re
 import unicodedata
 from pathlib import Path
 
@@ -12,26 +18,18 @@ from PyPDF2 import PdfReader
 
 
 # =========================
-# Configuración inicial
-# =========================
-st.set_page_config(
-    page_title="SelektIA",
-    page_icon="🧠",
-    layout="wide",
-)
-
-# =========================
 # Variables de tema/colores
 # =========================
 PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG    = "#10172A"    # fondo columna izquierda
-BOX_DARK      = "#132840"    # fondo y borde de boxes del sidebar
-BOX_DARK_HOV  = "#193355"    # borde en hover/focus del sidebar
-TEXT_LIGHT    = "#FFFFFF"    # texto blanco
-MAIN_BG       = "#F7FBFF"    # fondo del cuerpo (claro)
-BOX_LIGHT     = "#F1F7FD"    # fondo claro de inputs principales (panel derecho)
-BOX_LIGHT_B   = "#E3EDF6"    # borde claro de inputs principales
-TITLE_DARK    = "#142433"    # texto títulos principales
+SIDEBAR_BG   = "#10172A"    # fondo columna izquierda
+BOX_DARK     = "#132840"    # fondo y borde de boxes del sidebar
+BOX_DARK_HOV = "#193355"    # borde hover/focus del sidebar
+TEXT_LIGHT   = "#FFFFFF"    # texto blanco
+MAIN_BG      = "#F7FBFF"    # fondo del cuerpo (claro)
+BOX_LIGHT    = "#F1F7FD"    # fondo claro de inputs principales
+BOX_LIGHT_B  = "#E3EDF6"    # borde claro de inputs principales
+TITLE_DARK   = "#142433"    # texto títulos principales
+
 
 # ==========
 #   ESTILO
@@ -53,17 +51,17 @@ CSS = f"""
 html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main-bg) !important;
 }}
-/* Elimina fondo blanco interno */
+/* Fondo de la app (quita el blanco del contenedor) */
 .block-container {{
   background: transparent !important;
 }}
 
-/* Sidebar */
+/* Sidebar fondo */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
 }}
-/* Títulos del sidebar en verde */
+/* --- TÍTULOS DEL SIDEBAR EN VERDE --- */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
@@ -73,14 +71,15 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] .stMarkdown p strong {{
   color: var(--green) !important;
 }}
-/* Texto del sidebar */
+
+/* Etiquetas del sidebar y texto */
 [data-testid="stSidebar"] label, 
 [data-testid="stSidebar"] p, 
 [data-testid="stSidebar"] span {{
   color: var(--text) !important;
 }}
 
-/* Inputs del SIDEBAR */
+/* Inputs del SIDEBAR (select, input, textarea, dropzone) */
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
 [data-testid="stSidebar"] [data-baseweb="select"] {{
   background: var(--box) !important;
@@ -113,14 +112,14 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
   color: var(--text) !important;
 }}
-/* Chips de archivos subidos */
+/* Pills de archivos subidos */
 [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
   background: var(--box) !important;
   border: 1px solid var(--box) !important;
   color: var(--text) !important;
 }}
 
-/* Botones verdes */
+/* Botón verde (sidebar y cuerpo) */
 .stButton > button {{
   background: var(--green) !important;
   color: #082017 !important;
@@ -129,11 +128,17 @@ html, body, [data-testid="stAppViewContainer"] {{
   padding: .45rem .9rem !important;
   font-weight: 600 !important;
 }}
-.stButton > button:hover {{ filter: brightness(0.95); }}
+.stButton > button:hover {{
+  filter: brightness(0.95);
+}}
 
 /* Títulos del cuerpo */
-h1, h2, h3 {{ color: var(--title-dark) !important; }}
-h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
+h1, h2, h3 {{
+  color: var(--title-dark);
+}}
+h1 strong, h2 strong, h3 strong {{
+  color: var(--green);
+}}
 
 /* Controles del área principal (claros) */
 .block-container [data-testid="stSelectbox"] > div > div,
@@ -146,7 +151,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
   border-radius: 10px !important;
 }}
 
-/* Tabla clara */
+/* Tabla clara (dataframe/simple table) */
 .block-container table {{
   background: #fff !important;
   border: 1px solid var(--box-light-border) !important;
@@ -167,7 +172,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
   color: var(--title-dark) !important;
 }}
 
-/* Selector del visor de PDF */
+/* Selector del visor de PDF en claro */
 #pdf_candidate, #pdf_candidate_alt {{
   background: var(--box-light) !important;
   border: 1.5px solid var(--box-light-border) !important;
@@ -175,120 +180,133 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
   border-radius: 10px !important;
 }}
 """
+
+
+# =================
+#   PAGE SETTINGS
+# =================
+st.set_page_config(
+    page_title="SelektIA",
+    page_icon="🧠",
+    layout="wide",
+)
+
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-# =========================
-# Utilidades (texto y score)
-# =========================
-def _normalize_text(s: str) -> str:
+
+# =================================
+#  UTILIDADES Y PROCESAMIENTO
+# =================================
+def normalize_text(s: str) -> str:
+    """Normaliza texto: minúsculas y sin acentos para comparar."""
     if not s:
         return ""
     s = s.lower()
     s = "".join(
-        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
     )
     return s
 
-def extract_text_from_bytes(name: str, data: bytes) -> str:
-    """Extrae texto de PDF (PyPDF2) o TXT a partir de bytes."""
+
+def parse_keywords(raw: str) -> list:
+    """Separa keywords por coma/; o salto de línea y limpia espacios."""
+    if not raw:
+        return []
+    parts = []
+    for token in raw.replace("\n", ",").replace(";", ",").split(","):
+        t = token.strip()
+        if t:
+            parts.append(t)
+    return parts
+
+
+def extract_text_from_file(uploaded_file) -> str:
+    """Extrae texto de PDF (PyPDF2) o TXT. Devuelve str normalizado."""
     try:
-        ext = Path(name).suffix.lower()
-        if ext == ".pdf":
-            reader = PdfReader(io.BytesIO(data))
+        suffix = Path(uploaded_file.name).suffix.lower()
+        if suffix == ".pdf":
+            pdf_reader = PdfReader(io.BytesIO(uploaded_file.read()))
             text = ""
-            for page in reader.pages:
+            for page in pdf_reader.pages:
                 text += page.extract_text() or ""
-            return text
         else:
-            return data.decode("utf-8", errors="ignore")
+            text = uploaded_file.read().decode("utf-8", errors="ignore")
+        return normalize_text(text)
     except Exception as e:
-        st.error(f"Error al leer '{name}': {e}")
+        st.error(f"Error al leer '{uploaded_file.name}': {e}")
         return ""
 
-def score_by_keywords(jd_text: str, kw_text: str, cv_text: str) -> tuple[int, list, list, int]:
-    """
-    Devuelve (score 0-100, pros(list), cons(list), coincidencias).
-    Score simple por coincidencia de palabras clave dentro del CV.
-    """
-    jd_norm = _normalize_text(jd_text)
-    kw_norm = _normalize_text(kw_text)
-    cv_norm = _normalize_text(cv_text)
 
-    # KeyWords base: separa por coma y por espacios/punctuation
-    kw_items = [k.strip() for k in re.split(r"[,\n;]", kw_norm) if k.strip()]
-    # Evita duplicados y vacíos
-    kw_items = list({k for k in kw_items if k})
+def score_cv(cv_text: str, kw_list: list) -> tuple:
+    """Devuelve (matches_count, score_0_100, reasons_str)."""
+    if not kw_list:
+        return 0, 0, "Sin keywords definidas."
 
-    if not kw_items:
-        return 0, ["No se definieron palabras clave."], ["Agrega keywords para evaluar."], 0
+    matches = []
+    text = normalize_text(cv_text)
+    for kw in kw_list:
+        kwn = normalize_text(kw)
+        if kwn and kwn in text:
+            matches.append(kw)
 
-    total = len(kw_items)
-    hits = [k for k in kw_items if k and k in cv_norm]
-    n_hits = len(hits)
-
-    score = int(min(100, round((n_hits / total) * 100))) if total else 0
-
-    pros = [
-        f"Coincidencias: {n_hits}/{total} keywords.",
-        "Alineación general con el perfil (según keywords).",
-    ]
-    if hits:
-        pros.append("Palabras clave encontradas: " + ", ".join(hits[:8]) + ("..." if len(hits) > 8 else ""))
-
-    cons = []
-    missing = [k for k in kw_items if k not in hits]
-    if missing:
-        cons.append("Palabras clave faltantes: " + ", ".join(missing[:8]) + ("..." if len(missing) > 8 else ""))
-    if score < 50:
-        cons.append("Baja coincidencia global con el perfil definido.")
-
-    return score, pros, cons, n_hits
+    matches_count = len(matches)
+    total = len(kw_list)
+    score = int(round((matches_count / total) * 100)) if total else 0
+    reasons = (
+        f"{matches_count}/{total} keywords encontradas — Coincidencias: "
+        + (", ".join(matches) if matches else "Ninguna")
+    )
+    return matches_count, max(0, min(score, 100)), reasons
 
 
-# =========================
-# Lógica de análisis (sin IA)
-# =========================
-def analyze_cvs(jd, keywords, cv_files):
-    st.session_state.candidates = []
+def analyze_cvs(jd_text: str, kw_text: str, files):
+    """Analiza CVs (sin IA): coincidencias con keywords del JD."""
+    kw_list = parse_keywords(kw_text)
+    candidates = []
+
     progress = st.progress(0, "Analizando CVs...")
+    for i, f in enumerate(files):
+        # Leer bytes para guardar y luego extraer texto (volver a posicion 0)
+        file_bytes = f.read()
+        f.seek(0)
+        cv_text = extract_text_from_file(f)
 
-    files = list(cv_files)  # aseguramos lista para len()
-    for i, file in enumerate(files):
-        file_bytes = file.getvalue()  # bytes inmutables del archivo
-        cv_text = extract_text_from_bytes(file.name, file_bytes)
-
-        if not cv_text.strip():
-            st.warning(f"No se pudo extraer texto de '{file.name}'. Omitiendo.")
-            progress.progress((i + 1) / len(files), f"Omitido: {file.name}")
+        if not cv_text:
+            st.warning(f"No se pudo extraer texto de '{f.name}'. Omitiendo.")
             continue
 
-        score, pros, cons, matches = score_by_keywords(jd, keywords, cv_text)
+        matches, score, reasons = score_cv(cv_text, kw_list)
 
-        st.session_state.candidates.append({
-            "Name": file.name,
-            "Score": int(score),
-            "Pros": "• " + "\n• ".join(pros),
-            "Cons": "• " + "\n• ".join(cons),
+        candidates.append({
+            "Name": f.name,
+            "Score": score,
             "Matches": matches,
+            "Reasons": reasons,
             "file_bytes": file_bytes,
-            "is_pdf": Path(file.name).suffix.lower() == ".pdf"
+            "is_pdf": Path(f.name).suffix.lower() == ".pdf"
         })
-        progress.progress((i + 1) / len(files), f"Procesado: {file.name}")
+
+        progress.progress((i + 1) / len(files), f"Analizando: {f.name}")
 
     progress.empty()
-    if st.session_state.candidates:
-        st.success(f"¡Listo! {len(st.session_state.candidates)} CV(s) analizados.")
+
+    st.session_state.candidates = candidates
+    if not candidates:
+        st.warning("No se pudo procesar ningún CV. Revisa que los archivos no estén dañados.")
     else:
-        st.warning("No se pudo analizar ningún CV.")
+        st.success(f"¡Análisis completo! {len(candidates)} CV(s) procesados.")
+        st.rerun()
 
 
 # ================
 #  SIDEBAR (oscuro)
 # ================
 with st.sidebar:
-    st.image("assets/logo-wayki.png", use_container_width=True)  # ← sin deprecación
-    st.markdown("### Definición del puesto")
+    # Logo (sin use_column_width para evitar banner deprecado)
+    st.image("assets/logo-wayki.png", width=170)
 
+    st.markdown("### Definición del puesto")
     puesto = st.selectbox(
         "Puesto",
         [
@@ -305,14 +323,14 @@ with st.sidebar:
     st.markdown("### Descripción del puesto (texto libre)")
     jd_text = st.text_area(
         "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
-        height=120,
+        height=110,
         key="jd",
         label_visibility="collapsed",
     )
 
     st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
     kw_text = st.text_area(
-        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad...",
+        "",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         height=110,
         key="kw",
@@ -334,9 +352,11 @@ with st.sidebar:
             analyze_cvs(jd_text, kw_text, files)
 
     st.divider()
-    if st.session_state.get("candidates"):
+
+    if 'candidates' in st.session_state and st.session_state.candidates:
         if st.button("Limpiar Lista", use_container_width=True):
             st.session_state.candidates = []
+            st.success("Resultados limpiados.")
             st.rerun()
 
 
@@ -345,18 +365,32 @@ with st.sidebar:
 # ===================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Results</span>", unsafe_allow_html=True)
 
-if not st.session_state.get("candidates"):
+if 'candidates' not in st.session_state or not st.session_state.candidates:
     st.info("Define el puesto, ajusta keywords y sube CVs. Luego presiona **Analizar CVs** en la barra lateral.", icon="ℹ️")
 else:
+    # DataFrame base
     df = pd.DataFrame(st.session_state.candidates)
+
+    # --- Normalización defensiva (evita KeyError si algo falta en memoria)
+    if "Matches" not in df.columns:
+        df["Matches"] = 0
+    if "Reasons" not in df.columns:
+        df["Reasons"] = ""
+    if "file_bytes" not in df.columns:
+        df["file_bytes"] = None
+    if "is_pdf" not in df.columns:
+        df["is_pdf"] = False
+
+    # Orden por Score
     df_sorted = df.sort_values("Score", ascending=False)
 
-    tabs = st.tabs(["🏆 Ranking de Candidatos", "📄 Visor de CV"])
-    with tabs[0]:
-        st.markdown(f"##### Ranking de Candidatos")
-        show = df_sorted[["Name", "Score", "Matches"]].rename(
-            columns={"Name": "Candidato", "Score": "Score", "Matches": "Keywords"}
-        )
+    tab_rank, tab_viewer = st.tabs(["🏆 Ranking de Candidatos", "📄 Visor de CV"])
+
+    # -------- Ranking --------
+    with tab_rank:
+        st.markdown("##### Ranking de Candidatos")
+        cols = [c for c in ["Name", "Score", "Matches"] if c in df_sorted.columns]
+        show = df_sorted[cols].rename(columns={"Name": "Candidato", "Score": "Score", "Matches": "Keywords"})
         st.dataframe(show, use_container_width=True, hide_index=True)
 
         st.markdown("#### Comparativa General")
@@ -377,19 +411,17 @@ else:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("#### Detalle (pros/cons)")
+        st.markdown("#### Detalle (coincidencias)")
         for _, r in df_sorted.iterrows():
-            with st.expander(f"{r['Name']}  (Score: {r['Score']}/100)"):
-                st.markdown("**✅ A favor (Pros):**")
-                st.markdown(r["Pros"])
-                st.markdown("**⚠️ A mejorar (Cons):**")
-                st.markdown(r["Cons"])
+            with st.expander(f"{r['Name']}  (Score: {r['Score']}/100, Keywords: {r['Matches']})"):
+                st.markdown(r.get("Reasons", ""))
 
-    with tabs[1]:
+    # -------- Visor de CV --------
+    with tab_viewer:
         st.markdown(f"#### <span style='color:{PRIMARY_GREEN}'>Visor de CV</span>", unsafe_allow_html=True)
         all_names = df_sorted["Name"].tolist()
-        col1, col2 = st.columns([1,1])
 
+        col1, col2 = st.columns([1, 1])
         with col1:
             selected_name = st.selectbox(
                 "Selecciona un candidato:",
@@ -397,7 +429,6 @@ else:
                 key="pdf_candidate",
                 label_visibility="collapsed",
             )
-
         with col2:
             st.selectbox(
                 "Elegir candidato (opción alternativa)",
@@ -407,12 +438,12 @@ else:
                 label_visibility="visible",
             )
 
-        # Visor PDF (con respaldo)
         if selected_name:
             cdata = next(c for c in st.session_state.candidates if c["Name"] == selected_name)
-            if cdata["is_pdf"] and cdata["file_bytes"]:
+            if cdata.get("is_pdf") and cdata.get("file_bytes"):
                 data_b64 = base64.b64encode(cdata["file_bytes"]).decode("utf-8")
 
+                # Embebido principal
                 st.markdown(
                     f"""
                     <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
@@ -424,9 +455,11 @@ else:
                     unsafe_allow_html=True,
                 )
 
-                # Respaldo si el navegador no renderiza el iframe base64
-                st.components.v1.iframe(src=f"data:application/pdf;base64,{data_b64}",
-                                        width=None, height=750, scrolling=True)
+                # Fallback (algunos navegadores son estrictos con data: URIs)
+                st.components.v1.iframe(
+                    src=f"data:application/pdf;base64,{data_b64}",
+                    width=None, height=750, scrolling=True
+                )
 
                 st.download_button(
                     f"Descargar {selected_name}",
@@ -436,5 +469,5 @@ else:
                 )
             else:
                 st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
-                txt_content = cdata["file_bytes"].decode("utf-8", errors="ignore")
+                txt_content = (cdata.get("file_bytes") or b"").decode("utf-8", errors="ignore")
                 st.text_area("Contenido del TXT:", value=txt_content, height=600, disabled=True)
