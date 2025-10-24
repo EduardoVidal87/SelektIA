@@ -8,7 +8,7 @@ import streamlit as st
 from pdfminer.high_level import extract_text
 
 # =========================
-# Configuración general
+# Configuración
 # =========================
 st.set_page_config(
     page_title="SelektIA – Evaluación de CVs",
@@ -17,134 +17,145 @@ st.set_page_config(
 )
 
 PRIMARY = "#00CD78"
-SIDEBAR_BG = "#10172A"      # barra izquierda
-BOX_BG = "#132840"          # interiores y bordes de boxes en la izquierda
-LIGHT_BG = "#F5F7FA"        # fondo claro principal
+SIDEBAR_BG = "#10172A"      # columna izquierda
+BOX_BG = "#132840"          # fondo + borde de TODOS los boxes izquierda
+LIGHT_BG = "#F5F7FA"        # fondo derecha
 TEXT = "#FFFFFF"            # texto blanco
 ACCENT = "#9FB3C8"          # gris azulado sutil
+RADIUS = "14px"
 
 # =========================
-# Estilos (CSS)
+# Estilos CSS unificados
 # =========================
 CSS = f"""
 <style>
-/* Fondo app y tipografías */
+/* Fondo general */
 body, .main, [data-testid="stAppViewContainer"] {{
   background: {LIGHT_BG};
 }}
+
 /* Sidebar */
-[data-testid="stSidebar"], section[data-testid="stSidebar"] {{
+[data-testid="stSidebar"] {{
   background: {SIDEBAR_BG} !important;
-  color: {TEXT} !important;
 }}
-/* Títulos globales */
-h1, h2, h3, h4, h5, h6 {{
-  color: {PRIMARY} !important;
-  font-weight: 700;
-}}
-/* Texto general en sidebar */
+/* Texto del sidebar en blanco por defecto */
 [data-testid="stSidebar"] * {{
   color: {TEXT} !important;
 }}
-/* Etiquetas (subtítulos) del panel izquierdo */
-.sidebar-label {{
+
+/* Títulos en verde Wayki */
+h1, h2, h3, h4, h5 {{
   color: {PRIMARY} !important;
-  font-weight: 700 !important;
-  margin-bottom: .25rem;
-  display:block;
+  font-weight: 800 !important;
 }}
 
-/* ---------- Componentes de entrada en el panel izquierdo ---------- */
-/* Text input */
-[data-testid="stTextInput"] input {{
+/* Etiquetas del panel izquierdo */
+.sidebar-label {{
+  color: {PRIMARY} !important;
+  font-weight: 800 !important;
+  display:block;
+  margin: 2px 0 6px;
+}}
+
+/* === BOXES UNIFICADOS EN LA IZQUIERDA (mismo look) === */
+/* Select cerrado (contenedor) */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {{
+  background:{BOX_BG} !important;
+  border:1px solid {BOX_BG} !important;
+  border-radius:{RADIUS} !important;
+}}
+/* Texto del valor mostrado en select */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] div {{
+  color:{TEXT} !important;
+}}
+
+/* Inputs */
+[data-testid="stSidebar"] [data-testid="stTextInput"] input {{
   background:{BOX_BG} !important;
   color:{TEXT} !important;
   border:1px solid {BOX_BG} !important;
-  border-radius:10px !important;
+  border-radius:{RADIUS} !important;
 }}
-/* Text area */
-[data-testid="stTextArea"] textarea {{
+/* Textareas */
+[data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
   background:{BOX_BG} !important;
   color:{TEXT} !important;
   border:1px solid {BOX_BG} !important;
-  border-radius:10px !important;
+  border-radius:{RADIUS} !important;
 }}
-/* Selectbox (contenedor cerrado) */
-[data-testid="stSelectbox"] > div > div {{
-  background:{BOX_BG} !important;
-  color:{TEXT} !important;
-  border:1px solid {BOX_BG} !important;
-  border-radius:10px !important;
-}}
-/* Selectbox (valor mostrado) */
-[data-testid="stSelectbox"] [data-baseweb="select"] div {{
-  color:{TEXT} !important;
-}}
-/* Botón secundario/primario en panel izquierdo */
-[data-testid="stSidebar"] button[kind="secondary"],
-[data-testid="stSidebar"] button[kind="primary"] {{
+/* Botón (sugerir keywords / browse) */
+[data-testid="stSidebar"] button[kind="primary"],
+[data-testid="stSidebar"] button[kind="secondary"] {{
   background:{PRIMARY} !important;
-  color:#001017 !important;
+  color:#011014 !important;
   border:1px solid {PRIMARY} !important;
-  font-weight:700 !important;
-  border-radius:12px !important;
+  border-radius:{RADIUS} !important;
+  font-weight:800 !important;
 }}
-[data-testid="stSidebar"] button[kind="secondary"]:hover,
-[data-testid="stSidebar"] button[kind="primary"]:hover {{
+[data-testid="stSidebar"] button:hover {{
   filter:brightness(1.05);
   transform:translateY(-1px);
 }}
 
-/* ---------- File uploader ---------- */
-/* Zona de arrastre */
-[data-testid="stFileUploaderDropzone"] {{
+/* Dropzone */
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background:{BOX_BG} !important;
   border:2px dashed {ACCENT} !important;
   color:{TEXT} !important;
-  border-radius:14px !important;
+  border-radius:{RADIUS} !important;
 }}
-/* Botón Browse */
-[data-testid="stFileUploaderDropzone"] button {{
+/* Botón Browse dentro del dropzone */
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {{
   background:{PRIMARY} !important;
-  color:#001017 !important;
+  color:#011014 !important;
   border:1px solid {PRIMARY} !important;
-  border-radius:10px !important;
+  border-radius:{RADIUS} !important;
+  font-weight:800 !important;
 }}
-/* Caja de cada archivo subido */
-[data-testid="stFileUploader"] .uploadedFile {{
+
+/* Tarjetas de archivo subido */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] .uploadedFile {{
   background:{BOX_BG} !important;
   border:1px solid {BOX_BG} !important;
-  border-radius:12px !important;
+  border-radius:{RADIUS} !important;
   color:{TEXT} !important;
 }}
-/* Nombre y tamaño del archivo */
-.uploadedFileName, .uploadedFileSize {{
-  color:{TEXT} !important;
-}}
-/* Icono PDF vistoso */
-[data-testid="stFileUploader"] .uploadedFile::before {{
+.uploadedFileName, .uploadedFileSize {{ color:{TEXT} !important; }}
+
+/* Icono PDF rojo para que resalte */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] .uploadedFile::before {{
   content:"PDF";
   display:inline-flex;
   align-items:center;
   justify-content:center;
   width:28px;
   height:28px;
-  margin-right:.5rem;
+  margin-right:.6rem;
   background:#FF5252;
   color:white;
   font-weight:900;
   border-radius:6px;
 }}
 
-/* ---------- Barra de selección en el visor (dropdown claro) ---------- */
+/* === CONTROLES EN LA DERECHA EN TONO CLARO === */
 .select-light > div > div {{
   background:#E9EEF5 !important;
   color:#0F172A !important;
   border:1px solid #E9EEF5 !important;
-  border-radius:10px !important;
+  border-radius:{RADIUS} !important;
+}}
+[data-testid="stExpander"] > details {{
+  background:#EEF3FA !important;
+  border:1px solid #EEF3FA !important;
+  border-radius:{RADIUS} !important;
+  color:#0F172A !important;
+}}
+[data-testid="stExpander"] summary p {{
+  color:#0F172A !important;
+  font-weight:700 !important;
 }}
 
-/* ---------- Tabla/ayuda superior ---------- */
+/* Pastilla de ayuda bajo el título */
 .helper-pill {{
   background:#E3EEFF;
   color:#1E293B;
@@ -152,27 +163,52 @@ h1, h2, h3, h4, h5, h6 {{
   padding:10px 12px;
   font-size:.95rem;
 }}
-/* DataFrame header contraste sutil */
+
+/* Cabecera de tablas */
 [data-testid="stTable"] th, .dataframe thead th {{
   background:#E9EEF5 !important;
   color:#0F172A !important;
-  font-weight:700 !important;
+  font-weight:800 !important;
 }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
+# Inyección ligera para que los select de la derecha usen la clase select-light automáticamente
+st.markdown("""
+<script>
+const applyLightToMainSelects = () => {
+  const app = window.parent.document;
+  const all = [...app.querySelectorAll('div[data-baseweb="select"]')];
+  all.forEach(el => {
+    // ignora los que están dentro del sidebar
+    let inSidebar = false;
+    let node = el;
+    while (node) {
+      if (node.getAttribute && node.getAttribute('data-testid') === 'stSidebar') { inSidebar = true; break; }
+      node = node.parentElement;
+    }
+    if (!inSidebar) {
+       const wrap = el.closest('div');
+       if (wrap) wrap.parentElement?.parentElement?.classList?.add('select-light');
+    }
+  });
+}
+setTimeout(applyLightToMainSelects, 300);
+</script>
+""", unsafe_allow_html=True)
+
 # =========================
-# Encabezado con logotipo
+# Logo en sidebar
 # =========================
-def logo_base64(path="assets/logo-wayki.png"):
+def logo_b64(path="assets/logo-wayki.png"):
     try:
         with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     except Exception:
         return None
 
-logo64 = logo_base64()
+logo64 = logo_b64()
 if logo64:
     st.sidebar.markdown(
         f'<img src="data:image/png;base64,{logo64}" style="width:140px;margin:8px 0 16px 2px;">',
@@ -186,7 +222,7 @@ st.title("SelektIA – Evaluation Results")
 # =========================
 st.sidebar.markdown('<span class="sidebar-label">Puesto</span>', unsafe_allow_html=True)
 role = st.sidebar.selectbox(
-    "", 
+    "",
     ["Enfermera/o Asistencial – Hospitalización / UCI intermedia", "Otro"],
     index=0, label_visibility="collapsed"
 )
@@ -195,8 +231,7 @@ st.sidebar.markdown('<span class="sidebar-label">Descripción del puesto (texto 
 jd_text = st.sidebar.text_area(
     "",
     value="Resume el objetivo del puesto, responsabilidades, protocolos y competencias clave.",
-    height=110,
-    label_visibility="collapsed"
+    height=110, label_visibility="collapsed"
 )
 
 if st.sidebar.button("Sugerir keywords"):
@@ -207,8 +242,7 @@ st.sidebar.markdown('<span class="sidebar-label">Palabras clave del perfil (ajú
 keywords_text = st.sidebar.text_area(
     "",
     value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, monitoreo, eventos adversos",
-    height=110,
-    label_visibility="collapsed"
+    height=110, label_visibility="collapsed"
 )
 
 st.sidebar.markdown('<span class="sidebar-label">Subir CVs (PDF o TXT)</span>', unsafe_allow_html=True)
@@ -220,56 +254,50 @@ files = st.sidebar.file_uploader(
 )
 
 # =========================
-# Funciones de parsing y scoring
+# Helpers de texto/score
 # =========================
-def read_pdf(file_bytes: bytes) -> str:
+def read_pdf(b: bytes) -> str:
     try:
-        text = extract_text(io.BytesIO(file_bytes))
-        return text or ""
+        return extract_text(io.BytesIO(b)) or ""
     except Exception:
         return ""
 
 def normalize(s: str) -> str:
     s = s.lower()
     s = re.sub(r"[^a-z0-9áéíóúüñ\s]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    return re.sub(r"\s+", " ", s).strip()
 
 def keywords_from_text(txt: str):
-    kws = [k.strip() for k in re.split(r"[,\n;]", txt) if k.strip()]
-    # sinónimos básicos (ejemplo)
+    raw = [k.strip() for k in re.split(r"[,\n;]", txt) if k.strip()]
     syn = {
         "bls": ["soporte vital básico", "basic life support"],
         "acls": ["advanced cardiac life support", "soporte vital avanzado"],
         "his": ["sistema his", "hospital information system"],
         "sap is-h": ["sap ish", "sap is-h"]
     }
-    expanded = []
-    for k in kws:
-        expanded.append(k)
-        for k0, vs in syn.items():
-            if k0 in k.lower():
-                expanded.extend(vs)
-    # únicos
-    seen, final = set(), []
-    for k in expanded:
-        kl = k.lower()
-        if kl not in seen:
-            seen.add(kl)
+    out = []
+    for k in raw:
+        out.append(k)
+        for base, vs in syn.items():
+            if base in k.lower():
+                out.extend(vs)
+    uniq, final = set(), []
+    for k in out:
+        if k.lower() not in uniq:
+            uniq.add(k.lower())
             final.append(k)
     return final
 
 def score_cv(text: str, keywords: list[str]) -> tuple[int, list[str]]:
     nt = normalize(text)
-    found = []
-    score = 0
+    found, score = [], 0
     for kw in keywords:
         k = normalize(kw)
-        if len(k) < 2: 
+        if len(k) < 2:
             continue
         if re.search(rf"\b{k}\b", nt):
-            score += 1
             found.append(kw)
+            score += 1
     return score, found
 
 # =========================
@@ -277,116 +305,98 @@ def score_cv(text: str, keywords: list[str]) -> tuple[int, list[str]]:
 # =========================
 kw_list = keywords_from_text(keywords_text)
 rows = []
+files_map = {}  # name -> {bytes, mime, text}
 
 if files:
     for f in files:
         raw = f.read()
-        if f.type == "text/plain" or f.name.lower().endswith(".txt"):
-            text = raw.decode("utf-8", errors="ignore")
-        else:
+        name = f.name
+        mime = f.type or ("application/pdf" if name.lower().endswith(".pdf") else "text/plain")
+
+        if mime == "application/pdf" or name.lower().endswith(".pdf"):
             text = read_pdf(raw)
+        else:
+            text = raw.decode("utf-8", errors="ignore")
 
         s, found = score_cv(text, kw_list)
         rows.append({
-            "Name": f.name,
+            "Name": name,
             "Score": s,
             "Reasons": f"{len(found)}/{len(kw_list)} keywords encontradas — Coincidencias: " + (", ".join(found) if found else "—"),
-            "PDF_text": f"{len(text)} chars",
-            "_text": text
+            "PDF_text": f"{len(text)} chars"
         })
+        files_map[name] = {"bytes": raw, "mime": mime, "text": text}
 
 # =========================
-# Resultados (tabla + gráfico)
+# UI derecha: tabla + gráfico + visor
 # =========================
 if rows:
     df = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
 
     st.markdown('<div class="helper-pill">Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.</div>', unsafe_allow_html=True)
-    st.dataframe(
-        df[["Name","Score","Reasons","PDF_text"]],
-        use_container_width=True, height=260
-    )
+    st.dataframe(df[["Name","Score","Reasons","PDF_text"]], use_container_width=True, height=260)
 
-    # Gráfico
-    threshold = st.slider("Umbral de selección", 0, max(1, df["Score"].max()+1), min(50, max(1, df["Score"].max())), help="Puntaje mínimo para resaltar candidatos")
+    threshold = st.slider("Umbral de selección", 0, max(1, df["Score"].max()+1), min(50, max(1, df["Score"].max())))
     fig = px.bar(
         df, x="Name", y="Score",
         color=df["Score"] >= threshold,
         color_discrete_map={True: PRIMARY, False: "#C7D2E3"},
-        text="Score",
-        height=360
+        text="Score", height=360
     )
     fig.update_traces(textposition="outside")
-    fig.update_layout(
-        xaxis_title=None, yaxis_title="Score",
-        showlegend=False, bargap=0.25,
-        margin=dict(l=10,r=10,t=10,b=10)
-    )
+    fig.update_layout(xaxis_title=None, yaxis_title="Score", showlegend=False, bargap=0.25, margin=dict(l=10,r=10,t=10,b=10))
     st.plotly_chart(fig, use_container_width=True)
 
-    # =========================
-    # Visor de CV (PDF/TXT)
-    # =========================
     st.subheader("Visor de CV (PDF)")
     colL, colR = st.columns([1,2])
 
     with colL:
         st.caption("Elige un candidato")
-        # select claro (clase select-light)
-        choice = st.selectbox(
-            "", df["Name"].tolist(),
-            label_visibility="collapsed",
-            key="viewer_choice"
-        )
-        # Aplico CSS “select-light” sólo a este select
+        choice = st.selectbox("", df["Name"].tolist(), label_visibility="collapsed")
+        # fuerza select claro por JS (añade clase select-light)
         st.markdown(
             """
             <script>
-            const boxes = window.parent.document.querySelectorAll('div[data-baseweb="select"]');
+            const app = window.parent.document;
+            const boxes = app.querySelectorAll('div[data-baseweb="select"]');
             if (boxes && boxes.length){
-                boxes[boxes.length-1].parentElement.parentElement.classList.add('select-light');
+              const last = boxes[boxes.length-1];
+              const wrap = last.closest('div');
+              if (wrap) wrap.parentElement?.parentElement?.classList?.add('select-light');
             }
             </script>
             """, unsafe_allow_html=True
         )
 
-        # Alternativa
         with st.expander("Elegir candidato (opción alternativa)"):
             alt = st.selectbox("Candidato", df["Name"].tolist(), key="alt_choice")
-            if st.session_state.alt_choice:
-                choice = st.session_state.alt_choice
+            if alt:
+                choice = alt
 
     with colR:
         st.caption(f"Mostrando: {choice}")
 
-    # Render del texto (por simplicidad mostramos el texto indexado)
-    text = df.loc[df["Name"]==choice, "_text"].iloc[0]
-    # Extraigo fragmentos donde aparezcan keywords
-    def highlight_snippets(t: str, kws: list[str], n=8):
-        nt = normalize(t)
-        snippets = []
-        for kw in kws:
-            k = normalize(kw)
-            for m in re.finditer(rf"\b{k}\b", nt):
-                start = max(0, m.start()-80)
-                end   = min(len(nt), m.end()+80)
-                snippets.append(nt[start:end])
-                if len(snippets) >= n:
-                    return snippets
-        return snippets
-    snips = highlight_snippets(text, kw_list, n=12)
-    if snips:
-        st.markdown("**Fragmentos con coincidencias:**")
-        for sni in snips:
-            st.markdown(f"- {sni}")
-    else:
-        st.info("No hay coincidencias visibles; desplázate por el PDF/Texto completo o ajusta las keywords.")
+    # === Mostrar PDF o texto según el tipo ===
+    blob = files_map.get(choice, {})
+    raw = blob.get("bytes", b"")
+    mime = blob.get("mime", "application/pdf")
+    text = blob.get("text", "")
+
+    if raw:
+        if mime == "application/pdf":
+            # visor PDF embebido
+            b64pdf = base64.b64encode(raw).decode("utf-8")
+            st.download_button("Descargar PDF", data=raw, file_name=choice, mime="application/pdf")
+            st.markdown(
+                f'<iframe src="data:application/pdf;base64,{b64pdf}" width="100%" height="850px" style="border:1px solid #E5E7EB;border-radius:{RADIUS};"></iframe>',
+                unsafe_allow_html=True
+            )
+        else:
+            # si no es PDF, muestra el texto plano
+            st.download_button("Descargar archivo", data=raw, file_name=choice, mime=mime)
+            st.text_area("Contenido del archivo", text, height=450)
+
+    st.caption(f"Puesto: **{role}** — Keywords totales: **{len(kw_list)}**")
 
 else:
     st.info("Sube algunos CVs para ver el demo.")
-
-
-# =========================
-# Notas finales
-# =========================
-st.caption("Puesto: **{}** — Keywords totales: **{}**".format(role, len(kw_list)))
