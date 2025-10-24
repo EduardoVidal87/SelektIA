@@ -3,9 +3,9 @@
 
 import io
 import base64
+import html
 from pathlib import Path
-from datetime import date, datetime, timedelta
-from html import escape  # para sanitizar chips
+from datetime import date
 
 import streamlit as st
 import pandas as pd
@@ -13,17 +13,18 @@ import plotly.express as px
 from PyPDF2 import PdfReader
 
 # ======================================================================================
-# TEMA / COLORES
+# PALETA / THEME (mantenemos tu look&feel)
 # ======================================================================================
 PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG = "#10172A"
-BOX_DARK = "#132840"
-BOX_DARK_HOV = "#193355"
+SIDEBAR_BG = "#10172A"        # fondo columna izquierda
+BOX_DARK = "#132840"          # fondo y borde de boxes del sidebar
+BOX_DARK_HOV = "#193355"      # borde hover/focus
 TEXT_LIGHT = "#FFFFFF"
-MAIN_BG = "#F7FBFF"
-BOX_LIGHT = "#F1F7FD"
-BOX_LIGHT_B = "#E3EDF6"
+MAIN_BG = "#F7FBFF"           # cuerpo claro
+BOX_LIGHT = "#F1F7FD"         # inputs cuerpo
+BOX_LIGHT_B = "#E3EDF6"       # borde inputs
 TITLE_DARK = "#142433"
+
 BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD = "#33FFAC"
 
@@ -40,7 +41,7 @@ CSS = f"""
   --title-dark: {TITLE_DARK};
 }}
 
-/* Fondo general */
+/* Fondo app */
 html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main-bg) !important;
 }}
@@ -56,38 +57,28 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] h3,
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6,
-[data-testid="stSidebar"] .stMarkdown p strong {{
+[data-testid="stSidebar"] h6 {{
   color: var(--green) !important;
 }}
-[data-testid="stSidebar"] label, 
-[data-testid="stSidebar"] p, 
-[data-testid="stSidebar"] span {{
-  color: var(--text) !important;
-}}
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span {{ color: var(--text) !important; }}
 
-/* 4 boxes del panel izquierdo */
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
-[data-testid="stSidebar"] [data-baseweb="select"],
+/* Cards/inputs Sidebar */
+[data-testid="stSidebar"] [data-testid="stTextInput"] input,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"],
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {{
   background: var(--box) !important;
   color: var(--text) !important;
   border: 1.5px solid var(--box) !important;
   border-radius: 14px !important;
-  box-shadow: none !important;
 }}
+[data-testid="stSidebar"] [data-testid="stTextInput"] input:hover,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea:hover,
-[data-testid="stSidebar"] [data-testid="stTextArea"] textarea:focus,
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover,
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"]:hover {{
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"]:hover,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
-}}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{ color: var(--text) !important; }}
-[data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
-  background: var(--box) !important;
-  border: 1px solid var(--box) !important;
-  color: var(--text) !important;
 }}
 
 /* Botón verde */
@@ -101,13 +92,12 @@ html, body, [data-testid="stAppViewContainer"] {{
 }}
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* Títulos del cuerpo */
+/* Títulos */
 h1, h2, h3 {{ color: var(--title-dark); }}
 h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Inputs claros del cuerpo */
+/* Inputs claros cuerpo */
 .block-container [data-testid="stSelectbox"] > div > div,
-.block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
 .block-container [data-testid="stTextArea"] textarea {{
   background: var(--box-light) !important;
@@ -115,6 +105,20 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   border: 1.5px solid var(--box-light-border) !important;
   border-radius: 10px !important;
 }}
+
+/* TABS VISIBLES (subrayado verde y texto marcado) */
+[data-baseweb="tab-list"] [role="tab"] {{
+  color: #1f2937 !important;
+  font-weight: 700 !important;
+  padding: 8px 12px !important;
+  margin-right: 14px !important;
+  border-bottom: 3px solid transparent !important;
+}}
+[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {{
+  color: var(--green) !important;
+  border-bottom-color: var(--green) !important;
+}}
+[data-baseweb="tab-list"] [role="tab"] span {{ color: inherit !important; }}
 
 /* Tabla clara */
 .block-container table {{
@@ -127,52 +131,13 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   color: var(--title-dark) !important;
 }}
 
-/* Selector visor */
-#pdf_candidate {{
-  background: var(--box-light) !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  color: var(--title-dark) !important;
-  border-radius: 10px !important;
-}}
-
-/* Contenedor visor PDF */
+/* Marco visor PDF */
 .pdf-frame {{
   border: 1px solid var(--box-light-border);
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
 }}
-
-/* --- TABS VISIBLES --- */
-[data-baseweb="tab-list"] [role="tab"] {{
-  color: #1f2937 !important;
-  font-weight: 700 !important;
-  padding: 6px 10px !important;
-  margin-right: 10px !important;
-  border-bottom: 3px solid transparent !important;
-}}
-[data-baseweb="tab-list"] [role="tab"][aria-selected="true"] {{
-  color: var(--green) !important;
-  border-bottom-color: var(--green) !important;
-}}
-[data-baseweb="tab-list"] [role="tab"] span {{
-  color: inherit !important;
-}}
-
-/* Chips */
-.badge {{
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  margin-right: 6px;
-  margin-bottom: 6px;
-  border: 1px solid #e3edf6;
-}}
-.badge-green {{ background:#E9FFF5; color:#0F5132; border-color:#BFEFD9; }}
-.badge-amber {{ background:#FFF9E6; color:#614700; border-color:#FFE8A3; }}
-.badge-red   {{ background:#FFECEC; color:#7A1E1E; border-color:#FFC2C2; }}
-.badge-gray  {{ background:#F1F5F9; color:#334155; }}
 """
 
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
@@ -181,6 +146,10 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 # ======================================================================================
 # UTILIDADES
 # ======================================================================================
+
+def chips(items, color="badge"):
+    safe = [html.escape(str(i)) for i in items]
+    return st.markdown(" ".join([f"<span class='{color}'>{i}</span>" for i in safe]), unsafe_allow_html=True)
 
 def extract_text_from_file(uploaded_file) -> str:
     try:
@@ -197,27 +166,29 @@ def extract_text_from_file(uploaded_file) -> str:
         st.error(f"Error al leer '{uploaded_file.name}': {e}")
         return ""
 
-def simple_score(cv_text: str, jd: str, keywords: str):
+def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str, list, list, list]:
     base = 0
     reasons = []
     text_low = cv_text.lower()
     jd_low = jd.lower()
+    validated, likely, to_validate = [], [], []
 
+    # Palabras clave
     hits = 0
     kws = [k.strip().lower() for k in keywords.split(",") if k.strip()]
-    validated = []
     for k in kws:
         if k and k in text_low:
             hits += 1
-            validated.append(k)
-
+            validated.append(k.upper())
+        else:
+            to_validate.append(k)
     if kws:
         pct_k = hits / len(kws)
         base += int(pct_k * 70)
-        reasons.append(
-            f"{hits}/{len(kws)} keywords encontradas — Coincidencias: {', '.join([k for k in kws if k in text_low])[:120]}"
-        )
+        found = [k for k in kws if k in text_low]
+        reasons.append(f"{hits}/{len(kws)} keywords encontradas — Coincidencias: {', '.join(found)[:120]}")
 
+    # JD match
     jd_terms = [t for t in set(jd_low.split()) if len(t) > 3]
     match_terms = sum(1 for t in jd_terms if t in text_low)
     if jd_terms:
@@ -226,14 +197,13 @@ def simple_score(cv_text: str, jd: str, keywords: str):
         reasons.append("Coincidencias con el JD (aprox.)")
 
     base = max(0, min(100, base))
-    to_validate = [k for k in kws if k not in validated][:6]
-    likely = []
+    if " iaas" in text_low and "iaas" not in validated:
+        likely.append("IAAS")
     return base, " — ".join(reasons), validated, likely, to_validate
 
 def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
     b64 = base64.b64encode(file_bytes).decode("utf-8")
-    pdfjs = "https://mozilla.github.io/pdf.js/web/viewer.html?file="
-    src = f"{pdfjs}data:application/pdf;base64,{b64}#zoom={int(scale*100)}"
+    src = f"https://mozilla.github.io/pdf.js/web/viewer.html?file=data:application/pdf;base64,{b64}#zoom={int(scale*100)}"
     st.markdown(
         f"""
         <div class="pdf-frame">
@@ -243,208 +213,163 @@ def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
         unsafe_allow_html=True,
     )
 
-def chips(items, cls):
-    if not items:
-        return "<span class='badge badge-gray'>—</span>"
-    safe = []
-    for it in items:
-        label = escape(str(it)) if it is not None else "—"
-        safe.append(f"<span class='badge {cls}'>{label}</span>")
-    return " ".join(safe)
-
 # ======================================================================================
 # ESTADO INICIAL
 # ======================================================================================
-if "candidates" not in st.session_state:
-    st.session_state.candidates = []
-if "uploader_key" not in st.session_state:
-    st.session_state.uploader_key = "u1"
+if "jd_text" not in st.session_state: st.session_state.jd_text = ""
+if "kw_text" not in st.session_state:
+    st.session_state.kw_text = "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos"
+if "candidates" not in st.session_state: st.session_state.candidates = []
+if "uploader_key" not in st.session_state: st.session_state.uploader_key = "u1"
 if "positions" not in st.session_state:
     st.session_state.positions = pd.DataFrame([
-        {
-            "ID": "10,645,194",
-            "Puesto": "Desarrollador/a Backend (Python)",
-            "Ubicación": "Lima, Perú",
-            "Leads": 1800,
-            "Nuevos": 115,
-            "Recruiter Screen": 35,
-            "HM Screen": 7,
-            "Entrevista Telefónica": 14,
-            "Entrevista Presencial": 15,
-            "Días Abierto": 3,
-            "Hiring Manager": "Rivers Brykson",
-            "Estado": "Abierto",
-        },
-        {
-            "ID": "10,376,415",
-            "Puesto": "VP de Marketing",
-            "Ubicación": "Santiago, Chile",
-            "Leads": 8100,
-            "Nuevos": 1,
-            "Recruiter Screen": 15,
-            "HM Screen": 35,
-            "Entrevista Telefónica": 5,
-            "Entrevista Presencial": 7,
-            "Días Abierto": 28,
-            "Hiring Manager": "Angela Cruz",
-            "Estado": "Abierto",
-        },
-        {
-            "ID": "10,376,646",
-            "Puesto": "Planner de Demanda",
-            "Ubicación": "Ciudad de México, MX",
-            "Leads": 2300,
-            "Nuevos": 26,
-            "Recruiter Screen": 3,
-            "HM Screen": 8,
-            "Entrevista Telefónica": 6,
-            "Entrevista Presencial": 3,
-            "Días Abierto": 28,
-            "Hiring Manager": "Rivers Brykson",
-            "Estado": "Abierto",
-        },
+        {"ID": "10,645,194","Puesto":"Desarrollador/a Backend (Python)","Ubicación":"Lima, Perú","Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,"Entrevista Telefónica":14,"Entrevista Presencial":15,"Días Abierto":3,"Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
+        {"ID": "10,376,415","Puesto":"VP de Marketing","Ubicación":"Santiago, Chile","Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,"Entrevista Telefónica":5,"Entrevista Presencial":7,"Días Abierto":28,"Hiring Manager":"Angela Cruz","Estado":"Abierto"},
+        {"ID": "10,376,646","Puesto":"Planner de Demanda","Ubicación":"Ciudad de México, MX","Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,"Entrevista Telefónica":6,"Entrevista Presencial":3,"Días Abierto":28,"Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
     ])
-if "pipeline_selected" not in st.session_state:
-    st.session_state.pipeline_selected = None
-if "gerencia_list" not in st.session_state:
-    st.session_state.gerencia_list = []
-if "hh_tasks" not in st.session_state:
-    st.session_state.hh_tasks = {}
-if "ofertas" not in st.session_state:
-    st.session_state.ofertas = []
-if "metrics" not in st.session_state:
-    st.session_state.metrics = {}
-if "onboarding" not in st.session_state:
-    st.session_state.onboarding = {}
-# NUEVO: rol y flags
-if "current_role" not in st.session_state:
-    st.session_state.current_role = "Coordinador RR.HH."
-if "feature_flags" not in st.session_state:
-    st.session_state.feature_flags = {"crear_oferta": True, "aprobar_oferta": False, "mover_pipeline": True}
-if "audit_log" not in st.session_state:
-    st.session_state.audit_log = []  # lista de dicts
+if "gerencia_pool" not in st.session_state: st.session_state.gerencia_pool = []
+if "ofertas" not in st.session_state: st.session_state.ofertas = []
+if "onboarding" not in st.session_state: st.session_state.onboarding = []
 
 # ======================================================================================
-# SIDEBAR
+# SIDEBAR: Logo + acceso rápido (no cambia pestañas, sirve de índice)
 # ======================================================================================
 with st.sidebar:
     st.image("assets/logo-wayki.png", use_column_width=True)
-    st.markdown("### Definición del puesto")
-
-    puesto = st.selectbox(
-        "Puesto",
-        [
-            "Enfermera/o Asistencial",
-            "Tecnólogo/a Médico",
-            "Recepcionista de Admisión",
-            "Médico/a General",
-            "Químico/a Farmacéutico/a",
-        ],
-        index=0,
-        key="puesto",
-    )
-
-    st.markdown("### Descripción del puesto (texto libre)")
-    jd_text = st.text_area(
-        "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
-        height=120,
-        key="jd",
-        label_visibility="collapsed",
-    )
-
-    st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
-    kw_text = st.text_area(
-        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad…",
-        value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
-        height=110,
-        key="kw",
-        label_visibility="collapsed",
-    )
-
-    st.markdown("### Subir CVs (PDF o TXT)")
-    files = st.file_uploader(
-        "Drag and drop files here",
-        key=st.session_state.uploader_key,
-        type=["pdf", "txt"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-    )
-
-    if files:
-        st.session_state.candidates = []
-        for f in files:
-            b = f.read()
-            f.seek(0)
-            text = extract_text_from_file(f)
-            score, reasons, v_sk, l_sk, t_sk = simple_score(text, jd_text, kw_text)
-            first_seen = datetime.utcnow().isoformat()
-            st.session_state.candidates.append({
-                "Name": f.name,
-                "Score": score,
-                "Reasons": reasons,
-                "_bytes": b,
-                "_is_pdf": Path(f.name).suffix.lower() == ".pdf",
-                "_validated": v_sk,
-                "_likely": l_sk,
-                "_to_validate": t_sk,
-                "_first_seen": first_seen,
-            })
-            st.session_state.metrics.setdefault(f.name, {})["first_seen"] = first_seen
+    st.markdown("### Navegación rápida")
+    st.markdown("- **Dashboard** (Puestos + KPIs)")
+    st.markdown("- **Pestañas** (arriba, visibles con subrayado verde)")
+    st.markdown("- **Analytics** (al final)")
 
     st.divider()
-    if st.button("Limpiar Lista", use_container_width=True):
-        st.session_state.candidates = []
-        st.session_state.uploader_key = f"u{pd.Timestamp.utcnow().value}"
-        st.rerun()
+    st.markdown("#### Ayuda")
+    st.caption("1) Define JD y sube CVs en **Definición & Carga**.\n2) Revisa **Evaluación de CVs**.\n3) Gestiona **Pipeline** y **Entrevista**.\n4) Avanza a **Oferta** y **Onboarding**.")
 
 # ======================================================================================
-# TABS
+# TABS (nuevo orden: primero Asistente IA, luego Definición & Carga y resto sin cambios)
 # ======================================================================================
-tab_puestos, tab_eval, tab_pipe, tab_ger, tab_hh, tab_oferta, tab_onb, tab_ai = st.tabs(
-    [
-        "📄 Puestos",
-        "🧪 Evaluación de CVs",
-        "👥 Pipeline de Candidatos",
-        "👔 Entrevista (Gerencia)",
-        "🧰 Tareas del Headhunter",
-        "📑 Oferta",
-        "📦 Onboarding",
-        "🤖 Asistente IA",   # NUEVO
-    ]
-)
+tabs = st.tabs([
+    "🤖 Asistente IA",
+    "🗂️ Definición & Carga",
+    "📋 Puestos",
+    "🧪 Evaluación de CVs",
+    "👥 Pipeline de Candidatos",
+    "🗣️ Entrevista (Gerencia)",
+    "🧭 Tareas del Headhunter",
+    "🧾 Oferta",
+    "🚀 Onboarding",
+    "📈 Analytics"
+])
 
 # --------------------------------------------------------------------------------------
-# TAB 1: PUESTOS
+# 0) ASISTENTE IA (primera pestaña)
 # --------------------------------------------------------------------------------------
-with tab_puestos:
+with tabs[0]:
+    st.markdown("## SelektIA – **Asistente IA**")
+    colL, colR = st.columns([1.2, 1])
+    with colL:
+        st.markdown("#### Configuración del agente")
+        rol = st.selectbox("Role*", ["Headhunter","Coordinador RR.HH.","Hiring Manager","Gerencia/Comité","Legal","Finanzas","TI / Onboarding"], index=0)
+        goal = st.text_input("Goal*", "Identificar a los mejores profesionales para el cargo que se define en el JD")
+        backstory = st.text_area("Backstory*", "Eres un analista de recursos humanos con amplia experiencia en análisis de documentos, CV y currículums...")
+        guardrails = st.text_area("Guardrails", "No compartas datos sensibles. Cita siempre la fuente (CV o JD) al argumentar.")
+        tools = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Vector Search (JD/CVs)","Recomendador de keywords","Generador de correo"], default=["Parser de PDF","Recomendador de keywords"])
+        st.button("Crear/Actualizar Agente", use_container_width=True)
+    with colR:
+        st.markdown("#### Permisos y alcance")
+        st.write("• **RLS** por puesto: el agente solo ve candidatos del puesto/rol asignado.")
+        st.write("• Acciones permitidas según rol (ej. HH no aprueba ofertas).")
+        st.write("• Auditoría: toda acción queda registrada (usuario/rol, objeto, timestamp).")
+        st.info("Tip: usa esta configuración para guiar evaluaciones en la pestaña *Evaluación de CVs*.")
+
+# --------------------------------------------------------------------------------------
+# 1) DEFINICIÓN & CARGA (movimos JD y subida de CVs aquí)
+# --------------------------------------------------------------------------------------
+with tabs[1]:
+    st.markdown("## SelektIA – **Definición & Carga**")
+    c1, c2 = st.columns([1.2, 1])
+    with c1:
+        puesto = st.selectbox(
+            "Puesto objetivo",
+            ["Enfermera/o Asistencial","Tecnólogo/a Médico","Recepcionista de Admisión","Médico/a General","Químico/a Farmacéutico/a"],
+            index=0
+        )
+        st.markdown("##### Descripción del puesto (JD)")
+        st.session_state.jd_text = st.text_area(
+            "JD",
+            value=st.session_state.jd_text,
+            height=140,
+            label_visibility="collapsed"
+        )
+        st.markdown("##### Palabras clave del perfil (coma separada)")
+        st.session_state.kw_text = st.text_area(
+            "Keywords",
+            value=st.session_state.kw_text,
+            height=90,
+            label_visibility="collapsed"
+        )
+    with c2:
+        st.markdown("##### Subir CVs (PDF o TXT)")
+        files = st.file_uploader(
+            "Arrastra y suelta o haz click",
+            key=st.session_state.uploader_key,
+            type=["pdf","txt"],
+            accept_multiple_files=True,
+            label_visibility="collapsed"
+        )
+        if files:
+            st.session_state.candidates = []
+            for f in files:
+                raw = f.read()
+                f.seek(0)
+                text = extract_text_from_file(f)
+                score, reasons, v, lk, tv = simple_score(text, st.session_state.jd_text, st.session_state.kw_text)
+                st.session_state.candidates.append({
+                    "Name": f.name,
+                    "Score": score,
+                    "Reasons": reasons,
+                    "Validated": v,
+                    "Likely": lk,
+                    "ToValidate": tv,
+                    "_bytes": raw,
+                    "_is_pdf": Path(f.name).suffix.lower() == ".pdf",
+                })
+            st.success(f"Se procesaron {len(st.session_state.candidates)} archivos.")
+        st.divider()
+        if st.button("Limpiar lista de CVs", use_container_width=True):
+            st.session_state.candidates = []
+            st.session_state.uploader_key = f"u{pd.Timestamp.utcnow().value}"
+            st.experimental_rerun()
+
+    st.markdown("---")
+    st.markdown("#### Resumen de carga")
+    colA, colB, colC, colD = st.columns(4)
+    colA.metric("CVs cargados", len(st.session_state.candidates))
+    colB.metric("JD (caracteres)", len(st.session_state.jd_text))
+    colC.metric("Keywords", len([k for k in st.session_state.kw_text.split(",") if k.strip()]))
+    colD.metric("Listos para evaluar", sum(1 for c in st.session_state.candidates if c["_bytes"]))
+
+# --------------------------------------------------------------------------------------
+# 2) PUESTOS (igual que antes)
+# --------------------------------------------------------------------------------------
+with tabs[2]:
     st.markdown("## SelektIA – **Puestos**")
-    col_top_l, col_top_c, col_top_r = st.columns([1.8, 1, 1])
-    with col_top_l:
-        q = st.text_input("Buscar (puesto, ubicación, ID, hiring manager…)", placeholder="Ej: Lima, 10645194, Angela Cruz")
-    with col_top_c:
-        st.text("")
-        show_filters = st.checkbox("Mostrar filtros", value=False)
-    with col_top_r:
-        st.metric("Puestos totales", len(st.session_state.positions))
+    q = st.text_input("Buscar (puesto, ubicación, ID, hiring manager…)", placeholder="Ej: Lima, 10645194, Angela Cruz")
+    show_filters = st.checkbox("Mostrar filtros", value=False)
 
-    df_pos = st.session_state.positions.copy()
     if show_filters:
         with st.expander("Filtros", expanded=True):
-            colf1, colf2, colf3, colf4 = st.columns(4)
-            with colf1:
-                ubic = st.multiselect("Ubicación", sorted(df_pos["Ubicación"].unique().tolist()))
-            with colf2:
-                hm = st.multiselect("Hiring Manager", sorted(df_pos["Hiring Manager"].unique().tolist()))
-            with colf3:
-                estado = st.multiselect("Estado", sorted(df_pos["Estado"].unique().tolist()))
-            with colf4:
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                ubic = st.multiselect("Ubicación", sorted(st.session_state.positions["Ubicación"].unique().tolist()))
+            with c2:
+                hm = st.multiselect("Hiring Manager", sorted(st.session_state.positions["Hiring Manager"].unique().tolist()))
+            with c3:
+                estado = st.multiselect("Estado", sorted(st.session_state.positions["Estado"].unique().tolist()))
+            with c4:
                 dias_abierto = st.slider("Días abierto (máx)", min_value=0, max_value=60, value=60)
-        if show_filters:
-            if ubic: df_pos = df_pos[df_pos["Ubicación"].isin(ubic)]
-            if hm: df_pos = df_pos[df_pos["Hiring Manager"].isin(hm)]
-            if estado: df_pos = df_pos[df_pos["Estado"].isin(estado)]
-            df_pos = df_pos[df_pos["Días Abierto"] <= dias_abierto]
 
+    df_pos = st.session_state.positions.copy()
     if q:
         ql = q.lower()
         df_pos = df_pos[
@@ -453,38 +378,32 @@ with tab_puestos:
             df_pos["Hiring Manager"].str.lower().str.contains(ql) |
             df_pos["ID"].astype(str).str.contains(ql)
         ]
+    if show_filters:
+        if 'ubic' in locals() and ubic: df_pos = df_pos[df_pos["Ubicación"].isin(ubic)]
+        if 'hm' in locals() and hm: df_pos = df_pos[df_pos["Hiring Manager"].isin(hm)]
+        if 'estado' in locals() and estado: df_pos = df_pos[df_pos["Estado"].isin(estado)]
+        df_pos = df_pos[df_pos["Días Abierto"] <= dias_abierto]
 
     st.caption(f"Mostrando **{len(df_pos)}** posiciones")
     st.dataframe(
-        df_pos[
-            [
-                "Puesto", "Días Abierto", "Leads", "Nuevos", "Recruiter Screen",
-                "HM Screen", "Entrevista Telefónica", "Entrevista Presencial",
-                "Ubicación", "Hiring Manager", "Estado", "ID"
-            ]
-        ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True, True, False]),
-        use_container_width=True,
-        height=400,
+        df_pos[["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]]
+        .sort_values(["Estado","Días Abierto","Leads"], ascending=[True, True, False]),
+        use_container_width=True, height=420
     )
 
 # --------------------------------------------------------------------------------------
-# TAB 2: EVALUACIÓN DE CVS
+# 3) EVALUACIÓN DE CVS (misma base, colores de barras)
 # --------------------------------------------------------------------------------------
-with tab_eval:
-    st.markdown("## SelektIA – **Resultados de evaluación**")
-
+with tabs[3]:
+    st.markdown("## SelektIA – **Resultados de evaluación**  ↪️")
     if not st.session_state.candidates:
-        st.info("Carga CVs en la barra lateral. El análisis se ejecuta automáticamente.")
+        st.info("Carga CVs en **Definición & Carga**. El análisis se ejecuta automáticamente.")
     else:
         df = pd.DataFrame(st.session_state.candidates)
         df_sorted = df.sort_values("Score", ascending=False)
 
         st.markdown("### Ranking de Candidatos")
-        st.dataframe(
-            df_sorted[["Name", "Score", "Reasons"]],
-            use_container_width=True,
-            height=240
-        )
+        st.dataframe(df_sorted[["Name","Score","Reasons"]], use_container_width=True, height=240)
 
         st.markdown("### Comparación de puntajes")
         bar_colors = [BAR_GOOD if s >= 60 else BAR_DEFAULT for s in df_sorted["Score"]]
@@ -493,7 +412,7 @@ with tab_eval:
         fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("### Visor de CV (PDF/TXT)  ↪️")
+        st.markdown("### Visor de CV (PDF/TXT)")
         all_names = df_sorted["Name"].tolist()
         selected_name = st.selectbox("Elige un candidato", all_names, index=0, key="pdf_candidate", label_visibility="collapsed")
         cand = df.loc[df["Name"] == selected_name].iloc[0]
@@ -510,361 +429,157 @@ with tab_eval:
                 st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
 # --------------------------------------------------------------------------------------
-# TAB 3: PIPELINE
+# 4) PIPELINE (panel izquierdo y detalle a la derecha, solo lectura)
 # --------------------------------------------------------------------------------------
-with tab_pipe:
+with tabs[4]:
     st.markdown("## SelektIA – **Pipeline de Candidatos**")
     if not st.session_state.candidates:
-        st.info("Primero sube CVs en la barra lateral para armar el pipeline.")
+        st.info("No hay candidatos cargados. Usa **Definición & Carga**.")
     else:
         df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False)
-        c_l, c_r = st.columns([1.35, 1])
-        with c_l:
-            st.markdown("**Candidatos detectados (clic para ver detalle):**")
-            show = df[["Name", "Score"]].copy()
-            show.rename(columns={"Name": "Candidato", "Score": "Match (%)"}, inplace=True)
-            st.dataframe(show, use_container_width=True, height=260)
-
-            default_idx = 0
-            if st.session_state.pipeline_selected and st.session_state.pipeline_selected in df["Name"].tolist():
-                default_idx = df["Name"].tolist().index(st.session_state.pipeline_selected)
-            selected_name = st.selectbox("Selecciona para detalle", df["Name"].tolist(), index=default_idx)
-            st.session_state.pipeline_selected = selected_name
-
-            st.markdown("**Acciones rápidas**")
-            colA, colB = st.columns(2)
-            with colA:
-                if st.button("Mover a ‘Entrevista (Gerencia)’", use_container_width=True):
-                    if selected_name not in st.session_state.gerencia_list:
-                        st.session_state.gerencia_list.append(selected_name)
-                    st.success(f"{selected_name} movido a Entrevista (Gerencia).")
-            with colB:
-                if st.button("Añadir nota ‘Buen encaje’", use_container_width=True):
-                    st.info("Nota guardada (demo).")
-
-        with c_r:
+        colL, colR = st.columns([1.2, 1])
+        with colL:
+            st.markdown("#### Candidatos detectados (clic para ver detalle)")
+            sel = st.radio("Candidatos", df["Name"].tolist(), index=0, label_visibility="collapsed")
+        with colR:
+            cand = df[df["Name"] == sel].iloc[0]
             st.markdown("### Detalle del candidato")
-            cand = df.loc[df["Name"] == st.session_state.pipeline_selected].iloc[0]
-            st.caption(cand["Name"])
-            score = int(cand["Score"])
-            badge = "<span class='badge badge-green'>Match estimado: Alto</span>" if score>=70 else "<span class='badge badge-amber'>Match estimado: Medio</span>" if score>=60 else "<span class='badge badge-gray'>Match estimado: Bajo</span>"
-            st.markdown(badge, unsafe_allow_html=True)
+            st.write(sel)
+            match_txt = "Alto" if cand["Score"] >= 60 else "Medio" if cand["Score"] >= 40 else "Bajo"
+            st.write("Match estimado:", match_txt)
+
             st.markdown("**Validated Skills**")
-            st.markdown(chips(cand["_validated"], "badge-green"), unsafe_allow_html=True)
+            chips(cand.get("Validated", []) or ["—"])
             st.markdown("**Likely Skills**")
-            st.markdown(chips(cand["_likely"], "badge-amber"), unsafe_allow_html=True)
+            chips(cand.get("Likely", []) or ["—"])
             st.markdown("**Skills to Validate**")
-            st.markdown(chips(cand["_to_validate"], "badge-gray"), unsafe_allow_html=True)
+            chips(cand.get("ToValidate", []) or ["—"])
 
 # --------------------------------------------------------------------------------------
-# TAB 4: ENTREVISTA (GERENCIA)
+# 5) ENTREVISTA (GERENCIA) – igual que antes, con pool desde Tareas HH
 # --------------------------------------------------------------------------------------
-with tab_ger:
+with tabs[5]:
     st.markdown("## SelektIA – **Entrevista (Gerencia)**")
-    if not st.session_state.gerencia_list:
-        st.info("Aún no hay candidatos en esta etapa. Muévelos desde ‘Pipeline de Candidatos’.")
+    if not st.session_state.gerencia_pool:
+        st.info("Aún no hay candidatos enviados desde **Tareas del Headhunter**.")
     else:
-        st.markdown("**Candidatos en entrevista (gerencia):**")
-        for n in st.session_state.gerencia_list:
-            st.markdown(f"- {n}")
-        st.markdown("---")
-        st.markdown("### Asignar headhunter")
-        hh = st.selectbox("Headhunter asignado", ["Carla P.", "Luis M.", "Andrea G."], index=0)
-        if st.button("Asignar / Reasignar"):
-            st.success(f"Headhunter asignado: {hh}")
+        for name in st.session_state.gerencia_pool:
+            st.markdown(f"- {name}")
+        hh_score = st.slider("Rúbrica de Gerencia (0-70)", 0, 70, 40)
+        chk_score = st.slider("Checklist HH (0-30)", 0, 30, 20)
+        total = hh_score + chk_score
+        st.metric("Score consolidado", f"{total}/100")
+        if total >= 70:
+            st.success("Semáforo: **Verde** (≥70)")
+        elif total >= 60:
+            st.warning("Semáforo: **Ámbar** (60–69)")
+        else:
+            st.error("Semáforo: **Rojo** (<60)")
+        colA, colB = st.columns(2)
+        with colA:
+            if st.button("Mover a Oferta"):
+                st.success("Candidata movida a **Oferta** (ver pestaña).")
+        with colB:
+            if st.button("Descartar con feedback"):
+                st.info("Se registró descarte con feedback.")
 
 # --------------------------------------------------------------------------------------
-# TAB 5: TAREAS DEL HEADHUNTER
+# 6) TAREAS DEL HEADHUNTER – checklist + Enviar a Comité
 # --------------------------------------------------------------------------------------
-with tab_hh:
+with tabs[6]:
     st.markdown("## SelektIA – **Tareas del Headhunter**")
-    if not st.session_state.gerencia_list:
-        st.info("No hay candidatos en ‘Entrevista (Gerencia)’.")
+    if not st.session_state.candidates:
+        st.info("Carga CVs en **Definición & Carga** primero.")
     else:
-        candidate = st.selectbox("Candidata/o", st.session_state.gerencia_list, index=0, key="hh_sel")
-        data = st.session_state.hh_tasks.get(candidate, {
-            "check_contacto": False, "check_agenda": False, "check_feedback": False,
-            "fortalezas": "", "riesgos": "", "pretension": "", "disponibilidad": "",
-            "due_date": (datetime.utcnow() + timedelta(days=1)).date().isoformat(), "enviado_comite": False,
+        names = [c["Name"] for c in st.session_state.candidates]
+        sel_hh = st.selectbox("Candidata", names)
+        c1, c2, c3 = st.columns(3)
+        with c1: ch1 = st.checkbox("Contacto hecho")
+        with c2: ch2 = st.checkbox("Entrevista agendada")
+        with c3: ch3 = st.checkbox("Feedback recibido")
+        st.markdown("**Notas (obligatorio)**")
+        notas = st.text_area("3 fortalezas, 2 riesgos, pretensión salarial, disponibilidad", height=120, label_visibility="collapsed")
+        st.markdown("**Adjuntos (BLS/ACLS, colegiatura… PDF/IMG)**")
+        st.file_uploader("Adjuntar", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True)
+        st.divider()
+        if st.button("Enviar a Comité"):
+            if not (ch1 and ch2 and ch3) or len(notas.strip()) < 10:
+                st.error("Completa el checklist y agrega notas antes de enviar.")
+            else:
+                if sel_hh not in st.session_state.gerencia_pool:
+                    st.session_state.gerencia_pool.append(sel_hh)
+                st.success("Enviado a **Entrevista (Gerencia)** y bloqueado para edición.")
+
+# --------------------------------------------------------------------------------------
+# 7) OFERTA – minimal (se integra con Onboarding)
+# --------------------------------------------------------------------------------------
+with tabs[7]:
+    st.markdown("## SelektIA – **Oferta**")
+    with st.form("form_oferta", clear_on_submit=False):
+        c1, c2, c3 = st.columns(3)
+        puesto_o = c1.text_input("Puesto", value="Enfermera/o Asistencial")
+        ubi_o    = c2.selectbox("Ubicación", ["Lima, Perú","Santiago, Chile","Ciudad de México, MX","Remoto LATAM"], index=0)
+        mod_o    = c3.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"], index=0)
+        c4, c5, c6 = st.columns(3)
+        contrato  = c4.selectbox("Contrato", ["Indeterminado","Plazo fijo","Servicios (honorarios)"], index=0)
+        salario   = c5.text_input("Salario (rango y neto)", "USD 1,200 – 1,500 neto")
+        beneficios= c6.text_input("Bonos/beneficios", "Alimentación, movilidad")
+        c7, c8 = st.columns(2)
+        f_ini    = c7.date_input("Fecha de inicio")
+        f_cad    = c8.date_input("Caducidad de oferta")
+        aprobadores = st.multiselect("Aprobadores", ["Gerencia","Legal","Finanzas"])
+        enviado = st.form_submit_button("Generar oferta (PDF) y Enviar")
+        if enviado:
+            st.success("Oferta generada/enviada (simulado). SLA recordatorios: 48h y 72h.")
+    st.divider()
+    if st.button("Marcar **Propuesta aceptada**"):
+        st.success("Estado: **Aceptada**. Se crean tareas de **Onboarding** automáticamente.")
+        st.session_state.onboarding.append({
+            "tareas": [
+                {"nombre":"Contrato firmado","due_h":48,"estado":"pendiente"},
+                {"nombre":"Documentos completos","due_h":72,"estado":"pendiente"},
+                {"nombre":"Usuario/email creado","due_h":24,"estado":"pendiente"},
+                {"nombre":"Acceso SAP IS-H","due_h":48,"estado":"pendiente"},
+                {"nombre":"Examen médico","due_h":72,"estado":"pendiente"},
+                {"nombre":"Inducción día 1","due_h":24*3,"estado":"pendiente"},
+                {"nombre":"EPP/Uniforme entregado","due_h":24,"estado":"pendiente"},
+                {"nombre":"Plan 30-60-90 cargado","due_h":24*7,"estado":"pendiente"},
+            ],
+            "responsables": {"RRHH":"Coordinador/a","TI":"Equipo TI","Jefe directo":"Por definir","Tutor":"Asignar"},
         })
 
-        c1, c2, c3 = st.columns(3)
-        with c1: data["check_contacto"] = st.checkbox("✅ Contacto hecho", value=data["check_contacto"])
-        with c2: data["check_agenda"] = st.checkbox("✅ Entrevista agendada", value=data["check_agenda"])
-        with c3: data["check_feedback"] = st.checkbox("✅ Feedback recibido", value=data["check_feedback"])
-
-        st.markdown("**Notas obligatorias**")
-        data["fortalezas"] = st.text_input("3 fortalezas (breve)", value=data["fortalezas"])
-        data["riesgos"] = st.text_input("2 riesgos (breve)", value=data["riesgos"])
-        c4, c5 = st.columns(2)
-        with c4: data["pretension"] = st.text_input("Pretensión salarial", value=data["pretension"], placeholder="S/ 3,500")
-        with c5: data["disponibilidad"] = st.text_input("Disponibilidad", value=data["disponibilidad"], placeholder="Inmediata / 2 semanas")
-
-        st.markdown("**Adjuntos (BLS/ACLS, colegiatura, etc.)**")
-        _ = st.file_uploader("Sube PDFs o imágenes", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True, key=f"hh_up_{candidate}")
-
-        colD, colE = st.columns(2)
-        with colD: data["due_date"] = st.date_input("Fecha límite (SLA)", value=pd.to_datetime(data["due_date"]))
-        with colE:
-            due = pd.to_datetime(data["due_date"]); now = pd.to_datetime(datetime.utcnow().date())
-            delta = (due - now).days
-            if delta < 0: st.markdown("<span class='badge badge-red'>SLA vencido</span>", unsafe_allow_html=True)
-            elif delta <= 1: st.markdown("<span class='badge badge-amber'>SLA ≤ 24h</span>", unsafe_allow_html=True)
-            else: st.markdown("<span class='badge badge-green'>En plazo</span>", unsafe_allow_html=True)
-
-        st.session_state.hh_tasks[candidate] = data
-        st.markdown("---")
-        colF, colG = st.columns([1,1])
-        with colF:
-            if st.button("Guardar", use_container_width=True):
-                st.session_state.hh_tasks[candidate] = data
-                st.success("Tareas guardadas.")
-        with colG:
-            disabled_send = not (data["check_contacto"] and data["check_agenda"] and data["check_feedback"] and data["fortalezas"] and data["riesgos"])
-            if st.button("Enviar a Comité", use_container_width=True, disabled=disabled_send):
-                data["enviado_comite"] = True
-                st.session_state.hh_tasks[candidate] = data
-                if candidate not in st.session_state.gerencia_list:
-                    st.session_state.gerencia_list.append(candidate)
-                st.success("Enviado a Comité. Checklists bloqueados.")
-        if data.get("enviado_comite"):
-            st.info("Checklists bloqueados por envío a Comité.")
-
 # --------------------------------------------------------------------------------------
-# Helper onboarding
+# 8) ONBOARDING – checklist con SLA y asignaciones
 # --------------------------------------------------------------------------------------
-def _default_onboarding_tasks(inicio_fecha: date):
-    today = datetime.utcnow().date()
-    return {
-        "contrato_firmado": {"label":"Contrato firmado","done":False,"due": today + timedelta(days=2),"resp":"RR.HH.","files":[]},
-        "docs_completos": {"label":"Documentos completos (DNI, colegiatura, BLS/ACLS, 2 referencias, cuenta)","done":False,"due": today + timedelta(days=3),"resp":"RR.HH.","files":[]},
-        "usuario_email": {"label":"Usuario/email creado","done":False,"due": today + timedelta(days=1),"resp":"TI","files":[]},
-        "acceso_sap": {"label":"Acceso SAP IS-H","done":False,"due": today + timedelta(days=2),"resp":"TI","files":[]},
-        "examen_medico": {"label":"Examen médico de ingreso","done":False,"due": today + timedelta(days=5),"resp":"Salud Ocupacional","files":[]},
-        "induccion_dia1": {"label":"Inducción día 1 (agenda)","done":False,"due": inicio_fecha,"resp":"RR.HH.","files":[]},
-        "epp_uniforme": {"label":"EPP/Uniforme entregado","done":False,"due": inicio_fecha,"resp":"Seguridad/Almacén","files":[]},
-        "plan_30_60_90": {"label":"Plan 30-60-90 cargado","done":False,"due": inicio_fecha + timedelta(days=7),"resp":"Jefe Directo","files":[]},
-        "asignaciones": {"jefe_directo":"", "tutor":"","rrhh_resp":"","ti_resp":""},
-    }
-
-def _sla_badge(due_date):
-    due = pd.to_datetime(due_date); now = pd.to_datetime(datetime.utcnow().date())
-    delta = (due - now).days
-    if delta < 0: return "<span class='badge badge-red'>Vencido</span>"
-    elif delta <= 1: return "<span class='badge badge-amber'>≤ 24h</span>"
-    else: return "<span class='badge badge-green'>En plazo</span>"
-
-# --------------------------------------------------------------------------------------
-# TAB 6: OFERTA
-# --------------------------------------------------------------------------------------
-with tab_oferta:
-    st.markdown("## SelektIA – **Oferta**")
-    if not st.session_state.gerencia_list:
-        st.info("No hay candidatos en etapa final.")
-    else:
-        cand = st.selectbox("Candidata/o para oferta", st.session_state.gerencia_list, index=0)
-        accepted = [o for o in st.session_state.ofertas if o["candidato"]==cand and o["estado"]=="Aceptada"]
-        if accepted:
-            o = accepted[-1]
-            st.success("Propuesta aceptada. Edición bloqueada (solo lectura).")
-            colA, colB, colC = st.columns(3)
-            with colA: st.text_input("Puesto", value=o["puesto"], disabled=True)
-            with colB: st.text_input("Ubicación", value=o["ubicacion"], disabled=True)
-            with colC: st.text_input("Modalidad", value=o["modalidad"], disabled=True)
-            colD, colE, colF = st.columns(3)
-            with colD: st.text_input("Contrato", value=o["contrato"], disabled=True)
-            with colE: st.text_input("Salario (rango/neto)", value=o["salario"], disabled=True)
-            with colF: st.text_input("Beneficios", value=o["beneficios"], disabled=True)
-            colG, colH = st.columns(2)
-            with colG: st.text_input("Inicio", value=o["inicio"], disabled=True)
-            with colH: st.text_input("Caducidad", value=o["caducidad"], disabled=True)
-            st.text_input("Aprobadores", value=", ".join(o["aprobadores"]), disabled=True)
-            if cand in st.session_state.metrics:
-                m = st.session_state.metrics[cand]
-                ttostr = f"TTO: {m.get('tto_days','-')} días • TTF: {m.get('ttf_days','-')} días"
-                st.info(ttostr)
-        else:
-            with st.form("form_oferta"):
-                c1, c2, c3 = st.columns(3)
-                with c1: puesto_o = st.text_input("Puesto", value=st.session_state.get("puesto",""))
-                with c2: ubic_o = st.selectbox("Ubicación", ["Lima, Perú","Santiago, Chile","Ciudad de México, MX","Remoto LATAM"])
-                with c3: modalidad_o = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"])
-                c4, c5, c6 = st.columns(3)
-                with c4: contrato_o = st.selectbox("Tipo de contrato", ["Indeterminado","Plazo fijo","Servicio (honorarios)"])
-                with c5: salario_o = st.text_input("Salario (rango y neto)", placeholder="S/ 4,500 neto")
-                with c6: beneficios_o = st.text_input("Bonos/beneficios", placeholder="Bono anual, EPS…")
-                c7, c8 = st.columns(2)
-                with c7: inicio_o = st.date_input("Fecha de inicio", value=datetime.utcnow().date() + timedelta(days=14))
-                with c8: caduca_o = st.date_input("Caducidad de oferta", value=datetime.utcnow().date() + timedelta(days=7))
-                aprobadores = st.multiselect("Aprobadores", ["Gerencia","Legal","Finanzas"], default=["Gerencia","Legal","Finanzas"])
-                submitted = st.form_submit_button("Generar oferta (PDF) + Registrar")
-                if submitted:
-                    st.session_state.ofertas.append({
-                        "candidato": cand, "puesto": puesto_o, "ubicacion": ubic_o, "modalidad": modalidad_o,
-                        "contrato": contrato_o, "salario": salario_o, "beneficios": beneficios_o,
-                        "inicio": str(inicio_o), "caducidad": str(caduca_o), "aprobadores": aprobadores,
-                        "estado": "Enviada", "historial": [f"{datetime.utcnow().isoformat()} - Generada y enviada"],
-                        "generated_at": datetime.utcnow().isoformat(),
-                    })
-                    st.session_state.metrics.setdefault(cand, {})["offer_generated_at"] = st.session_state.ofertas[-1]["generated_at"]
-                    st.success("Oferta generada y registrada (demo).")
-
-        if st.session_state.ofertas:
-            st.markdown("### Ofertas registradas")
-            df_o = pd.DataFrame(st.session_state.ofertas)
-            st.dataframe(df_o, use_container_width=True, height=260)
-            st.markdown("**Acciones**")
-            idx = st.number_input("Índice de oferta", min_value=0, max_value=len(st.session_state.ofertas)-1, value=0, step=1)
-            colH, colI, colJ = st.columns(3)
-            with colH:
-                if st.button("Marcar aceptada"):
-                    st.session_state.ofertas[idx]["estado"] = "Aceptada"
-                    st.session_state.ofertas[idx]["historial"].append(f"{datetime.utcnow().isoformat()} - Aceptada")
-                    candX = st.session_state.ofertas[idx]["candidato"]
-                    st.session_state.metrics.setdefault(candX, {})
-                    st.session_state.metrics[candX]["offer_accepted_at"] = datetime.utcnow().isoformat()
-                    gen_at = st.session_state.metrics[candX].get("offer_generated_at")
-                    if gen_at:
-                        tto = (pd.to_datetime(st.session_state.metrics[candX]["offer_accepted_at"]) - pd.to_datetime(gen_at)).days
-                        st.session_state.metrics[candX]["tto_days"] = int(tto)
-                    first_seen = st.session_state.metrics[candX].get("first_seen")
-                    if first_seen:
-                        ttf = (pd.to_datetime(st.session_state.metrics[candX]["offer_accepted_at"]) - pd.to_datetime(first_seen)).days
-                        st.session_state.metrics[candX]["ttf_days"] = int(ttf)
-                    inicio_dt = pd.to_datetime(st.session_state.ofertas[idx]["inicio"]).date()
-                    if candX not in st.session_state.onboarding:
-                        st.session_state.onboarding[candX] = _default_onboarding_tasks(inicio_dt)
-                    st.success("Oferta aceptada y tareas de Onboarding generadas.")
-            with colI:
-                if st.button("Registrar contraoferta"):
-                    st.session_state.ofertas[idx]["estado"] = "Contraoferta"
-                    st.session_state.ofertas[idx]["historial"].append(f"{datetime.utcnow().isoformat()} - Contraoferta")
-                    st.info("Contraoferta registrada.")
-            with colJ:
-                if st.button("Marcar rechazada"):
-                    st.session_state.ofertas[idx]["estado"] = "Rechazada"
-                    st.session_state.ofertas[idx]["historial"].append(f"{datetime.utcnow().isoformat()} - Rechazada")
-                    st.warning("Oferta rechazada.")
-
-# --------------------------------------------------------------------------------------
-# TAB 7: ONBOARDING
-# --------------------------------------------------------------------------------------
-with tab_onb:
+with tabs[8]:
     st.markdown("## SelektIA – **Onboarding**")
-    accepted_cands = [o["candidato"] for o in st.session_state.ofertas if o["estado"]=="Aceptada"]
-    if not accepted_cands:
-        st.info("Aún no hay ofertas aceptadas. Marca una oferta como Aceptada para iniciar onboarding.")
+    if not st.session_state.onboarding:
+        st.info("Cuando marques **Propuesta aceptada** en Oferta, se generarán aquí las tareas.")
     else:
-        cand = st.selectbox("Candidata/o", sorted(set(accepted_cands)), index=0)
-        if cand not in st.session_state.onboarding:
-            off = [o for o in st.session_state.ofertas if o["candidato"]==cand and o["estado"]=="Aceptada"]
-            inicio_dt = pd.to_datetime(off[-1]["inicio"]).date() if off else datetime.utcnow().date() + timedelta(days=14)
-            st.session_state.onboarding[cand] = _default_onboarding_tasks(inicio_dt)
-        data = st.session_state.onboarding[cand]
-        if cand in st.session_state.metrics:
-            m = st.session_state.metrics[cand]
-            st.info(f"TTO: {m.get('tto_days','-')} días • TTF: {m.get('ttf_days','-')} días")
-
-        st.markdown("### Checklist con SLA")
-        task_keys = ["contrato_firmado","docs_completos","usuario_email","acceso_sap","examen_medico","induccion_dia1","epp_uniforme","plan_30_60_90"]
-        for k in task_keys:
-            row = data[k]
-            col1, col2, col3, col4 = st.columns([0.6, 0.2, 0.2, 0.6])
-            with col1: row["done"] = st.checkbox(row["label"], value=row["done"], key=f"onb_done_{cand}_{k}")
-            with col2: row["due"] = st.date_input("Vence", value=row["due"], key=f"onb_due_{cand}_{k}")
-            with col3:
-                opts = ["RR.HH.","TI","Salud Ocupacional","Seguridad/Almacén","Jefe Directo"]
-                row["resp"] = st.selectbox("Resp.", opts, index=opts.index(row["resp"]) if row["resp"] in opts else 0, key=f"onb_resp_{cand}_{k}")
-            with col4:
-                st.markdown(_sla_badge(row["due"]), unsafe_allow_html=True)
-                up = st.file_uploader("Adjuntos", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True, key=f"onb_up_{cand}_{k}")
-                if up: row["files"] = [u.name for u in up]
-            data[k] = row
-            st.divider()
-
-        st.markdown("### Asignaciones")
-        colA, colB, colC, colD = st.columns(4)
-        with colA: data["asignaciones"]["jefe_directo"] = st.text_input("Jefe directo", value=data["asignaciones"].get("jefe_directo",""))
-        with colB: data["asignaciones"]["tutor"] = st.text_input("Tutor/Buddy", value=data["asignaciones"].get("tutor",""))
-        with colC: data["asignaciones"]["rrhh_resp"] = st.text_input("RR.HH. responsable", value=data["asignaciones"].get("rrhh_resp",""))
-        with colD: data["asignaciones"]["ti_resp"] = st.text_input("TI responsable", value=data["asignaciones"].get("ti_resp",""))
-        st.session_state.onboarding[cand] = data
-        st.markdown("---")
-        colX, colY, colZ = st.columns(3)
-        with colX:
-            if st.button("Guardar Onboarding", use_container_width=True): st.success("Onboarding guardado.")
-        with colY:
-            if st.button("Generar Carta de bienvenida (PDF)", use_container_width=True): st.info("Carta de bienvenida generada (demo).")
-        with colZ:
-            if st.button("Exportar a Payroll/HRIS", use_container_width=True): st.success("Exportado (demo).")
+        data = st.session_state.onboarding[-1]
+        st.markdown("#### Checklist y due dates")
+        for i, t in enumerate(data["tareas"]):
+            c1, c2, c3 = st.columns([2,1,1])
+            done = c1.checkbox(t["nombre"], value=(t.get("estado")=="hecho"), key=f"onb_{i}")
+            sla = c2.number_input("SLA (h)", min_value=1, max_value=240, value=int(t["due_h"]), key=f"sla_{i}")
+            st.caption("Rojo si vencido, naranja si <24h")
+            estado = "hecho" if done else "pendiente"
+            t["estado"] = estado
+            t["due_h"] = sla
+        st.markdown("#### Asignaciones")
+        rrhh = st.text_input("RR.HH. responsable", value=data["responsables"].get("RRHH",""))
+        ti   = st.text_input("TI responsable", value=data["responsables"].get("TI",""))
+        jefe = st.text_input("Jefe directo", value=data["responsables"].get("Jefe directo",""))
+        tutor= st.text_input("Tutor/buddy", value=data["responsables"].get("Tutor",""))
+        data["responsables"] = {"RRHH": rrhh, "TI": ti, "Jefe directo": jefe, "Tutor": tutor}
+        st.markdown("#### Documentos")
+        st.file_uploader("Contrato / BLS-ACLS / Colegiatura / Referencias", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True)
+        st.success("Al completar, exporta a Payroll/HRIS (futuro).")
 
 # --------------------------------------------------------------------------------------
-# TAB 8: 🤖 ASISTENTE IA (ROLES Y PERMISOS)  — NUEVO
+# 9) ANALYTICS – placeholder simple
 # --------------------------------------------------------------------------------------
-with tab_ai:
-    st.markdown("## SelektIA – **Asistente IA / Roles y Permisos**")
+with tabs[9]:
+    st.markdown("## SelektIA – **Analytics**")
+    st.caption("KPIs de conversión por etapa, time-to-fill, SLA, razones de descarte, etc. (en construcción)")
 
-    # Selector de rol (solo demostrativo; no bloquea otras pestañas aún)
-    roles = [
-        "Admin RR.HH. (Owner)","Coordinador RR.HH.","Headhunter","Hiring Manager (HM)",
-        "Gerencia/Comité","Legal","Finanzas","TI / Onboarding","Solo lectura"
-    ]
-    st.session_state.current_role = st.selectbox("Tu rol actual (demo):", roles, index=roles.index(st.session_state.current_role) if st.session_state.current_role in roles else 1)
-
-    st.markdown("### Reglas clave")
-    st.markdown("""
-- **RLS (Row-Level Security):** cada rol ve solo sus puestos/candidatos asignados (HH y HM por posición).
-- **Action-Level:** separar *crear/enviar oferta* de *aprobar oferta*.
-- **Adjuntos sensibles:** visibles para RR.HH., Gerencia y Legal; HH solo ve/sube los suyos.
-- **Auditoría:** todas las transiciones (quién/cuándo, IP) y descargas de adjuntos.
-- **SLA/Recordatorios:** por rol (HH: contacto/feedback; HM: calificar entrevista; Legal/Finanzas: aprobar oferta; TI: accesos día 1).
-- **Export:** solo Admin/Coord pueden CSV completos; otros un recorte.
-    """)
-
-    st.markdown("### Permisos por pestaña (resumen)")
-    perm = pd.DataFrame([
-        ["Puestos","E","E","V","V","V","V","V","V"],
-        ["Evaluación de CVs","E","E","V","-","-","-","-","-"],
-        ["Pipeline","E","E","E","E","V","V","V","V"],
-        ["Tareas HH","E","E","E","-","V","V","V","V"],
-        ["Entrevista (Gerencia)","E","E","V","E","E","V","V","V"],
-        ["Oferta (crear/enviar)","E","E","V","V","V","V","V","V"],
-        ["Oferta (aprobar)","A","A","-","-","A","A","-","-"],
-        ["Onboarding","E","E","V","V","V","V","E","V"],
-        ["Reportes/Export","E","E","V","V","V","V","V","V"],
-    ], columns=["Pestaña","Admin","Coord","HH","HM","Gerencia","Legal","Finanzas","TI/Solo lectura"])
-    st.dataframe(perm, use_container_width=True, height=330)
-
-    st.markdown("### Recomendaciones de implementación")
-    st.markdown("""
-- **RBAC** en la capa de datos (roles + permisos + *scope* por puesto).
-- **Feature flags** por acción (ej.: `crear_oferta`, `aprobar_oferta`, `mover_pipeline_x`).
-- **Guardias de UI:** deshabilitar botón y *tooltip* (“No tienes permiso para aprobar ofertas”).
-- **Plantillas de auditoría:** `user_id`, `role`, `action`, `object_id`, `before/after`, `ts`, `ip`.
-    """)
-
-    st.markdown("### Demo rápida de feature flags (local)")
-    ff = st.session_state.feature_flags
-    colf1, colf2, colf3 = st.columns(3)
-    with colf1: ff["crear_oferta"] = st.checkbox("crear_oferta", value=ff.get("crear_oferta", True))
-    with colf2: ff["aprobar_oferta"] = st.checkbox("aprobar_oferta", value=ff.get("aprobar_oferta", False))
-    with colf3: ff["mover_pipeline"] = st.checkbox("mover_pipeline", value=ff.get("mover_pipeline", True))
-    st.session_state.feature_flags = ff
-
-    st.markdown("### Auditoría (demo)")
-    if st.button("Registrar evento de auditoría (demo)"):
-        event = {
-            "ts": datetime.utcnow().isoformat(),
-            "user_role": st.session_state.current_role,
-            "action": "view_permissions",
-            "object_id": "asistente_ia",
-            "before": None,
-            "after": {"feature_flags": ff},
-            "ip": "0.0.0.0",
-        }
-        st.session_state.audit_log.append(event)
-        st.success("Evento registrado (demo).")
-
-    if st.session_state.audit_log:
-        st.markdown("**Eventos recientes**")
-        st.dataframe(pd.DataFrame(st.session_state.audit_log).tail(5), use_container_width=True, height=180)
