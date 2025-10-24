@@ -15,7 +15,7 @@ from PyPDF2 import PdfReader
 # ==========================================================
 # THEME / COLORS
 # ==========================================================
-PRIMARY_GREEN = "#00CD78"   # <- requerido
+PRIMARY_GREEN = "#00CD78"   # <- verde solicitado
 SIDEBAR_BG     = "#10172A"
 TEXT_LIGHT     = "#FFFFFF"
 TITLE_DARK     = "#142433"
@@ -40,46 +40,52 @@ html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main) !important;
 }}
 
+/* ===== Sidebar (izquierda) ===== */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
   border-right: 1px solid #0f1424;
 }}
-[data-testid="stSidebar"] * {{
-  color: var(--text) !important;
+[data-testid="stSidebar"] * {{ color: var(--text) !important; }}
+
+.sidebar-logo {{
+  display:flex; align-items:center; justify-content:center;
+  padding: 14px 8px 6px 8px;
+  margin-bottom: 8px;
 }}
+.sidebar-logo img {{ max-width: 200px; height:auto; }}
 
 .sidebar-section-title {{
   font-weight: 800;
   color: var(--green);
-  margin: 18px 0 6px 0;
+  margin: 14px 8px 6px 8px;
   letter-spacing: .2px;
   font-size: 14px;
+  text-transform: uppercase;
 }}
 
-.sidebar-link {{
-  display: block;
+[data-testid="stSidebar"] .stButton > button {{
   width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  margin: 6px 0;
-  border-radius: 10px;
-  background: transparent;
+  border-radius: 10px !important;
+  background: var(--sidebar-bg) !important;        /* mismo color del fondo */
+  border: 1px solid rgba(255,255,255,.12) !important;
   color: #dde6f7 !important;
-  border: 1px solid transparent;
-  cursor: pointer;
+  display: flex;
+  justify-content: flex-start;                      /* texto NO centrado */
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
 }}
-.sidebar-link:hover {{
-  border-color: rgba(255,255,255,.12);
-  background: rgba(255,255,255,.03);
+[data-testid="stSidebar"] .stButton > button:hover {{
+  border-color: rgba(255,255,255,.22) !important;
+  background: rgba(255,255,255,.03) !important;
 }}
 
-.sidebar-link-strong {{
-  color: var(--green) !important;
-  font-weight: 800;
-}}
-
-.stButton > button, button[kind="secondary"], .stDownloadButton button {{
+/* ===== Botones del contenido (derecha) ===== */
+.block-container .stButton > button,
+.block-container button[kind="secondary"],
+.block-container .stDownloadButton button {{
   background: var(--green) !important;
   color: #082017 !important;
   border: none !important;
@@ -88,7 +94,8 @@ html, body, [data-testid="stAppViewContainer"] {{
   font-weight: 700 !important;
   box-shadow: none !important;
 }}
-.stButton > button:hover, .stDownloadButton button:hover {{
+.block-container .stButton > button:hover,
+.block-container .stDownloadButton button:hover {{
   filter: brightness(.96);
 }}
 
@@ -107,26 +114,23 @@ h1 strong, h2 strong, h3 strong {{
   border: 1.5px solid var(--boxlb) !important;
   border-radius: 10px !important;
 }}
-table {{
-  border: 1px solid var(--boxlb) !important;
-  border-radius: 6px !important;
-}}
-thead th {{
-  background: var(--boxl) !important;
-}}
+
+table {{ border: 1px solid var(--boxlb) !important; border-radius: 6px !important; }}
+thead th {{ background: var(--boxl) !important; }}
+
 .pdf-frame {{
   border: 1px solid var(--boxlb);
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
 }}
+
+/* Logos top-right */
 .topbar {{
   display:flex;align-items:center;justify-content:flex-end;
   gap:18px;margin-bottom:8px;
 }}
-.topbar img {{
-  max-height: 34px;
-}}
+.topbar img {{ max-height: 34px; }}
 """
 
 st.set_page_config(page_title="Selektia", page_icon="🧠", layout="wide")
@@ -176,14 +180,13 @@ if "positions" not in st.session_state:
     ])
 
 # ==========================================================
-# UTILS
+# UTILS (parse CV)
 # ==========================================================
 def extract_text_from_file(f) -> str:
     try:
         suf = Path(f.name).suffix.lower()
         if suf == ".pdf":
-            data = f.read()
-            f.seek(0)
+            data = f.read(); f.seek(0)
             reader = PdfReader(io.BytesIO(data))
             txt = ""
             for p in reader.pages:
@@ -196,75 +199,52 @@ def extract_text_from_file(f) -> str:
         return ""
 
 def guess_last_university_and_year(text):
-    # Busca líneas tipo: Universidad ... Bachelors, 1998  / University ... 2018
-    uline = None
-    uy = None
+    uline = None; uy = None
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     uni_pat = re.compile(r"(Universidad|University)[^\n]*", re.IGNORECASE)
-    year_pat = re.compile(r"(19|20)\d{2}")
     for l in lines:
         if uni_pat.search(l):
-            years = year_pat.findall(l)
-            y = None
-            # extrae último año presente en la línea
-            yy = re.findall(r"(19|20)\d{2}", l)
-            if yy:
-                y = max(int(x) for x in re.findall(r"(?:19|20)\d{2}", l))
-            uline = l
-            uy = y
+            yrs = re.findall(r"(?:19|20)\\d{{2}}", l)
+            y = max([int(x) for x in yrs], default=None)
+            uline, uy = l, y
     return uline, uy
 
 def guess_experience_years(text):
-    # patrones típicos: 20+ years of total experience, 7 years, (6 years)
-    m = re.search(r"(\d{1,2})\+?\s*(?:años|years)\s*(?:de\s*experiencia|of total experience)?", text, re.IGNORECASE)
+    m = re.search(r"(\\d{{1,2}})\\+?\\s*(?:años|years)\\s*(?:de\\s*experiencia|of total experience)?", text, re.IGNORECASE)
     if m:
-        try:
-            return int(m.group(1))
-        except:
-            pass
-    # intenta sumar roles con (7 years), 2015-Current (6 years)
-    years = [int(x) for x in re.findall(r"\((\d{{1,2}})\s*years?\)", text, re.IGNORECASE)]
-    if years:
-        return max(years)
-    return None
+        try: return int(m.group(1))
+        except: pass
+    years = [int(x) for x in re.findall(r"\\((\\d{{1,2}})\\s*years?\\)", text, re.IGNORECASE)]
+    return max(years) if years else None
 
 def guess_roles(text):
-    # extrae líneas de títulos habituales
     roles = []
-    role_kw = ["Engineer", "Developer", "Architect", "Enfermera", "Tecnólogo", "Medico", "Recepcionista",
-               "Químico", "Farmacéutico", "Manager", "Consultant", "Analyst", "Especialista"]
+    role_kw = ["Engineer","Developer","Architect","Enfermera","Tecnólogo","Medico","Recepcionista",
+               "Químico","Farmacéutico","Manager","Consultant","Analyst","Especialista"]
     for line in [l.strip() for l in text.splitlines() if l.strip()]:
         if any(k.lower() in line.lower() for k in role_kw):
             roles.append(line)
     return roles[:6]
 
 def guess_skills(text):
-    # heurística: lista separada por comas tras palabras como Java, SQL, GIS, etc.
-    # también agarra línea que empieza con skills o contiene varios tokens técnicos
     skills = set()
-    # tokens técnicos más comunes
-    tokens = ["java", "python", "sql", "gis", "postgis", "geoserver", "oracle", "css", "html", "sap", "sap is-h",
-              "his", "bls", "acls", "iaas", "protocolos", "educación al paciente", "seguridad del paciente"]
+    tokens = ["java","python","sql","gis","postgis","geoserver","oracle","css","html","sap","sap is-h",
+              "his","bls","acls","iaas","protocolos","educación al paciente","seguridad del paciente"]
     for line in [l.strip() for l in text.splitlines() if l.strip()]:
-        # usa coma como delimitador
         if "," in line and sum(1 for t in tokens if t in line.lower()) >= 1:
             parts = [p.strip() for p in line.split(",")]
             for p in parts:
                 if len(p) <= 40:
                     skills.add(p)
-    # fallback: agrega tokens que aparezcan en texto
     found = [t for t in tokens if t in text.lower()]
     skills.update(found)
     return list(dict.fromkeys(skills))[:12]
 
 def guess_last_update(text):
-    # "Updated Jan 12, 2022" o "Actualizado 2023-07-15"
-    m = re.search(r"Updated\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE)
-    if m:
-        return m.group(1)
-    m = re.search(r"(?:Actualizado|Actualizada)\s+(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE)
-    if m:
-        return m.group(1)
+    m = re.search(r"Updated\\s+([A-Za-z]{{3,9}}\\s+\\d{{1,2}},\\s+\\d{{4}})", text, re.IGNORECASE)
+    if m: return m.group(1)
+    m = re.search(r"(?:Actualizado|Actualizada)\\s+(\\d{{4}}-\\d{{2}}-\\d{{2}})", text, re.IGNORECASE)
+    if m: return m.group(1)
     return None
 
 def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
@@ -281,81 +261,79 @@ def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
     )
 
 # ==========================================================
-# TOP RIGHT LOGOS
+# TOP RIGHT (solo Wayki) & SIDEBAR NAV
 # ==========================================================
 def top_right_logos():
     c1, c2 = st.columns([8, 1.2])
     with c2:
-        # Selektia logo si está disponible
-        sele_path = Path("assets/logo-selektia.png")
-        if sele_path.exists():
-            st.image(str(sele_path))
-        # Wayki logo
         wayki_path = Path("assets/logo-wayki.png")
         if wayki_path.exists():
             st.image(str(wayki_path))
 
-# ==========================================================
-# SIDEBAR NAVIGATION
-# ==========================================================
 def sidebar_nav():
-    st.sidebar.markdown("### ")  # espacio
-    # DASHBOARD
+    # Logo SelektIA en el panel izquierdo
+    sele_path = Path("assets/logo-selektia.png")
+    if sele_path.exists():
+        st.sidebar.markdown('<div class="sidebar-logo">', unsafe_allow_html=True)
+        st.sidebar.image(str(sele_path))
+        st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+    # Orden solicitado: Bienvenido → Páginas ATS → resto
     st.sidebar.markdown('<div class="sidebar-section-title">DASHBOARD</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Bienvenido a Selektia", key="nav_dash", use_container_width=True, help="", type="secondary"):
+    if st.sidebar.button("Bienvenido a Selektia", key="nav_dash"):
         st.session_state.page = "Bienvenido"
 
-    # ANALYTICS
+    # PÁGINAS ATS debajo de Bienvenido
+    st.sidebar.markdown('<div class="sidebar-section-title">Páginas ATS</div>', unsafe_allow_html=True)
+    if st.sidebar.button("Definición & Carga", key="nav_def"):
+        st.session_state.page = "Definición & Carga"
+    if st.sidebar.button("Puestos", key="nav_puestos"):
+        st.session_state.page = "Puestos"
+    if st.sidebar.button("Evaluación de CVs", key="nav_eval"):
+        st.session_state.page = "Evaluación de CVs"
+    if st.sidebar.button("Pipeline de Candidatos", key="nav_pipe"):
+        st.session_state.page = "Pipeline de Candidatos"
+    if st.sidebar.button("Entrevista (Gerencia)", key="nav_ger"):
+        st.session_state.page = "Entrevista (Gerencia)"
+    if st.sidebar.button("Tareas del Headhunter", key="nav_hh"):
+        st.session_state.page = "Tareas del Headhunter"
+    if st.sidebar.button("Oferta", key="nav_oferta"):
+        st.session_state.page = "Oferta"
+    if st.sidebar.button("Onboarding", key="nav_onboard"):
+        st.session_state.page = "Onboarding"
+
+    # Analytics
     st.sidebar.markdown('<div class="sidebar-section-title">Analytics</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Abrir Analytics", key="nav_analytics", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Abrir Analytics", key="nav_analytics"):
         st.session_state.page = "Analytics"
 
-    # ACCIONES
+    # Acciones
     st.sidebar.markdown('<div class="sidebar-section-title">Acciones</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Crear tarea", key="nav_task", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Crear tarea", key="nav_task"):
         st.session_state.page = "Crear tarea"
 
-    # ASISTENTE IA (primero en orden funcional)
+    # Asistente IA
     st.sidebar.markdown('<div class="sidebar-section-title">Asistente IA</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Flujos", key="nav_flujos", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Flujos", key="nav_flujos"):
         st.session_state.page = "Flujos"
-    if st.sidebar.button("Agentes", key="nav_agentes", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Agentes", key="nav_agentes"):
         st.session_state.page = "Asistente IA"
-    if st.sidebar.button("Tareas de Agente", key="nav_tareas_ag", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Tareas de Agente", key="nav_tareas_ag"):
         st.session_state.page = "Tareas de Agente"
 
-    # TAREAS
+    # Tareas secciones
     st.sidebar.markdown('<div class="sidebar-section-title">Tareas</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Todas las tareas", key="nav_todas", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Todas las tareas", key="nav_todas"):
         st.session_state.page = "Todas las tareas"
-    if st.sidebar.button("Asignadas a mí", key="nav_mi", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Asignadas a mí", key="nav_mi"):
         st.session_state.page = "Asignadas a mí"
-    if st.sidebar.button("Asignado a mi equipo", key="nav_equipo", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Asignado a mi equipo", key="nav_equipo"):
         st.session_state.page = "Asignado a mi equipo"
 
     # Archivo
     st.sidebar.markdown('<div class="sidebar-section-title">Archivo</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Ver archivo", key="nav_archivo", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Ver archivo", key="nav_archivo"):
         st.session_state.page = "Archivo"
-
-    # Páginas del flujo ATS ya implementadas
-    st.sidebar.markdown('<div class="sidebar-section-title">Páginas ATS</div>', unsafe_allow_html=True)
-    if st.sidebar.button("Definición & Carga", key="nav_def", use_container_width=True, type="secondary"):
-        st.session_state.page = "Definición & Carga"
-    if st.sidebar.button("Puestos", key="nav_puestos", use_container_width=True, type="secondary"):
-        st.session_state.page = "Puestos"
-    if st.sidebar.button("Evaluación de CVs", key="nav_eval", use_container_width=True, type="secondary"):
-        st.session_state.page = "Evaluación de CVs"
-    if st.sidebar.button("Pipeline de Candidatos", key="nav_pipe", use_container_width=True, type="secondary"):
-        st.session_state.page = "Pipeline de Candidatos"
-    if st.sidebar.button("Entrevista (Gerencia)", key="nav_ger", use_container_width=True, type="secondary"):
-        st.session_state.page = "Entrevista (Gerencia)"
-    if st.sidebar.button("Tareas del Headhunter", key="nav_hh", use_container_width=True, type="secondary"):
-        st.session_state.page = "Tareas del Headhunter"
-    if st.sidebar.button("Oferta", key="nav_oferta", use_container_width=True, type="secondary"):
-        st.session_state.page = "Oferta"
-    if st.sidebar.button("Onboarding", key="nav_onboard", use_container_width=True, type="secondary"):
-        st.session_state.page = "Onboarding"
 
 # ==========================================================
 # PAGES
@@ -363,7 +341,7 @@ def sidebar_nav():
 def page_bienvenido():
     top_right_logos()
     st.markdown("## Bienvenido a Selektia")
-    st.info("Aquí podrás ver KPIs clave y accesos rápidos (placeholder).")
+    st.info("KPIs y accesos rápidos (placeholder).")
 
 def page_analytics():
     top_right_logos()
@@ -453,26 +431,19 @@ def page_definicion_carga():
     if files:
         st.session_state.candidates = []
         for f in files:
-            bytes_ = f.read()
-            f.seek(0)
+            bytes_ = f.read(); f.seek(0)
             txt = extract_text_from_file(f)
-            # scoring muy simple por keywords
-            score = 0
-            hits = 0
+            # scoring simple con keywords
+            score = 0; hits = 0
             kws = [k.strip().lower() for k in kw_text.split(",") if k.strip()]
             low = txt.lower()
             for k in kws:
-                if k and k in low:
-                    hits += 1
-            if kws:
-                score = int((hits/len(kws))*100)
+                if k and k in low: hits += 1
+            if kws: score = int((hits/len(kws))*100)
             st.session_state.candidates.append({
-                "Name": f.name,
-                "Score": score,
+                "Name": f.name, "Score": score,
                 "Reasons": f"{hits}/{len(kws)} keywords encontradas — Coincidencias: {', '.join([k for k in kws if k in low])[:120]}",
-                "_bytes": bytes_,
-                "_is_pdf": Path(f.name).suffix.lower()==".pdf",
-                "_text": txt
+                "_bytes": bytes_, "_is_pdf": Path(f.name).suffix.lower()==".pdf", "_text": txt
             })
         st.success("CVs procesados ✔️")
 
@@ -581,16 +552,26 @@ def page_pipeline():
         cand = df[df["Name"]==st.session_state._pipeline_selected].iloc[0]
         text = cand["_text"]
 
-        # ---- Heurísticas de extracción a partir del CV ----
+        # Datos extraídos del CV
+        def guess_last_university_and_year_local(txt):  # (scope local por seguridad)
+            uline = None; uy = None
+            lines = [l.strip() for l in txt.splitlines() if l.strip()]
+            uni_pat = re.compile(r"(Universidad|University)[^\n]*", re.IGNORECASE)
+            for l in lines:
+                if uni_pat.search(l):
+                    yrs = re.findall(r"(?:19|20)\\d{{2}}", l)
+                    y = max([int(x) for x in yrs], default=None)
+                    uline, uy = l, y
+            return uline, uy
+
         exp_years = guess_experience_years(text)
-        uni_line, uni_year = guess_last_university_and_year(text)
+        uni_line, uni_year = guess_last_university_and_year_local(text)
         roles = guess_roles(text)
         skills = guess_skills(text)
         last_update = guess_last_update(text)
 
         st.write(f"**Archivo:** {cand['Name']}")
         st.write(f"**Match estimado:** {'Alto' if cand['Score']>=60 else 'Medio' if cand['Score']>=40 else 'Bajo'}")
-        st.write("**Resumen de perfil**")
         st.caption("Perfil detectado a partir del CV (heurística).")
 
         s1, s2 = st.columns(2)
@@ -646,7 +627,6 @@ def page_onboarding():
 # ==========================================================
 sidebar_nav()
 
-# Render page selected
 PAGES = {
     "Bienvenido": page_bienvenido,
     "Analytics": page_analytics,
