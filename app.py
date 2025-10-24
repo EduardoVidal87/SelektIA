@@ -34,34 +34,33 @@ TITLE_DARK   = "#142433"    # texto títulos principales
 # ==========
 #   ESTILO
 # ==========
+
 CSS = f"""
 :root {{
-  --green: {PRIMARY_GREEN};
-  --sidebar-bg: {SIDEBAR_BG};
-  --box: {BOX_DARK};
-  --box-hover: {BOX_DARK_HOV};
-  --text: {TEXT_LIGHT};
-  --main-bg: {MAIN_BG};
-  --box-light: {BOX_LIGHT};
-  --box-light-border: {BOX_LIGHT_B};
-  --title-dark: {TITLE_DARK};
+  --green: {PRIMARY_GREEN};        /* #00CD78 */
+  --sidebar-bg: {SIDEBAR_BG};      /* #10172A */
+  --box: {BOX_DARK};               /* #132840 */
+  --box-hover: {BOX_DARK_HOV};     /* #193355 */
+  --text: {TEXT_LIGHT};            /* #FFFFFF */
+  --main-bg: {MAIN_BG};            /* #F7FBFF */
+  --box-light: {BOX_LIGHT};        /* #F1F7FD */
+  --box-light-border: {BOX_LIGHT_B};/* #E3EDF6 */
+  --title-dark: {TITLE_DARK};      /* #142433 */
 }}
 
-/* Fondo general */
+/* ====== Lienzo general ====== */
 html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main-bg) !important;
 }}
-/* Fondo de la app (quita el blanco del contenedor) */
 .block-container {{
   background: transparent !important;
 }}
 
-/* Sidebar fondo */
+/* ====== SIDEBAR (oscuro) ====== */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
 }}
-/* --- TÍTULOS DEL SIDEBAR EN VERDE --- */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
@@ -71,23 +70,14 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] .stMarkdown p strong {{
   color: var(--green) !important;
 }}
-
-/* Etiquetas del sidebar y texto */
 [data-testid="stSidebar"] label, 
 [data-testid="stSidebar"] p, 
 [data-testid="stSidebar"] span {{
   color: var(--text) !important;
 }}
-
-/* Inputs del SIDEBAR (select, input, textarea, dropzone) */
+/* Inputs/Select/Area */
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
-[data-testid="stSidebar"] [data-baseweb="select"] {{
-  background: var(--box) !important;
-  color: var(--text) !important;
-  border: 1.5px solid var(--box) !important;
-  border-radius: 12px !important;
-  box-shadow: none !important;
-}}
+[data-testid="stSidebar"] [data-baseweb="select"],
 [data-testid="stSidebar"] [data-testid="stTextInput"] input,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
   background: var(--box) !important;
@@ -103,7 +93,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
 }}
-/* Dropzone */
+/* Dropzone/pills */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background: var(--box) !important;
   border: 1.5px dashed var(--box) !important;
@@ -112,14 +102,13 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
   color: var(--text) !important;
 }}
-/* Pills de archivos subidos */
 [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
   background: var(--box) !important;
   border: 1px solid var(--box) !important;
   color: var(--text) !important;
 }}
 
-/* Botón verde (sidebar y cuerpo) */
+/* ====== Botones (global) ====== */
 .stButton > button {{
   background: var(--green) !important;
   color: #082017 !important;
@@ -128,43 +117,56 @@ html, body, [data-testid="stAppViewContainer"] {{
   padding: .45rem .9rem !important;
   font-weight: 600 !important;
 }}
-.stButton > button:hover {{
-  filter: brightness(0.95);
-}}
+.stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* Títulos del cuerpo */
-h1, h2, h3 {{
-  color: var(--title-dark);
-}}
-h1 strong, h2 strong, h3 strong {{
-  color: var(--green);
-}}
+/* ====== TITULOS CUERPO ====== */
+h1, h2, h3 {{ color: var(--title-dark); }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Controles del área principal (claros) */
+/* ====== PANEL DERECHO (claro) ======
+   Replicamos paleta clara de todo lo interactivo:
+   inputs, selects, multiselects, sliders, tabs, expanders, tablas. */
+.block-container [data-testid="stTextInput"] input,
+.block-container [data-testid="stTextArea"] textarea,
 .block-container [data-testid="stSelectbox"] > div > div,
 .block-container [data-baseweb="select"],
-.block-container [data-testid="stTextInput"] input,
-.block-container [data-testid="stTextArea"] textarea {{
-  background: var(--box-light) !important;
+.block-container [data-baseweb="textarea"],
+.block-container [data-baseweb="input"] {{
+  background: #FFFFFF !important;                   /* más claro que #F1F7FD */
   color: var(--title-dark) !important;
   border: 1.5px solid var(--box-light-border) !important;
   border-radius: 10px !important;
+  box-shadow: none !important;
+}}
+/* Hover/Focus en verde */
+.block-container [data-testid="stTextInput"] input:hover,
+.block-container [data-testid="stTextInput"] input:focus,
+.block-container [data-testid="stTextArea"] textarea:hover,
+.block-container [data-testid="stTextArea"] textarea:focus,
+.block-container [data-testid="stSelectbox"] > div > div:hover,
+.block-container [data-baseweb="select"]:hover {{
+  border-color: var(--green) !important;
 }}
 
-/* Tabla clara (dataframe/simple table) */
-.block-container table {{
-  background: #fff !important;
-  border: 1px solid var(--box-light-border) !important;
-  border-radius: 8px !important;
-}}
-.block-container thead th {{
-  background: var(--box-light) !important;
+/* Tabs */
+.stTabs [data-baseweb="tab"] {{
+  background: #FFFFFF !important;
   color: var(--title-dark) !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-bottom: none !important;
+  margin-right: .25rem !important;
+  border-top-left-radius: 10px !important;
+  border-top-right-radius: 10px !important;
+}}
+.stTabs [aria-selected="true"] {{
+  border-color: var(--green) !important;
+  color: var(--title-dark) !important;
+  font-weight: 600 !important;
 }}
 
-/* Expander claro */
+/* Expander */
 [data-testid="stExpander"] {{
-  background: #fff !important;
+  background: #FFFFFF !important;
   border: 1px solid var(--box-light-border) !important;
   border-radius: 12px !important;
 }}
@@ -172,9 +174,40 @@ h1 strong, h2 strong, h3 strong {{
   color: var(--title-dark) !important;
 }}
 
-/* Selector del visor de PDF en claro */
-#pdf_candidate, #pdf_candidate_alt {{
+/* Tabla/Dataframe */
+.block-container table {{
+  background: #FFFFFF !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-radius: 8px !important;
+}}
+.block-container thead th {{
   background: var(--box-light) !important;
+  color: var(--title-dark) !important;
+}}
+/* Scrollbar claro */
+.block-container ::-webkit-scrollbar {{
+  height: 10px; width: 10px;
+}}
+.block-container ::-webkit-scrollbar-thumb {{
+  background: var(--box-light-border);
+  border-radius: 8px;
+}}
+.block-container ::-webkit-scrollbar-thumb:hover {{
+  background: var(--green);
+}}
+
+/* Slider (color verde) */
+[data-testid="stSlider"] [role="slider"] {{
+  background: var(--green) !important;
+  border: 2px solid #089f5e !important;
+}}
+[data-testid="stSlider"] .st-b3 {{
+  background: linear-gradient(90deg, var(--green), var(--green)) !important;
+}}
+
+/* Selector del visor de PDF (claro) */
+#pdf_candidate, #pdf_candidate_alt {{
+  background: #FFFFFF !important;
   border: 1.5px solid var(--box-light-border) !important;
   color: var(--title-dark) !important;
   border-radius: 10px !important;
