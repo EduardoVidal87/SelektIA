@@ -2,12 +2,14 @@
 import io
 import re
 import base64
+import uuid
 from pathlib import Path
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
+import streamlit.components.v1 as components
 
 # ======================================================
 # CONFIGURACIÓN BÁSICA
@@ -192,42 +194,22 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 # ======================================================
 # UTILS: EXTRACCIÓN DE TEXTO
 # ======================================================
-def extract_text_from_upload(uploaded_file) -> str:
-    """Extrae texto de PDF o TXT."""
-    try:
-        suffix = Path(uploaded_file.name).suffix.lower()
-        if suffix == ".pdf":
-            pdf_reader = PdfReader(io.BytesIO(uploaded_file.read()))
-            text = []
-            for page in pdf_reader.pages:
-                text.append(page.extract_text() or "")
-            return "\n".join(text)
-        else:
-            return uploaded_file.read().decode("utf-8", errors="ignore")
-    except Exception as e:
-        st.error(f"Error al leer '{uploaded_file.name}': {e}")
-        return ""
-
-def tokenize(text: str):
-    """Tokeniza para hacer matching simple de palabras clave (insensible a may/min)."""
-    return re.findall(r"[A-Za-zÁÉÍÓÚáéíóúñÑ0-9\-/+_.]+", text.lower())
-
 def count_keyword_matches(text: str, keywords: list[str]) -> int:
     """Cuenta cuántas keywords aparecen al menos 1 vez en el texto."""
     if not text:
         return 0
-    tokens = set(tokenize(text))
+    tokens = re.findall(r"[A-Za-zÁÉÍÓÚáéíóúñÑ0-9\-/+_.]+", text.lower())
+    tokenset = set(tokens)
     matches = 0
     for kw in keywords:
         kw = kw.strip().lower()
         if not kw:
             continue
-        # match "contiene" (si la kw son varias palabras, chequeamos substring)
-        if " " in kw:
+        if " " in kw:  # frase
             if kw in text.lower():
                 matches += 1
-        else:
-            if kw in tokens:
+        else:  # palabra única
+            if kw in tokenset:
                 matches += 1
     return matches
 
@@ -289,35 +271,32 @@ candidates = []
 
 if files:
     for f in files:
-        # Guardar bytes primero y luego volver a situar el puntero
-        data_bytes = f.read()
-        suffix = Path(f.name).suffix.lower()
-        # extraer texto (reanclamos BytesIO)
+        raw = f.read()
+        ext = Path(f.name).suffix.lower()
+
+        # Extraer texto:
         text = ""
         try:
-            if suffix == ".pdf":
-                reader = PdfReader(io.BytesIO(data_bytes))
-                text_pages = [p.extract_text() or "" for p in reader.pages]
-                text = "\n".join(text_pages)
+            if ext == ".pdf":
+                reader = PdfReader(io.BytesIO(raw))
+                text = "\n".join([(p.extract_text() or "") for p in reader.pages])
             else:
-                text = data_bytes.decode("utf-8", errors="ignore")
+                text = raw.decode("utf-8", errors="ignore")
         except Exception as e:
             st.warning(f"No se pudo extraer texto de '{f.name}': {e}")
 
-        # Score simple por coincidencia de keywords
         matches = count_keyword_matches(text, kw_list)
-        score = int(round(100 * (matches / max(1, len(kw_list)))))  # normalización simple
+        score = int(round(100 * (matches / max(1, len(kw_list)))))
 
         candidates.append({
             "Name": f.name,
             "Score": score,
             "Matches": f"{matches}/{len(kw_list)} keywords encontradas",
             "PDF_text chars": len(text),
-            "_bytes": data_bytes,
-            "_is_pdf": (suffix == ".pdf"),
+            "_bytes": raw,
+            "_is_pdf": (ext == ".pdf"),
         })
 
-# Persistimos resultados si hay candidatos nuevos
 if candidates:
     st.session_state["candidates"] = candidates
 
@@ -348,19 +327,11 @@ show_cols = df[["Name", "Score", "Matches", "PDF_text chars"]].rename(columns={
 })
 st.dataframe(show_cols, use_container_width=True, height=240)
 
-# Gráfico con colores personalizados
+# Gráfico
 st.markdown("### Comparación de puntajes")
-
-# Asignamos color por fila según umbral >= 60
-bar_colors = [BAR_HIGHLIGHT if s >= 60 else BAR_BASE for s in df["Score"]]
-fig = px.bar(
-    df,
-    x="Name",
-    y="Score",
-    title=None,
-    labels={"Name": "Nombre", "Score": "Score"},
-)
-fig.update_traces(marker_color=bar_colors)
+colors = [BAR_HIGHLIGHT if s >= 60 else BAR_BASE for s in df["Score"]]
+fig = px.bar(df, x="Name", y="Score", labels={"Name": "Nombre", "Score": "Score"})
+fig.update_traces(marker_color=colors)
 fig.update_layout(
     plot_bgcolor="#FFFFFF",
     paper_bgcolor="rgba(0,0,0,0)",
@@ -372,63 +343,69 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 # ======================================================
-# VISOR DE CV (PDF/TXT)
+# VISOR DE CV (PDF/TXT) — usando BLOB en el navegador
 # ======================================================
-st.markdown("### Visor de CV (PDF/TXT)  <a href='#' id='visor_anchor'></a>", unsafe_allow_html=True)
-
+st.markdown("### Visor de CV (PDF/TXT)")
 all_names = df["Name"].tolist()
-selected_name = st.selectbox(
-    "Elige un candidato",
-    all_names,
-    index=0,
-    key="pdf_candidate_selector",
-    label_visibility="collapsed",
-)
+selected_name = st.selectbox("Elige un candidato", all_names, index=0, label_visibility="collapsed")
 
 candidate = df.loc[df["Name"] == selected_name].iloc[0]
+viewer_height = 520  # más contenido y limpio
 
-# Render PDF con iframe (base64) si es PDF; si TXT lo mostramos como texto
-viewer_height = 520  # altura contenida para que no ocupe toda la pantalla
+def render_pdf_blob(pdf_bytes: bytes, height: int = 520):
+    """
+    Renderiza un PDF seguro en un iframe usando un Blob (evita bloqueos de data:).
+    """
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    frame_id = f"pdf_iframe_{uuid.uuid4().hex}"
+    html = f"""
+    <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
+      <iframe id="{frame_id}" width="100%" height="{height}px" style="border:0;"></iframe>
+    </div>
+    <script>
+      (function() {{
+        try {{
+          const b64 = "{b64}";
+          const byteChars = atob(b64);
+          const byteNumbers = new Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {{
+            byteNumbers[i] = byteChars.charCodeAt(i);
+          }}
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], {{type: "application/pdf"}});
+          const url = URL.createObjectURL(blob);
+          const iframe = document.getElementById("{frame_id}");
+          if (iframe) {{
+            iframe.src = url;
+          }}
+        }} catch (e) {{
+          console.error("Fallo al preparar blob PDF:", e);
+        }}
+      }})();
+    </script>
+    """
+    components.html(html, height=height + 10, scrolling=False)
 
 if candidate["_is_pdf"] and candidate["_bytes"]:
-    try:
-        b64 = base64.b64encode(candidate["_bytes"]).decode("utf-8")
-        html = f"""
-        <div style="border:1px solid {BOX_LIGHT_B};border-radius:12px;overflow:hidden;background:#fff;">
-            <iframe
-                src="data:application/pdf;base64,{b64}"
-                type="application/pdf"
-                width="100%"
-                height="{viewer_height}px"
-                style="border:0;"
-            ></iframe>
-        </div>
-        """
-        st.markdown(html, unsafe_allow_html=True)
-        st.download_button(
-            f"Descargar {selected_name}",
-            data=candidate["_bytes"],
-            file_name=selected_name,
-            mime="application/pdf",
-            use_container_width=False
-        )
-    except Exception:
-        st.warning("No se pudo embeber el PDF en el navegador. Usa el botón de descarga.", icon="⚠️")
-        st.download_button(
-            f"Descargar {selected_name}",
-            data=candidate["_bytes"],
-            file_name=selected_name,
-            mime="application/pdf",
-            use_container_width=False
-        )
+    # Intento principal: blob en navegador
+    render_pdf_blob(candidate["_bytes"], height=viewer_height)
+
+    # Botón de descarga siempre como respaldo
+    st.download_button(
+        f"Descargar {selected_name}",
+        data=candidate["_bytes"],
+        file_name=selected_name,
+        mime="application/pdf",
+        use_container_width=False
+    )
 else:
-    # Mostrar TXT (o casos donde no haya bytes PDF)
+    # TXT u otro caso
     if not candidate["_is_pdf"]:
         try:
-            txt_content = candidate["_bytes"].decode("utf-8", errors="ignore")
+            txt = candidate["_bytes"].decode("utf-8", errors="ignore")
         except Exception:
-            txt_content = "(No se pudo leer el contenido de texto.)"
-        st.text_area("Contenido del TXT (solo lectura):", txt_content, height=viewer_height)
+            txt = "(No se pudo leer el contenido de texto.)"
+        st.text_area("Contenido del TXT (solo lectura):", txt, height=viewer_height)
         st.download_button(
             f"Descargar {selected_name}",
             data=candidate["_bytes"],
