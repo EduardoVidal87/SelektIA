@@ -135,15 +135,29 @@ def build_excel(shortlist_df: pd.DataFrame, all_df: pd.DataFrame) -> bytes:
     buf.seek(0); return buf.read()
 
 def show_pdf(file_bytes: bytes, height: int = 820):
-    """Visor PDF con fallback a descarga si el navegador no lo renderiza."""
-    b64 = base64.b64encode(file_bytes).decode()
-    html_code = f"""
-    <object data="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}">
-        <p>No se pudo previsualizar el PDF.
-        <a download="cv.pdf" href="data:application/pdf;base64,{b64}">Descargar CV</a></p>
-    </object>
     """
-    st.components.v1.html(html_code, height=height, scrolling=True)
+    Visor PDF robusto:
+    - Intenta renderizar con pdf.js (streamlit-pdf-viewer) pasando los bytes directamente.
+    - Si la librería no está disponible o el navegador bloquea la carga, hace fallback a <object>
+      con un enlace de descarga.
+    """
+    try:
+        # Import local para no romper si aún no está instalada la lib
+        from streamlit_pdf_viewer import pdf_viewer
+        # Render con pdf.js (acepta bytes)
+        pdf_viewer(file_bytes, height=height)
+    except Exception:
+        # Fallback HTML con enlace de descarga
+        import base64
+        b64 = base64.b64encode(file_bytes).decode()
+        html_code = f"""
+        <object data="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}">
+            <p>No se pudo previsualizar el PDF en el navegador.
+            <a download="cv.pdf" href="data:application/pdf;base64,{b64}">Descargar CV</a></p>
+        </object>
+        """
+        st.components.v1.html(html_code, height=height, scrolling=True)
+
 
 # ------------------- UI -------------------
 st.set_page_config(page_title="SelektIA", layout="wide")
