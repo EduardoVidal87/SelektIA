@@ -106,9 +106,51 @@ html, body, [data-testid="stAppViewContainer"] {{
 }}
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* Títulos */
-h1, h2, h3 {{ color: var(--title-dark); }}
-h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
+/* Títulos unificados (como la captura) */
+h1, h2, h3 {{
+  color: var(--title-dark) !important;
+  margin-bottom: .35rem !important;
+}}
+h1 strong, h2 strong, h3 strong {{
+  color: var(--green) !important;
+}}
+/* línea suave debajo del bloque de título (solo al primer título siguiente) */
+h1 + div, h2 + div, h3 + div {{
+  border-top: 1px solid var(--box-light-border);
+}}
+/* también permite separadores suaves debajo del título directo */
+h1 + p, h2 + p, h3 + p {{
+  border-top: 1px solid transparent;
+}}
+
+/* Tabs visibles: píldoras, activa con subrayado verde */
+.stTabs [role="tablist"] {{
+  gap: .5rem;
+  border-bottom: 1px solid var(--box-light-border);
+  margin-top: .2rem;
+  padding-bottom: .25rem;
+}}
+/* botón de tab */
+.stTabs [role="tab"] {{
+  background: #fff;
+  color: #374151;
+  border: 1px solid var(--box-light-border);
+  border-bottom: 2px solid transparent;
+  padding: .45rem .9rem;
+  border-radius: 10px 10px 0 0;
+  font-weight: 500;
+}}
+/* activa */
+.stTabs [role="tab"][aria-selected="true"] {{
+  color: var(--title-dark);
+  font-weight: 700;
+  border-color: var(--box-light-border);
+  border-bottom: 3px solid var(--green);
+}}
+/* hover */
+.stTabs [role="tab"]:hover {{
+  border-color: var(--green);
+}}
 
 /* Inputs claros del cuerpo */
 .block-container [data-testid="stSelectbox"] > div > div,
@@ -560,7 +602,7 @@ with tab_eval:
                 st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
 # --------------------------------------------------------------------------------------
-# TAB 3: PIPELINE (NO editable + selector + detalle + mover a Gerencia)
+# TAB 3: PIPELINE
 # --------------------------------------------------------------------------------------
 with tab_pipeline:
     st.markdown("## 👥 Pipeline de Candidatos")
@@ -579,7 +621,6 @@ with tab_pipeline:
             "Notas": [""] * len(df_sorted),
         })
 
-        # Sin vertical_alignment (causa error en tu versión)
         colL, colR = st.columns([1.15, 1])
         with colL:
             st.markdown("#### Pipeline de Candidatos")
