@@ -4,7 +4,8 @@
 import io
 import base64
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date
+from typing import List, Dict
 
 import streamlit as st
 import pandas as pd
@@ -12,7 +13,7 @@ import plotly.express as px
 from PyPDF2 import PdfReader
 
 # ======================================================================================
-# COLORES / TEMA
+# TEMA / COLORES / ESTILOS
 # ======================================================================================
 PRIMARY_GREEN = "#00CD78"
 SIDEBAR_BG = "#10172A"
@@ -39,16 +40,14 @@ CSS = f"""
   --title-dark: {TITLE_DARK};
 }}
 
-/* Fondo general */
 html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main-bg) !important;
 }}
 .block-container {{
   background: transparent !important;
-  padding-top: 1.2rem !important;
+  padding-top: 0.6rem !important;
 }}
 
-/* Sidebar */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
@@ -57,17 +56,16 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
 [data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6,
 [data-testid="stSidebar"] .stMarkdown p strong {{
   color: var(--green) !important;
 }}
-[data-testid="stSidebar"] label, 
-[data-testid="stSidebar"] p, 
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
 [data-testid="stSidebar"] span {{
   color: var(--text) !important;
 }}
-/* Boxes del sidebar */
+
+/* 4 boxes del sidebar */
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
 [data-testid="stSidebar"] [data-baseweb="select"],
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea,
@@ -93,25 +91,20 @@ html, body, [data-testid="stAppViewContainer"] {{
   color: var(--text) !important;
 }}
 
-/* Botón verde */
 .stButton > button {{
   background: var(--green) !important;
   color: #082017 !important;
   border-radius: 10px !important;
   border: none !important;
   padding: .45rem .9rem !important;
-  font-weight: 700 !important;
+  font-weight: 600 !important;
 }}
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
-/* Títulos del cuerpo */
 h1, h2, h3 {{
   color: var(--title-dark) !important;
-  margin-bottom: .6rem !important;
 }}
-h1 strong, h2 strong, h3 strong {{
-  color: var(--green) !important;
-}}
+h1 strong, h2 strong, h3 strong {{ color: var(--green) !important; }}
 
 /* Inputs claros del cuerpo */
 .block-container [data-testid="stSelectbox"] > div > div,
@@ -124,77 +117,46 @@ h1 strong, h2 strong, h3 strong {{
   border-radius: 10px !important;
 }}
 
-/* Tablas */
-.block-container table {{
-  background: #fff !important;
-  border: 1px solid var(--box-light-border) !important;
-  border-radius: 8px !important;
+/* Tab styling (subrayado visible y color activo) */
+.stTabs [data-baseweb="tab-list"] {{
+  gap: 6px !important;
+  border-bottom: 2px solid rgba(0,0,0,0.06);
 }}
-.block-container thead th {{
-  background: var(--box-light) !important;
-  color: var(--title-dark) !important;
+.stTabs [data-baseweb="tab"] {{
+  color: #64748B !important;
+  font-weight: 600 !important;
+  padding: 8px 14px !important;
+  border-radius: 6px 6px 0 0 !important;
 }}
-
-/* Selector visor */
-#pdf_candidate {{
-  background: var(--box-light) !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  color: var(--title-dark) !important;
-  border-radius: 10px !important;
+.stTabs [aria-selected="true"] {{
+  color: var(--green) !important;
+  border-bottom: 3px solid var(--green) !important;
 }}
-
-/* Contenedor visor PDF */
+/* Título principal */
+.page-title {{
+  display: flex; align-items: baseline; gap: 8px;
+  margin: .2rem 0 1rem 0;
+}}
+.page-title h2 {{
+  margin: 0;
+}}
+.page-title .accent {{
+  color: var(--green);
+  font-weight: 800;
+}}
+/* Bloques de detalle */
+.card {{
+  border: 1px solid var(--box-light-border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+}}
 .pdf-frame {{
   border: 1px solid var(--box-light-border);
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
 }}
-
-/* ====== TABS VISIBLES (títulos completos) ====== */
-/* >>> TABS-VISIBLES: START >>> */
-[data-testid="stTabs"] [role="tablist"],
-[data-baseweb="tab-list"] {{
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  padding: 0 .25rem;
-  margin: .4rem 0 1.1rem 0;
-  border-bottom: 3px solid #d0e4f7;
-  overflow-x: auto;               /* permite scrollear si hay muchas pestañas */
-}}
-[data-testid="stTabs"] button[role="tab"],
-[data-baseweb="tab"] {{
-  background: transparent !important;
-  color: #2b3a55 !important;
-  padding: .55rem 1rem !important;
-  border-radius: 12px 12px 0 0 !important;
-  font-weight: 900 !important;
-  letter-spacing: .2px;
-  border: none !important;
-  position: relative;
-  white-space: nowrap;            /* <-- evita corte de texto */
-  max-width: none !important;     /* <-- sin límite de ancho */
-  overflow: visible !important;   /* <-- que no esconda el texto */
-}}
-[data-testid="stTabs"] button[role="tab"]:hover,
-[data-baseweb="tab"]:hover {{
-  color: #1a2538 !important;
-  background: rgba(0,0,0,.03) !important;
-}}
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"],
-[data-baseweb="tab"][aria-selected="true"] {{
-  color: var(--green) !important;
-  background: #f2fbf7 !important;
-}}
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"]::after,
-[data-baseweb="tab"][aria-selected="true"]::after {{
-  content: "";
-  position: absolute;
-  left: 10px; right: 10px; bottom: -3px;
-  height: 4px; border-radius: 4px; background: var(--green);
-}}
-/* >>> TABS-VISIBLES: END >>> */
 """
 
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
@@ -221,13 +183,12 @@ def extract_text_from_file(uploaded_file) -> str:
         return ""
 
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
-    """Score simple por coincidencia de palabras clave y términos del JD."""
+    """Score simple por coincidencias."""
     base = 0
     reasons = []
     text_low = cv_text.lower()
     jd_low = jd.lower()
 
-    # keywords
     hits = 0
     kws = [k.strip().lower() for k in keywords.split(",") if k.strip()]
     for k in kws:
@@ -236,10 +197,11 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
     if kws:
         pct_k = hits / len(kws)
         base += int(pct_k * 70)
-        top_hits = [k for k in kws if k in text_low]
-        reasons.append(f"{hits}/{len(kws)} keywords encontradas — Coincidencias: {', '.join(top_hits)[:120]}")
+        reasons.append(
+            f"{hits}/{len(kws)} keywords encontradas — Coincidencias: "
+            f"{', '.join([k for k in kws if k in text_low])[:120]}"
+        )
 
-    # JD match
     jd_terms = [t for t in set(jd_low.split()) if len(t) > 3]
     match_terms = sum(1 for t in jd_terms if t in text_low)
     if jd_terms:
@@ -250,8 +212,11 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
     base = max(0, min(100, base))
     return base, " — ".join(reasons)
 
-def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
-    """Visor estable con pdf.js."""
+def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.05):
+    """Visor usando pdf.js (robusto en navegadores y Streamlit Cloud)."""
+    if not file_bytes:
+        st.info("No hay bytes para mostrar.")
+        return
     b64 = base64.b64encode(file_bytes).decode("utf-8")
     pdfjs = "https://mozilla.github.io/pdf.js/web/viewer.html?file="
     src = f"{pdfjs}data:application/pdf;base64,{b64}#zoom={int(scale*100)}"
@@ -267,57 +232,100 @@ def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
 # ======================================================================================
 # ESTADO INICIAL
 # ======================================================================================
+
 if "candidates" not in st.session_state:
-    st.session_state.candidates = []
+    st.session_state.candidates: List[Dict] = []
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = "u1"
-if "interview_list" not in st.session_state:
-    st.session_state.interview_list = []
-if "selected_pipeline" not in st.session_state:
-    st.session_state.selected_pipeline = None
-if "hh_tasks" not in st.session_state:
-    st.session_state.hh_tasks = []   # [{candidate, headhunter, contact, schedule, feedback, due, notes}]
-
-# Puestos demo
+if "interview_pool" not in st.session_state:
+    st.session_state.interview_pool: List[str] = []
+if "assignments" not in st.session_state:
+    st.session_state.assignments: Dict[str, str] = {}  # candidato -> headhunter
 if "positions" not in st.session_state:
     st.session_state.positions = pd.DataFrame([
-        {"ID": 10645194, "Puesto": "Desarrollador/a Backend (Python)", "Ubicación": "Lima, Perú",
-         "Leads": 1800, "Nuevos": 115, "Recruiter Screen": 35, "HM Screen": 7,
-         "Entrevista Telefónica": 14, "Entrevista Presencial": 15, "Días Abierto": 3,
-         "Hiring Manager": "Rivers Brykson", "Estado": "Abierto", "Creado": date.today()},
-        {"ID": 10376646, "Puesto": "Planner de Demanda", "Ubicación": "Ciudad de México, MX",
-         "Leads": 2300, "Nuevos": 26, "Recruiter Screen": 3, "HM Screen": 8,
-         "Entrevista Telefónica": 6, "Entrevista Presencial": 3, "Días Abierto": 28,
-         "Hiring Manager": "Rivers Brykson", "Estado": "Abierto", "Creado": date.today()},
-        {"ID": 10376415, "Puesto": "VP de Marketing", "Ubicación": "Santiago, Chile",
-         "Leads": 8100, "Nuevos": 1, "Recruiter Screen": 15, "HM Screen": 35,
-         "Entrevista Telefónica": 5, "Entrevista Presencial": 7, "Días Abierto": 28,
-         "Hiring Manager": "Angela Cruz", "Estado": "Abierto", "Creado": date.today()},
+        {
+            "ID": "10,645,194",
+            "Puesto": "Desarrollador/a Backend (Python)",
+            "Ubicación": "Lima, Perú",
+            "Leads": 1800,
+            "Nuevos": 115,
+            "Recruiter Screen": 35,
+            "HM Screen": 7,
+            "Entrevista Telefónica": 14,
+            "Entrevista Presencial": 15,
+            "Días Abierto": 3,
+            "Hiring Manager": "Rivers Brykson",
+            "Estado": "Abierto",
+            "Creado": date.today(),
+        },
+        {
+            "ID": "10,376,415",
+            "Puesto": "VP de Marketing",
+            "Ubicación": "Santiago, Chile",
+            "Leads": 8100,
+            "Nuevos": 1,
+            "Recruiter Screen": 15,
+            "HM Screen": 35,
+            "Entrevista Telefónica": 5,
+            "Entrevista Presencial": 7,
+            "Días Abierto": 28,
+            "Hiring Manager": "Angela Cruz",
+            "Estado": "Abierto",
+            "Creado": date.today(),
+        },
+        {
+            "ID": "10,376,646",
+            "Puesto": "Planner de Demanda",
+            "Ubicación": "Ciudad de México, MX",
+            "Leads": 2300,
+            "Nuevos": 26,
+            "Recruiter Screen": 3,
+            "HM Screen": 8,
+            "Entrevista Telefónica": 6,
+            "Entrevista Presencial": 3,
+            "Días Abierto": 28,
+            "Hiring Manager": "Rivers Brykson",
+            "Estado": "Abierto",
+            "Creado": date.today(),
+        },
     ])
 
 # ======================================================================================
-# SIDEBAR (análisis automático)
+# SIDEBAR
 # ======================================================================================
+
 with st.sidebar:
     st.image("assets/logo-wayki.png", use_column_width=True)
     st.markdown("### Definición del puesto")
+
     puesto = st.selectbox(
         "Puesto",
-        ["Enfermera/o Asistencial","Tecnólogo/a Médico","Recepcionista de Admisión","Médico/a General","Químico/a Farmacéutico/a"],
-        index=0, key="puesto",
+        [
+            "Enfermera/o Asistencial",
+            "Tecnólogo/a Médico",
+            "Recepcionista de Admisión",
+            "Médico/a General",
+            "Químico/a Farmacéutico/a",
+        ],
+        index=0,
+        key="puesto",
     )
 
     st.markdown("### Descripción del puesto (texto libre)")
     jd_text = st.text_area(
-        "Resumen / responsabilidades / protocolos / habilidades…",
-        height=120, key="jd", label_visibility="collapsed",
+        "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
+        height=120,
+        key="jd",
+        label_visibility="collapsed",
     )
 
     st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
     kw_text = st.text_area(
-        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad…",
+        "HIS, SAP IS-H, BLS, ACLS, IAAS…",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
-        height=110, key="kw", label_visibility="collapsed",
+        height=110,
+        key="kw",
+        label_visibility="collapsed",
     )
 
     st.markdown("### Subir CVs (PDF o TXT)")
@@ -329,10 +337,11 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
+    # Análisis automático al subir
     if files:
         st.session_state.candidates = []
         for f in files:
-            b = f.read()
+            raw = f.read()
             f.seek(0)
             text = extract_text_from_file(f)
             score, reasons = simple_score(text, jd_text, kw_text)
@@ -340,7 +349,7 @@ with st.sidebar:
                 "Name": f.name,
                 "Score": score,
                 "Reasons": reasons,
-                "_bytes": b,
+                "_bytes": raw,
                 "_is_pdf": Path(f.name).suffix.lower() == ".pdf",
             })
 
@@ -351,35 +360,27 @@ with st.sidebar:
         st.rerun()
 
 # ======================================================================================
-# PESTAÑAS
+# NAV TABS
 # ======================================================================================
-tabs = st.tabs(
-    ["🗂️ Puestos", "🧪 Evaluación de CVs", "👥 Pipeline de Candidatos", "📁 Entrevista (Gerencia)", "🧭 Tareas del Headhunter"]
+
+tab_puestos, tab_eval, tab_pipeline, tab_gerencia, tab_asignaciones = st.tabs(
+    ["📋 Puestos", "🧪 Evaluación de CVs", "👥 Pipeline de Candidatos", "🗓️ Entrevista (Gerencia)", "🧭 Asignaciones"]
 )
 
-# --------------------------------------------------------------------------------------
+# ======================================================================================
 # TAB 1: PUESTOS
-# --------------------------------------------------------------------------------------
-with tabs[0]:
-    st.markdown("## SelektIA – **Puestos**")
-    col_top_l, col_top_c, col_top_r = st.columns([1.8, 1, 1])
+# ======================================================================================
+with tab_puestos:
+    st.markdown('<div class="page-title"><h2>SelektIA – <span class="accent">Puestos</span></h2></div>', unsafe_allow_html=True)
+
+    col_top_l, col_top_c, col_top_r = st.columns([1.8, 1, 0.6])
     with col_top_l:
         q = st.text_input("Buscar (puesto, ubicación, ID, hiring manager…)", placeholder="Ej: Lima, 10645194, Angela Cruz")
     with col_top_c:
-        st.text("")
         show_filters = st.checkbox("Mostrar filtros", value=False)
     with col_top_r:
         st.metric("Puestos totales", len(st.session_state.positions))
 
-    df_pos = st.session_state.positions.copy()
-    if q:
-        ql = q.lower()
-        df_pos = df_pos[
-            df_pos["Puesto"].str.lower().str.contains(ql) |
-            df_pos["Ubicación"].str.lower().str.contains(ql) |
-            df_pos["Hiring Manager"].str.lower().str.contains(ql) |
-            df_pos["ID"].astype(str).str.contains(ql)
-        ]
     if show_filters:
         with st.expander("Filtros", expanded=True):
             colf1, colf2, colf3, colf4 = st.columns(4)
@@ -391,26 +392,45 @@ with tabs[0]:
                 estado = st.multiselect("Estado", sorted(st.session_state.positions["Estado"].unique().tolist()))
             with colf4:
                 dias_abierto = st.slider("Días abierto (máx)", min_value=0, max_value=60, value=60)
-            if 'ubic' in locals() and ubic: df_pos = df_pos[df_pos["Ubicación"].isin(ubic)]
-            if 'hm' in locals() and hm: df_pos = df_pos[df_pos["Hiring Manager"].isin(hm)]
-            if 'estado' in locals() and estado: df_pos = df_pos[df_pos["Estado"].isin(estado)]
-            if 'dias_abierto' in locals(): df_pos = df_pos[df_pos["Días Abierto"] <= dias_abierto]
+
+    df_pos = st.session_state.positions.copy()
+
+    if q:
+        ql = q.lower()
+        df_pos = df_pos[
+            df_pos["Puesto"].str.lower().str.contains(ql) |
+            df_pos["Ubicación"].str.lower().str.contains(ql) |
+            df_pos["Hiring Manager"].str.lower().str.contains(ql) |
+            df_pos["ID"].astype(str).str.contains(ql)
+        ]
+
+    if show_filters:
+        if ubic:
+            df_pos = df_pos[df_pos["Ubicación"].isin(ubic)]
+        if hm:
+            df_pos = df_pos[df_pos["Hiring Manager"].isin(hm)]
+        if estado:
+            df_pos = df_pos[df_pos["Estado"].isin(estado)]
+        df_pos = df_pos[df_pos["Días Abierto"] <= dias_abierto]
 
     st.caption(f"Mostrando **{len(df_pos)}** posiciones")
     st.dataframe(
         df_pos[
-            ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen",
-             "Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]
+            [
+                "Puesto", "Días Abierto", "Leads", "Nuevos", "Recruiter Screen",
+                "HM Screen", "Entrevista Telefónica", "Entrevista Presencial",
+                "Ubicación", "Hiring Manager", "Estado", "ID"
+            ]
         ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True, True, False]),
         use_container_width=True,
-        height=360,
+        height=420,
     )
 
-# --------------------------------------------------------------------------------------
+# ======================================================================================
 # TAB 2: EVALUACIÓN DE CVS
-# --------------------------------------------------------------------------------------
-with tabs[1]:
-    st.markdown("## SelektIA – **Resultados de evaluación**")
+# ======================================================================================
+with tab_eval:
+    st.markdown('<div class="page-title"><h2>SelektIA – <span class="accent">Resultados de evaluación</span></h2></div>', unsafe_allow_html=True)
 
     if not st.session_state.candidates:
         st.info("Carga CVs en la barra lateral. El análisis se ejecuta automáticamente.")
@@ -419,25 +439,48 @@ with tabs[1]:
         df_sorted = df.sort_values("Score", ascending=False)
 
         st.markdown("### Ranking de Candidatos")
-        st.dataframe(df_sorted[["Name","Score","Reasons"]], use_container_width=True, height=240)
+        st.dataframe(
+            df_sorted[["Name", "Score", "Reasons"]],
+            use_container_width=True,
+            height=240
+        )
 
         st.markdown("### Comparación de puntajes")
         bar_colors = [BAR_GOOD if s >= 60 else BAR_DEFAULT for s in df_sorted["Score"]]
-        fig = px.bar(df_sorted, x="Name", y="Score", title="Comparación de puntajes (todos los candidatos)")
+        fig = px.bar(
+            df_sorted,
+            x="Name",
+            y="Score",
+            title="Comparación de puntajes (todos los candidatos)",
+        )
         fig.update_traces(marker_color=bar_colors, hovertemplate="%{x}<br>Score: %{y}")
-        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                          font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
+        fig.update_layout(
+            plot_bgcolor="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=TITLE_DARK),
+            xaxis_title=None,
+            yaxis_title="Score",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("### Visor de CV (PDF/TXT)  ↪️")
         all_names = df_sorted["Name"].tolist()
-        selected_name = st.selectbox("Elige un candidato", all_names, index=0, key="pdf_candidate", label_visibility="collapsed")
-
+        selected_name = st.selectbox(
+            "Elige un candidato",
+            all_names,
+            index=0,
+            key="pdf_candidate",
+            label_visibility="collapsed"
+        )
         cand = df.loc[df["Name"] == selected_name].iloc[0]
         if cand["_is_pdf"] and cand["_bytes"]:
-            pdf_viewer_pdfjs(cand["_bytes"], height=520, scale=1.10)
-            st.download_button(f"Descargar {selected_name}", data=cand["_bytes"],
-                               file_name=selected_name, mime="application/pdf")
+            pdf_viewer_pdfjs(cand["_bytes"], height=500, scale=1.08)
+            st.download_button(
+                f"Descargar {selected_name}",
+                data=cand["_bytes"],
+                file_name=selected_name,
+                mime="application/pdf",
+            )
         else:
             st.info(f"'{selected_name}' es un TXT. Mostrando contenido abajo:")
             with st.expander("Ver contenido TXT", expanded=True):
@@ -447,150 +490,92 @@ with tabs[1]:
                     txt = "(No se pudo decodificar)"
                 st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
-# --------------------------------------------------------------------------------------
-# TAB 3: PIPELINE DE CANDIDATOS (CUADRO + DROPDOWN)
-# --------------------------------------------------------------------------------------
-with tabs[2]:
-    st.markdown("## SelektIA – **Pipeline de Candidatos**")
+# ======================================================================================
+# TAB 3: PIPELINE DE CANDIDATOS (no editable; click/hover muestra detalle)
+# ======================================================================================
+with tab_pipeline:
+    st.markdown('<div class="page-title"><h2>SelektIA – <span class="accent">Pipeline de Candidatos</span></h2></div>', unsafe_allow_html=True)
 
     if not st.session_state.candidates:
-        st.info("Primero sube algunos CVs para poblar el pipeline.")
+        st.info("Primero sube CVs para ver el pipeline.")
     else:
-        df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False).reset_index(drop=True)
+        df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False)
+        c1, c2 = st.columns([1, 1.2])
 
-        left, right = st.columns([1.3, 1])
-        with left:
-            st.markdown("#### Candidatos (vista rápida)")
-            cuadro = pd.DataFrame({
-                "Candidato": df["Name"],
-                "Match (%)": df["Score"].astype(int),
-                "Etapa": ["Leads"] * len(df),
-                "Último contacto": ["None"] * len(df),
-                "Fuente": ["CV"] * len(df),
-                "Notas": ["" for _ in range(len(df))]
-            })
-            st.dataframe(cuadro, use_container_width=True, height=280)
+        with c1:
+            st.markdown("#### Candidatos detectados (click para ver detalle)")
+            for _, row in df.iterrows():
+                label = f"🟢 {row['Name']} — {row['Score']}%"
+                # chips visuales
+                with st.container(border=True):
+                    if st.button(label, key=f"btn_{row['Name']}", use_container_width=True):
+                        st.session_state["pipeline_selected"] = row["Name"]
 
-            st.markdown("**Elegir candidato (lista desplegable):**")
-            pick = st.selectbox("Selecciona para ver detalles", df["Name"].tolist(),
-                                key="pipeline_select", label_visibility="collapsed")
-            st.session_state.selected_pipeline = pick
-
-        with right:
+        with c2:
             st.markdown("#### Detalle del candidato")
+            sel = st.session_state.get("pipeline_selected", df.iloc[0]["Name"])
+            cand = df[df["Name"] == sel].iloc[0]
+            st.markdown(f"**{cand['Name']}**")
+            st.caption("Perfil detectado a partir del CV")
+            # Badges
+            score = cand["Score"]
+            dots = "●" * max(1, int(score/20))
+            st.write(f"*Match estimado*: {dots}  —  **{score}%**")
+            st.markdown("**Validated Skills**")
+            vs = "his" if "his" in (cand["Reasons"] or "").lower() else "—"
+            st.write(vs)
+            st.markdown("**Likely Skills**")
+            st.caption("No se detectaron sinónimos relevantes.")
+            st.markdown("**Skills to Validate**")
+            st.write("sap is-h, bls, acls, iaas, educación al paciente, seguridad del paciente, protocolos")
 
-            if not st.session_state.selected_pipeline:
-                st.info("Selecciona un candidato de la lista para ver sus detalles.")
-            else:
-                cand = df.loc[df["Name"] == st.session_state.selected_pipeline].iloc[0]
-                st.write(f"**{cand['Name']}**")
-                st.caption("Perfil detectado a partir del CV")
-
-                st.write("**Match estimado**")
-                st.progress(min(100, int(cand["Score"])))
-
-                st.write("**Validated Skills**")
-                v_items = []
-                if "his" in kw_text.lower(): v_items.append("his")
-                st.write(", ".join(v_items) if v_items else "—")
-
-                st.write("**Likely Skills**")
-                st.caption("No se detectaron sinónimos relevantes.")
-
-                st.write("**Skills to Validate**")
-                chips = [x.strip() for x in kw_text.split(",") if x.strip()]
-                st.write(" ".join([f"`{c}`" for c in chips]) if chips else "Sin elementos.")
-
-                st.markdown("#### Acciones rápidas")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.button("Añadir nota 'Buen encaje'", use_container_width=True)
-                with c2:
-                    if st.button("Mover a ‘Entrevista (Gerencia)’", use_container_width=True):
-                        if cand["Name"] not in st.session_state.interview_list:
-                            st.session_state.interview_list.append(cand["Name"])
-                        st.success("Candidato movido a Entrevista (Gerencia).")
-
-# --------------------------------------------------------------------------------------
-# TAB 4: ENTREVISTA (GERENCIA)
-# --------------------------------------------------------------------------------------
-with tabs[3]:
-    st.markdown("## SelektIA – **Entrevista (Gerencia)**")
-    if not st.session_state.interview_list:
-        st.info("Aún no has movido candidatos a esta etapa desde el Pipeline.")
-    else:
-        st.write("**Candidatos en entrevista (gerencia):**")
-        for name in st.session_state.interview_list:
-            st.write(f"• {name}")
-        st.markdown("---")
-        hh = st.selectbox("Headhunter asignado", ["Carla P.", "Diego R.", "Lucía T."], index=0)
-        if st.button("Asignar / Reasignar", key="asignar_hh"):
-            # Crear tareas para todos los candidatos listados (si no existían)
-            for name in st.session_state.interview_list:
-                exists = any(t["candidate"] == name for t in st.session_state.hh_tasks)
-                if not exists:
-                    st.session_state.hh_tasks.append({
-                        "candidate": name,
-                        "headhunter": hh,
-                        "contact": False,
-                        "schedule": False,
-                        "feedback": False,
-                        "due": (date.today() + timedelta(days=3)).isoformat(),
-                        "notes": "",
-                    })
-            st.success(f"Tareas creadas/asignadas a **{hh}**. Revisa la pestaña ‘Tareas del Headhunter’.")
-            st.rerun()
-
-# --------------------------------------------------------------------------------------
-# TAB 5: TAREAS DEL HEADHUNTER (nuevo)
-# --------------------------------------------------------------------------------------
-with tabs[4]:
-    st.markdown("## SelektIA – **Tareas del Headhunter**")
-
-    if not st.session_state.hh_tasks:
-        st.info("Aún no hay tareas. Asigna desde ‘Entrevista (Gerencia)’ para generarlas automáticamente.")
-    else:
-        df_tasks = pd.DataFrame(st.session_state.hh_tasks)
-        # Filtros
-        colf1, colf2 = st.columns([1,1])
-        with colf1:
-            hh_filter = st.multiselect("Filtrar por Headhunter", sorted(df_tasks["headhunter"].unique().tolist()))
-        with colf2:
-            status = st.selectbox("Estado", ["Todos", "Pendientes", "Completados"], index=0)
-
-        dff = df_tasks.copy()
-        if hh_filter:
-            dff = dff[dff["headhunter"].isin(hh_filter)]
-        if status == "Pendientes":
-            dff = dff[~(dff["contact"] & dff["schedule"] & dff["feedback"])]
-        elif status == "Completados":
-            dff = dff[dff["contact"] & dff["schedule"] & dff["feedback"]]
-
-        st.caption(f"Mostrando **{len(dff)}** tareas")
-        # Editor simple de estado por fila
-        for i, row in dff.reset_index(drop=True).iterrows():
-            st.markdown(f"### {row['candidate']}  —  _{row['headhunter']}_")
-            c1, c2, c3, c4 = st.columns([1,1,1,3])
-            with c1:
-                c_done = st.checkbox("Contacto hecho", value=bool(row["contact"]), key=f"c_{row['candidate']}")
-            with c2:
-                s_done = st.checkbox("Entrevista agendada", value=bool(row["schedule"]), key=f"s_{row['candidate']}")
-            with c3:
-                f_done = st.checkbox("Feedback recibido", value=bool(row["feedback"]), key=f"f_{row['candidate']}")
-            with c4:
-                nota = st.text_input("Notas", value=row.get("notes",""), key=f"n_{row['candidate']}")
-            d1, d2 = st.columns([1,3])
-            with d1:
-                due = st.date_input("Fecha límite", value=pd.to_datetime(row["due"]))
-            with d2:
-                st.write("")
-
-            # Guardar cambios en session_state.hh_tasks
-            for t in st.session_state.hh_tasks:
-                if t["candidate"] == row["candidate"]:
-                    t["contact"] = bool(c_done)
-                    t["schedule"] = bool(s_done)
-                    t["feedback"] = bool(f_done)
-                    t["notes"] = nota
-                    t["due"] = due.isoformat()
             st.divider()
+            st.markdown("#### Acciones rápidas")
+            colx, coly = st.columns(2)
+            with colx:
+                if st.button("Añadir nota 'Buen encaje'", use_container_width=True):
+                    st.success("Nota añadida.")
+            with coly:
+                if st.button("Mover a ‘Entrevista (Gerencia)’", use_container_width=True):
+                    name = cand["Name"]
+                    if name not in st.session_state.interview_pool:
+                        st.session_state.interview_pool.append(name)
+                    st.success(f"Movido a entrevista: {name}")
+
+# ======================================================================================
+# TAB 4: ENTREVISTA (GERENCIA)
+# ======================================================================================
+with tab_gerencia:
+    st.markdown('<div class="page-title"><h2>SelektIA – <span class="accent">Entrevista (Gerencia)</span></h2></div>', unsafe_allow_html=True)
+
+    pool = st.session_state.interview_pool
+    if not pool:
+        st.info("Aún no hay candidatos en entrevista. Muévelos desde el Pipeline.")
+    else:
+        st.markdown("**Candidatos en entrevista (gerencia):**")
+        for n in pool:
+            st.markdown(f"- {n}")
+        st.divider()
+
+        st.markdown("**Headhunter asignado**")
+        hh = st.selectbox("Selecciona HH", ["Carla P.", "Luis A.", "María S.", "—"], index=0)
+        if st.button("Asignar / Reasignar"):
+            for n in pool:
+                st.session_state.assignments[n] = hh
+            st.success(f"Asignados a {hh}.")
+
+# ======================================================================================
+# TAB 5: ASIGNACIONES (Headhunter)
+# ======================================================================================
+with tab_asignaciones:
+    st.markdown('<div class="page-title"><h2>SelektIA – <span class="accent">Asignaciones (Headhunter)</span></h2></div>', unsafe_allow_html=True)
+
+    assignments = st.session_state.assignments
+    if not assignments:
+        st.info("Sin asignaciones aún. Asigna desde la pestaña 'Entrevista (Gerencia)'.")
+    else:
+        df_ass = pd.DataFrame(
+            [{"Candidato": k, "Headhunter": v} for k, v in assignments.items()]
+        )
+        st.dataframe(df_ass, use_container_width=True, height=240)
+        st.caption("Los headhunters verán estas asignaciones con sus siguientes tareas.")
