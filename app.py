@@ -6,96 +6,69 @@ from pdfminer.high_level import extract_text
 import base64, unicodedata, re, pathlib
 
 # ===================== BRAND / RUTAS =====================
-LOGO_PATH = "assets/logo-wayki.png"   # asegura que el archivo exista en esta ruta
-PRIMARY   = "#0AAE8F"                  # color de marca (botones, barras “Seleccionado”)
-ACCENT    = "#1F77B4"                  # color secundario (barras “Revisión”)
+LOGO_PATH = "assets/logo-wayki.png"     # asegúrate de que exista
+PRIMARY   = "#00CD78"                    # verde marca (títulos, botones, barras Seleccionado)
+ACCENT    = "#1F77B4"                    # color secundario para barras Revisión
+SIDEBAR_BG = "#10172A"                   # fondo sidebar
+MAIN_BG    = "#F8FAFC"                   # fondo área principal (claro)
+MAIN_TEXT  = "#0F172A"                   # texto en área principal
 
-# ===================== CONFIG APP + HEADER =====================
+# ===================== CONFIG APP =====================
 st.set_page_config(page_title="SelektIA", page_icon=LOGO_PATH, layout="wide")
 
-# Header con color y logo (bonito y simple)
-def header_bar(logo_path: str, title: str, bg=PRIMARY):
-    # === Estilos finos: sidebar oscuro, main claro, títulos verdes ===
-st.markdown("""
+# --- Estilos finos: sidebar oscuro, main claro y títulos verdes ---
+st.markdown(f"""
 <style>
 /* Sidebar: fondo oscuro y texto blanco */
-[data-testid="stSidebar"] {
-  background-color: #10172A !important;
+[data-testid="stSidebar"] {{
+  background-color: {SIDEBAR_BG} !important;
   color: #FFFFFF !important;
-}
-[data-testid="stSidebar"] * {
+}}
+[data-testid="stSidebar"] * {{
   color: #FFFFFF !important;
-}
+}}
 
-/* Inputs / selects del sidebar con texto blanco y fondo más oscuro */
+/* Inputs del sidebar con fondo más oscuro y borde sutil */
 [data-testid="stSidebar"] input,
 [data-testid="stSidebar"] textarea,
 [data-testid="stSidebar"] select,
 [data-testid="stSidebar"] .stTextInput input,
 [data-testid="stSidebar"] .stTextArea textarea,
 [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
-[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {
+[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {{
   background-color: #0F1629 !important;
   color: #FFFFFF !important;
   border: 1px solid #22314d !important;
-}
+}}
 
-/* Área principal clara */
-.stApp, .main, section.main .block-container {
-  background-color: #F8FAFC !important;
-  color: #0F172A !important;
-}
+/* Área principal clara y texto oscuro */
+.stApp, .main, section.main .block-container {{
+  background-color: {MAIN_BG} !important;
+  color: {MAIN_TEXT} !important;
+}}
 
-/* Títulos en el área principal (H1/H2/H3) en verde #00CD78 */
-section.main h1, section.main h2, section.main h3 {
-  color: #00CD78 !important;
-}
+/* Títulos (H1/H2/H3) en el área principal: verde marca */
+section.main h1, section.main h2, section.main h3 {{
+  color: {PRIMARY} !important;
+}}
 
-/* Botones en verde marca */
-.stButton button, .stDownloadButton button {
-  background: #00CD78 !important;
+/* Botones */
+.stButton button, .stDownloadButton button {{
+  background: {PRIMARY} !important;
   color: #0B1220 !important;
   border: 0 !important;
-}
+}}
 
-/* Encabezados de tablas un poquito resaltados */
-[data-testid="stStyledTable"] th {
+/* Encabezados de tablas levemente resaltados */
+[data-testid="stStyledTable"] th {{
   background: #E6FFF3 !important;  /* verde muy suave */
-  color: #0F172A !important;
-}
-
-/* Quitar aviso deprecado si aún hubiera algo heredado */
+  color: {MAIN_TEXT} !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
-    p = pathlib.Path(logo_path)
-    try:
-        b64 = base64.b64encode(p.read_bytes()).decode()
-        st.markdown(f"""
-        <style>
-          .app-header {{
-            background: {bg};
-            padding: 12px 16px;
-            border-radius: 12px;
-            color: white;
-            display: flex; align-items: center; gap: 12px;
-            margin-bottom: 16px;
-          }}
-          .app-header img {{ height: 28px; }}
-          .block-container {{ padding-top: 1rem; }}
-        </style>
-        <div class="app-header">
-          <img src="data:image/png;base64,{b64}" />
-          <strong>{title}</strong>
-        </div>
-        """, unsafe_allow_html=True)
-    except Exception:
-        st.markdown(f"### {title}")
-
-header_bar(LOGO_PATH, "SelektIA — Evaluación de Candidatos")
-
-# Logo en el sidebar
-st.sidebar.image(LOGO_PATH, use_column_width=True)
+# Logo en sidebar (sin warning deprecado)
+st.sidebar.image(LOGO_PATH, use_container_width=True)
 
 # ===================== UTILIDADES DE TEXTO =====================
 def _norm(s: str) -> str:
@@ -114,7 +87,6 @@ SYNONYMS = {
 }
 
 DOMAIN_DICTIONARY = [
-    # términos clínicos frecuentes; añade/edita según tu dominio
     "HIS","SAP IS-H","bombas de infusión","5 correctos","IAAS","bundles VAP","BRC","CAUTI",
     "curación avanzada","educación al paciente","BLS","ACLS","hospitalización","UCI intermedia",
     "LIS","laboratorio clínico","control de calidad","Westgard","TAT","validación","verificación",
@@ -133,27 +105,20 @@ def expand_keywords(kws):
         out.append(k2)
         for syn in SYNONYMS.get(k2, []):
             out.append(_norm(syn))
-    return list(dict.fromkeys(out))  # únicos manteniendo orden
+    return list(dict.fromkeys(out))
 
 # ===================== EXTRACCIÓN TEXTO PDF =====================
 def pdf_to_text_from_bytes(data: bytes) -> str:
-    """
-    Extrae texto de PDFs. Primero PyMuPDF (fitz), luego pdfminer como respaldo.
-    Devuelve "" si no hay texto (escaneo sin OCR).
-    """
-    # 1) PyMuPDF
+    """PyMuPDF primero; pdfminer como respaldo. Devuelve '' si el PDF no tiene texto."""
     try:
         import fitz  # PyMuPDF
         doc = fitz.open(stream=data, filetype="pdf")
-        text_pages = []
-        for page in doc:
-            text_pages.append(page.get_text("text"))
+        text_pages = [page.get_text("text") for page in doc]
         text = "\n".join(text_pages).strip()
         if len(text) > 20:
             return text
     except Exception:
         pass
-    # 2) Fallback: pdfminer
     try:
         return (extract_text(BytesIO(data)) or "").strip()
     except Exception:
@@ -161,17 +126,16 @@ def pdf_to_text_from_bytes(data: bytes) -> str:
 
 # ===================== PARSE / SUGERIR KEYWORDS =====================
 def smart_keywords_parse(jd_text: str) -> list[str]:
-    """Acepta coma, punto y coma, salto de línea, '/' y ' y '. Limpia relleno."""
     parts = [x.strip() for x in re.split(r'[,\n;]+', jd_text) if x.strip()]
     out = []
     for p in parts:
         sub = [s.strip() for s in re.split(r'/|\by\b', p, flags=re.IGNORECASE) if s.strip()]
         out.extend(sub if sub else [p])
-    STOP_PHRASES = ["manejo de","manejo","uso de","uso","vigente","vigentes","conocimiento de"]
+    STOP = ["manejo de","manejo","uso de","uso","vigente","vigentes","conocimiento de"]
     cleaned = []
     for k in out:
         kk = k
-        for sp in STOP_PHRASES:
+        for sp in STOP:
             kk = re.sub(rf'\b{sp}\b', '', kk, flags=re.I)
         kk = kk.strip(" .-/")
         if kk:
@@ -179,10 +143,9 @@ def smart_keywords_parse(jd_text: str) -> list[str]:
     return cleaned
 
 def suggest_keywords_from_text(role_title: str, jd_free_text: str) -> list[str]:
-    """Sugeridor simple: acrónimos, términos del diccionario y algunos bi/tri-gramas."""
     text = jd_free_text + " " + role_title
     text_norm = _norm(text)
-    acronyms = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}(?:-[A-Z]{1,})?\b', jd_free_text)  # BLS, ACLS, HIS, SAP-IS…
+    acronyms = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}(?:-[A-Z]{1,})?\b', jd_free_text)
     acronyms = [a.strip() for a in acronyms]
     dict_hits = [t for t in DOMAIN_DICTIONARY if _norm(t) in text_norm]
     words = [w for w in re.findall(r'[a-záéíóúñ]{3,}', text_norm)
@@ -198,7 +161,7 @@ def suggest_keywords_from_text(role_title: str, jd_free_text: str) -> list[str]:
         key = _norm(c)
         if key not in seen and len(c) >= 3:
             uniq.append(c)
-        seen.add(key)
+            seen.add(key)
     return uniq[:25]
 
 # ===================== SCORING & EXPORT =====================
@@ -220,12 +183,10 @@ def build_excel(shortlist_df: pd.DataFrame, all_df: pd.DataFrame) -> bytes:
 
 # ===================== VISOR PDF (pdf.js + fallback) =====================
 def show_pdf(file_bytes: bytes, height: int = 820):
-    """
-    Intenta con pdf.js (streamlit-pdf-viewer). Si falla, usa <object> con link de descarga.
-    """
+    """Intenta con pdf.js (streamlit-pdf-viewer). Si falla, <object> + link de descarga."""
     try:
         from streamlit_pdf_viewer import pdf_viewer
-        pdf_viewer(file_bytes, height=height)  # bytes directos
+        pdf_viewer(file_bytes, height=height)
     except Exception:
         b64 = base64.b64encode(file_bytes).decode()
         html_code = f"""
@@ -243,10 +204,9 @@ jd_free_text = st.sidebar.text_area(
     "Job Description (texto libre)",
     "Brindar atención segura. Administración de medicamentos (5 correctos), curación avanzada, manejo de bombas de infusión, "
     "educación al paciente/familia, registro en HIS (SAP IS-H), cumplimiento de bundles VAP/BRC/CAUTI. BLS/ACLS vigentes.",
-    height=120
+    height=110
 )
 
-# Sugerir keywords
 if "kw_text" not in st.session_state:
     st.session_state.kw_text = ("HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, "
                                 "curación avanzada, educación al paciente, BLS, ACLS, hospitalización, UCI intermedia")
@@ -256,7 +216,7 @@ def _fill_keywords():
     st.session_state.kw_text = ", ".join(sugg)
 
 st.sidebar.button("Sugerir keywords", on_click=_fill_keywords)
-kw_text = st.sidebar.text_area("Keywords (edítalas si quieres)", key="kw_text", height=120)
+kw_text = st.sidebar.text_area("Keywords (edítalas si quieres)", key="kw_text", height=110)
 jd_keywords = smart_keywords_parse(kw_text)
 
 st.sidebar.header("Upload CVs (PDF o TXT)")
@@ -338,4 +298,3 @@ if files:
                 st.write("No se pudo mostrar el contenido.")
 else:
     st.info("Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.")
-
