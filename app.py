@@ -1,4 +1,4 @@
-# app.py — SelektIA (puesto + JD libre -> sugerir keywords -> ranking + visor PDF + Excel)
+# app.py — SelektIA (PyMuPDF extractor + ranking + gráfico + Excel + visor PDF + keywords sugeridas)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -20,7 +20,6 @@ SYNONYMS = {
     "acls": ["soporte vital avanzado"],
     "uci intermedia": ["uci", "cuidados intermedios"],
     "educacion al paciente": ["educacion a pacientes", "educacion al usuario"],
-    # puedes añadir más…
 }
 
 DOMAIN_DICTIONARY = [
@@ -46,77 +45,82 @@ def expand_keywords(kws):
     # únicos, mantiene orden
     return list(dict.fromkeys(out))
 
-def pdf_to_text(file_like) -> str:
+def pdf_to_text_from_bytes(data: bytes) -> str:
+    """
+    Extrae texto de PDFs. Intenta primero PyMuPDF (fitz), luego pdfminer.
+    Devuelve "" si no encuentra texto (posible escaneo).
+    """
+    # 1) PyMuPDF
     try:
-        return extract_text(file_like)
+        import fitz  # PyMuPDF
+        doc = fitz.open(stream=data, filetype="pdf")
+        text_pages = []
+        for page in doc:
+            text_pages.append(page.get_text("text"))
+        text = "\n".join(text_pages).strip()
+        if len(text) > 20:
+            return text
+    except Exception:
+        pass
+
+    # 2) Fallback: pdfminer
+    try:
+        return (extract_text(BytesIO(data)) or "").strip()
     except Exception:
         return ""
 
 def smart_keywords_parse(jd_text: str) -> list[str]:
-    """
-    Acepta coma, punto y coma, salto de línea, '/', y ' y '.
-    Limpia frases de relleno típicas.
-    """
-    # 1) separa por coma, punto y coma o salto de línea
+    """Acepta coma, punto y coma, salto de línea, '/', y ' y '. Limpia frases de relleno."""
     parts = [x.strip() for x in re.split(r'[,\n;]+', jd_text) if x.strip()]
-    # 2) divide por "/" y por ' y '
     out = []
     for p in parts:
-        sub = [s.strip() for s in re.split(r'/|\\by\\b', p, flags=re.IGNORECASE) if s.strip()]
+        sub = [s.strip() for s in re.split(r'/|\by\b', p, flags=re.IGNORECASE) if s.strip()]
         out.extend(sub if sub else [p])
-    # 3) elimina palabras de relleno
     STOP_PHRASES = ["manejo de", "manejo", "uso de", "uso", "vigente", "vigentes", "conocimiento de"]
     cleaned = []
     for k in out:
         kk = k
         for sp in STOP_PHRASES:
-            kk = re.sub(rf'\\b{sp}\\b', '', kk, flags=re.I)
+            kk = re.sub(rf'\b{sp}\b', '', kk, flags=re.I)
         kk = kk.strip(" .-/")
         if kk:
             cleaned.append(kk)
     return cleaned
 
 def suggest_keywords_from_text(role_title: str, jd_free_text: str) -> list[str]:
-    """
-    Sugeridor simple: extrae acrónimos (MAYÚSCULAS), frases del diccionario
-    y términos de 2-3 palabras frecuentes en el JD.
-    """
+    """Sugeridor simple: acrónimos, términos del diccionario y algunos n-gramas."""
     text = jd_free_text + " " + role_title
     text_norm = _norm(text)
-
-    # 1) acrónimos tipo BLS/ACLS/LIS/HIS
-    acronyms = re.findall(r'\\b[A-ZÁÉÍÓÚÑ]{2,}(?:-[A-Z]{1,})?\\b', jd_free_text)
+    # acrónimos (BLS/ACLS/LIS/HIS…)
+    acronyms = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}(?:-[A-Z]{1,})?\b', jd_free_text)
     acronyms = [a.strip() for a in acronyms]
-
-    # 2) términos del diccionario presentes
+    # diccionario
     dict_hits = [t for t in DOMAIN_DICTIONARY if _norm(t) in text_norm]
-
-    # 3) bigramas/triagramas simples (muy heurístico)
-    words = [w for w in re.findall(r'[a-záéíóúñ]{3,}', text_norm) if w not in {"para","con","por","del","los","las","una","uno","unos","unas","que","de","al","la","el","y","en"}]
+    # n-gramas 2–3 palabras (heurístico)
+    words = [w for w in re.findall(r'[a-záéíóúñ]{3,}', text_norm) if w not in {
+        "para","con","por","del","los","las","una","uno","unos","unas","que","de","al","la","el","y","en","se","su"
+    }]
     ngrams = []
     for n in (2,3):
         for i in range(len(words)-n+1):
             ngram = " ".join(words[i:i+n])
-            if n == 2 and ngram in {"educacion paciente","bajos costos","alta calidad"}:
-                pass
             ngrams.append(ngram)
-    # filtrado ligero de repetidos y ruido
     candidates = acronyms + dict_hits + ngrams
-    uniq = []
-    seen = set()
+    uniq, seen = [], set()
     for c in candidates:
         key = _norm(c)
         if key not in seen and len(c) >= 3:
             uniq.append(c)
             seen.add(key)
-    # limita a 25 para no saturar
     return uniq[:25]
 
 def score_candidate(raw_text: str, jd_keywords: list) -> tuple[int, str, list]:
     text = _norm(" ".join(raw_text.split()))
     base_kws = [k.strip() for k in jd_keywords if k.strip()]
-    kws = expand_keywords(base_kws)
-    matched = [k for k in base_kws if re.search(rf"\\b{re.escape(_norm(k))}\\b", text)]
+    # usamos solo las "base" para el conteo de aciertos, pero ampliamos para búsqueda robusta
+    expanded = expand_keywords(base_kws)
+    # keywords que realmente aparecieron (de las base)
+    matched = [k for k in base_kws if re.search(rf"\b{re.escape(_norm(k))}\b", text)]
     hits = len(matched)
     ratio = min(hits / max(1, len(base_kws)), 1.0)
     score = round(100 * ratio)
@@ -155,15 +159,14 @@ jd_free_text = st.sidebar.text_area(
 
 # Sugerir keywords desde el JD
 if "kw_text" not in st.session_state:
-    st.session_state.kw_text = "HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, curación avanzada, educación al paciente, BLS, ACLS, hospitalización, UCI intermedia"
+    st.session_state.kw_text = ("HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, "
+                                "curación avanzada, educación al paciente, BLS, ACLS, hospitalización, UCI intermedia")
 
 def _fill_keywords():
     sugg = suggest_keywords_from_text(role_title, jd_free_text)
-    # muestra sugerencias en textarea separadas por comas
     st.session_state.kw_text = ", ".join(sugg)
 
 st.sidebar.button("Sugerir keywords", on_click=_fill_keywords)
-
 kw_text = st.sidebar.text_area("Keywords (edítalas si quieres)", key="kw_text", height=120)
 jd_keywords = smart_keywords_parse(kw_text)
 
@@ -184,21 +187,26 @@ if files:
         if f.type == "text/plain":
             raw = data.decode("utf-8", errors="ignore")
         else:
-            raw = pdf_to_text(BytesIO(data))
+            raw = pdf_to_text_from_bytes(data)
+
+        raw_len = len(raw)
+        no_text_flag = "PDF sin texto (posible escaneo)" if raw_len < 20 else f"{raw_len} chars"
 
         score, reasons, matched = score_candidate(raw, jd_keywords)
+
         rows.append({
             "Name": f.name.replace(".pdf","").replace("_"," ").title(),
             "FileName": f.name,
             "Score": score,
             "Reasons": reasons + (f" — Coincidencias: {', '.join(matched)}" if matched else ""),
+            "PDF_text": no_text_flag
         })
 
     df = pd.DataFrame(rows).sort_values("Score", ascending=False)
 
     left, right = st.columns([0.58, 0.42])
     with left:
-        st.dataframe(df[["Name","Score","Reasons"]], use_container_width=True)
+        st.dataframe(df[["Name","Score","Reasons","PDF_text"]], use_container_width=True)
 
         st.subheader("Score Comparison")
         threshold = st.slider("Umbral de selección", 0, 100, 50, 1)
@@ -236,6 +244,9 @@ if files:
             show_pdf(meta["bytes"])
         elif meta:
             st.info("Este archivo no es PDF; muestro el texto:")
-            st.text(meta["bytes"][:2000].decode("utf-8","ignore"))
+            try:
+                st.text(meta["bytes"][:2000].decode("utf-8","ignore"))
+            except Exception:
+                st.write("No se pudo mostrar el contenido.")
 else:
     st.info("Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.")
