@@ -1,372 +1,365 @@
-import base64
+# app.py
 import io
-import re
+import base64
 from pathlib import Path
 
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 
-# ========= VISOR PDF (preferido) =========
-try:
-    from streamlit_pdf_viewer import pdf_viewer   # pip install streamlit-pdf-viewer
-    HAS_PDF_VIEWER = True
-except Exception:
-    HAS_PDF_VIEWER = False
+# =========================
+# Variables de tema/colores
+# =========================
+PRIMARY_GREEN = "#00CD78"
+SIDEBAR_BG    = "#10172A"   # fondo columna izquierda
+BOX_DARK      = "#132840"   # fondo y borde de boxes del sidebar
+BOX_DARK_HOV  = "#193355"   # borde en hover/focus del sidebar
+TEXT_LIGHT    = "#FFFFFF"   # texto blanco
+MAIN_BG       = "#F7FBFF"   # fondo del cuerpo (claro)
+BOX_LIGHT     = "#F1F7FD"   # fondo claro de inputs principales
+BOX_LIGHT_B   = "#E3EDF6"   # borde claro de inputs principales
+TITLE_DARK    = "#142433"   # texto títulos principales
 
-
-# ========= LECTURA DE PDF (texto) =========
-def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
-    text = ""
-    # PyMuPDF
-    try:
-        import fitz  # PyMuPDF
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            for page in doc:
-                text += page.get_text()
-        if text.strip():
-            return text
-    except Exception:
-        pass
-
-    # pdfminer.six
-    try:
-        from pdfminer.high_level import extract_text as pdfminer_extract
-        text = pdfminer_extract(io.BytesIO(pdf_bytes))
-        return text or ""
-    except Exception:
-        return ""
-
-
-# ========= CONFIG =========
-st.set_page_config(
-    page_title="SelektIA",
-    page_icon="📄",
-    layout="wide"
-)
-
-PRIMARY = "#00CD78"
-SIDEBAR_BG = "#0B1A2B"
-BOX_DARK = "#132840"
-BOX_DARK_HOVER = "#0F223A"
-TEXT = "#FFFFFF"
-MAIN_BG = "#FFFFFF"
-BOX_LIGHT = "#F0F5FA"
-BOX_LIGHT_BORDER = "#E3EDF6"
-RADIUS = "12px"
-
-# ========= ESTILOS =========
+# ==========
+#   ESTILO
+# ==========
 CSS = f"""
-<style>
-/*------------- Global -------------*/
 :root {{
-  --dark: {SIDEBAR_BG};
+  --green: {PRIMARY_GREEN};
+  --sidebar-bg: {SIDEBAR_BG};
   --box: {BOX_DARK};
-  --box-hover: {BOX_DARK_HOVER};
+  --box-hover: {BOX_DARK_HOV};
+  --text: {TEXT_LIGHT};
   --main-bg: {MAIN_BG};
   --box-light: {BOX_LIGHT};
-  --box-light-border: {BOX_LIGHT_BORDER};
-  --primary: {PRIMARY};
-  --text: {TEXT};
+  --box-light-border: {BOX_LIGHT_B};
+  --title-dark: {TITLE_DARK};
 }}
 
+/* Fondo general */
 html, body, [data-testid="stAppViewContainer"] {{
   background: var(--main-bg) !important;
 }}
-
-/*------------- Headings (títulos y subtítulos) -------------*/
-h1, h2, h3, h4, h5 {{
-  color: var(--primary) !important;
-  letter-spacing: .2px;
+/* Fondo de la app (quita el blanco del contenedor) */
+.block-container {{
+  background: transparent !important;
 }}
 
-/*------------- Sidebar -------------*/
+/* Sidebar fondo */
 [data-testid="stSidebar"] {{
-  background: linear-gradient(180deg, #0B1A2B 0%, #0B1A2B 100%) !important;
-  border-right: 1px solid #0B2237 !important;
+  background: var(--sidebar-bg) !important;
+  color: var(--text) !important;
 }}
-[data-testid="stSidebar"] * {{ color: var(--text); }}
-[data-testid="stSidebar"] h3, 
-[data-testid="stSidebar"] h4, 
+/* --- TÍTULOS DEL SIDEBAR EN VERDE --- */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6,
+[data-testid="stSidebar"] .stMarkdown p strong {{
+  color: var(--green) !important;
+}}
+
+/* Etiquetas del sidebar y texto */
 [data-testid="stSidebar"] label, 
-[data-testid="stSidebar"] p {{
+[data-testid="stSidebar"] p, 
+[data-testid="stSidebar"] span {{
   color: var(--text) !important;
 }}
 
-/*------------- Boxes oscuros unificados en sidebar -------------*/
-/* SELECT (cerrado/abierto) */
+/* Inputs del SIDEBAR (select, input, textarea, dropzone) */
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
 [data-testid="stSidebar"] [data-baseweb="select"] {{
   background: var(--box) !important;
-  border: 1.5px solid var(--box) !important;
-  border-radius: {RADIUS} !important;
-  box-shadow: none !important;
-}}
-[data-testid="stSidebar"] [data-baseweb="select"]:hover,
-[data-testid="stSidebar"] [data-baseweb="select"]:focus {{
-  border-color: var(--box-hover) !important;
-}}
-
-/* INPUT */
-[data-testid="stSidebar"] [data-testid="stTextInput"] input {{
-  background: var(--box) !important;
   color: var(--text) !important;
   border: 1.5px solid var(--box) !important;
-  border-radius: {RADIUS} !important;
+  border-radius: 12px !important;
   box-shadow: none !important;
 }}
-[data-testid="stSidebar"] [data-testid="stTextInput"] input:hover,
-[data-testid="stSidebar"] [data-testid="stTextInput"] input:focus {{
-  border-color: var(--box-hover) !important;
-}}
-
-/* TEXTAREA */
+[data-testid="stSidebar"] [data-testid="stTextInput"] input,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
   background: var(--box) !important;
   color: var(--text) !important;
   border: 1.5px solid var(--box) !important;
-  border-radius: {RADIUS} !important;
+  border-radius: 12px !important;
   box-shadow: none !important;
 }}
+[data-testid="stSidebar"] [data-testid="stTextInput"] input:hover,
+[data-testid="stSidebar"] [data-testid="stTextInput"] input:focus,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea:hover,
-[data-testid="stSidebar"] [data-testid="stTextArea"] textarea:focus {{
+[data-testid="stSidebar"] [data-testid="stTextArea"] textarea:focus,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
 }}
-[data-testid="stSidebar"] [data-testid="stTextArea"] textarea::-webkit-resizer {{
-  background: var(--box) !important;
-}}
-
-/* FILE DROPPER */
+/* Dropzone */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background: var(--box) !important;
-  border: 1.5px solid var(--box) !important;
-  border-radius: {RADIUS} !important;
-  box-shadow: none !important;
+  border: 1.5px dashed var(--box) !important;
+  border-radius: 14px !important;
 }}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"]:hover {{
-  border-color: var(--box-hover) !important;
-}}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {{
-  background: var(--primary) !important;
-  color: #021 !important;
-  border: 1px solid var(--primary) !important;
-  border-radius: {RADIUS} !important;
-  font-weight: 800 !important;
-}}
-
-/* Tarjetas archivo subido */
-[data-testid="stSidebar"] [data-testid="stFileUploader"] .uploadedFile {{
-  background: var(--box) !important;
-  border: 1.5px solid var(--box) !important;
-  border-radius: {RADIUS} !important;
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
   color: var(--text) !important;
 }}
-.uploadedFileName, .uploadedFileSize {{ color: var(--text) !important; }}
-[data-testid="stSidebar"] [data-testid="stFileUploader"] .uploadedFile::before{{
-  content: "PDF";
-  display:inline-flex; align-items:center; justify-content:center;
-  width:28px; height:28px; margin-right:.6rem;
-  background:#FF5252; color:#fff; font-weight:900; border-radius:6px;
+/* Pills de archivos subidos */
+[data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
+  background: var(--box) !important;
+  border: 1px solid var(--box) !important;
+  color: var(--text) !important;
 }}
-
-/* Botones genéricos */
-[data-testid="stSidebar"] button {{
-  border-radius: 100px !important;
-  font-weight: 800 !important;
-}}
-[data-testid="stSidebar"] .stButton>button {{
-  background: var(--primary) !important; 
-  color: #011014 !important;
-}}
-
-/*------------- Boxes claros en el main -------------*/
-/* Controles (select, input, textarea) */
-.block-container [data-testid="stTextArea"] textarea,
-.block-container [data-testid="stTextInput"] input,
-.block-container [data-testid="stSelectbox"] > div > div,
-.block-container [data-baseweb="select"] {{
-  background: var(--box-light) !important;
-  color: #142433 !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  border-radius: {RADIUS} !important;
-  box-shadow: none !important;
-}}
-/* Elimina el borde-blanco del WRAPPER del select (doble borde) */
-.block-container [data-testid="stSelectbox"] > div {{
-  background: transparent !important;
+/* Botón verde (sidebar y cuerpo) */
+.stButton > button {{
+  background: var(--green) !important;
+  color: #082017 !important;
+  border-radius: 10px !important;
   border: none !important;
-  box-shadow: none !important;
+  padding: .45rem .9rem !important;
+  font-weight: 600 !important;
+}}
+.stButton > button:hover {{
+  filter: brightness(0.95);
 }}
 
-.block-container [data-baseweb="select"]:hover,
-.block-container [data-baseweb="select"]:focus {{
-  border-color: #C9D9EA !important;
+/* Títulos del cuerpo */
+h1, h2, h3 {{
+  color: var(--title-dark);
+}}
+h1 strong, h2 strong, h3 strong {{
+  color: var(--green);
+}}
+
+/* Controles del área principal (claros) */
+.block-container [data-testid="stSelectbox"] > div > div,
+.block-container [data-baseweb="select"],
+.block-container [data-testid="stTextInput"] input,
+.block-container [data-testid="stTextArea"] textarea {{
+  background: var(--box-light) !important;
+  color: var(--title-dark) !important;
+  border: 1.5px solid var(--box-light-border) !important;
+  border-radius: 10px !important;
+}}
+
+/* Tabla clara (dataframe/simple table) */
+.block-container table {{
+  background: #fff !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-radius: 8px !important;
+}}
+.block-container thead th {{
+  background: var(--box-light) !important;
+  color: var(--title-dark) !important;
 }}
 
 /* Expander claro */
-[data-testid="stExpander"] div[role="button"] {{
+[data-testid="stExpander"] {{
+  background: #fff !important;
+  border: 1px solid var(--box-light-border) !important;
+  border-radius: 12px !important;
+}}
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] p {{
+  color: var(--title-dark) !important;
+}}
+
+/* Selector del visor de PDF en claro */
+#pdf_candidate, #pdf_candidate_alt {{
   background: var(--box-light) !important;
-  color: #123 !important;
   border: 1.5px solid var(--box-light-border) !important;
-  border-radius: {RADIUS} !important;
+  color: var(--title-dark) !important;
+  border-radius: 10px !important;
 }}
-[data-testid="stExpander"] .streamlit-expanderContent {{
-  background: #FAFCFF !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  border-top: none !important;
-  border-radius: 0 0 {RADIUS} {RADIUS} !important;
-}}
-
-/* Info / alert como card clara (sin borde blanco) */
-div.stAlert {{
-  background: var(--box-light) !important;
-  color: #112 !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  border-radius: {RADIUS} !important;
-}}
-div.stAlert * {{ color: #112 !important; }}
-
-/* Tabla clara, sin doble borde */
-[data-testid="stTable"] {{
-  background: #FFFFFF !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  border-radius: {RADIUS} !important;
-  overflow: hidden !important;
-}}
-[data-testid="stTable"] table {{
-  border-collapse: collapse !important;
-}}
-[data-testid="stTable"] th {{
-  background: #EAF3FF !important;
-  color: #0B2545 !important;
-  border-bottom: 1px solid var(--box-light-border) !important;
-}}
-[data-testid="stTable"] td {{
-  border-bottom: 1px solid #F3F7FD !important;
-}}
-
-/* Contenedores con aspecto de "card" claro donde Streamlit pone wrappers */
-.block-container .st-emotion-cache-1r6slb0,     /* wrapper común de elementos */
-.block-container .st-emotion-cache-1r6slb1,     /* fallback de tema */
-.block-container .st-emotion-cache-1n76uvr      /* otras versiones */ {{
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}}
-</style>
 """
-st.markdown(CSS, unsafe_allow_html=True)
 
+# Inyectar CSS
+st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-# ========= LOGO =========
+st.set_page_config(
+    page_title="SelektIA",
+    page_icon="🧠",
+    layout="wide",
+)
+
+# ================
+#  SIDEBAR (oscuro)
+# ================
 with st.sidebar:
-    logo_path = Path("logo-wayki.png")
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
+    st.image("logo-wayki.png", use_column_width=True)
     st.markdown("### Definición del puesto")
 
-# ========= SIDEBAR =========
-with st.sidebar:
-    puesto = st.selectbox("Puesto", ["Enfermera/o Asistencial – Hospitalización / UCI Intermedia"], index=0)
+    puesto = st.selectbox(
+        "Puesto",
+        [
+            "Enfermera/o Asistencial",
+            "Tecnólogo Médico",
+            "Recepcionista de Admisión",
+            "Médico General",
+            "Químico Farmacéutico",
+        ],
+        index=0,
+        key="puesto",
+    )
 
+    st.markdown("### Descripción del puesto (texto libre)")
     jd_text = st.text_area(
-        "Descripción del puesto (texto libre)",
-        "Resume el objetivo del puesto, responsabilidades, protocolos y requisitos clave.",
-        height=110
+        "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
+        height=120,
+        key="jd",
+        label_visibility="collapsed",
     )
 
     st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
-    kw_default = "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, bombas de infusión"
     kw_text = st.text_area(
-        "",
-        kw_default,
-        help="Se usarán para evaluar coincidencias en los CVs.",
-        height=110
+        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad, protocolos…",
+        value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
+        height=110,
+        key="kw",
+        label_visibility="collapsed",
     )
 
     st.markdown("### Subir CVs (PDF o TXT)")
-    files = st.file_uploader("Drag and drop files here", type=["pdf", "txt"], accept_multiple_files=True)
+    files = st.file_uploader(
+        "Drag and drop files here",
+        type=["pdf", "txt"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
 
-# ========= PROCESAMIENTO =========
-file_store = {}
+# ===================
+#  PROCESAMIENTO MVP
+# ===================
+def extract_text_from_file(uploaded_file) -> str:
+    """MVP: si es txt leemos texto directo; si es pdf, nos quedamos con el binario para mostrar."""
+    if uploaded_file.type == "text/plain":
+        return uploaded_file.read().decode("utf-8", errors="ignore")
+    else:
+        # Para PDF, devolvemos un marcador (el texto crudo no se usa para visualizar)
+        return f"[PDF] {uploaded_file.name}"
+
+def simple_match_score(text, keywords) -> tuple[int, str]:
+    """Cuenta cuántas keywords aparecen; devuelve score y detalle."""
+    text_l = text.lower()
+    matches = 0
+    found = []
+    for kw in keywords:
+        k = kw.strip().lower()
+        if not k:
+            continue
+        if k in text_l:
+            matches += 1
+            found.append(k)
+    return matches * 10, f"{matches}/{len(keywords)} keywords encontradas — Coincidencias: {', '.join(found) if found else '—'}"
+
+# palabras clave
+keywords = [k.strip() for k in kw_text.split(",") if k.strip()]
+
+# Construimos un dataframe sencillo
 rows = []
-
+pdf_buffers = {}  # para visualizar luego
 if files:
     for f in files:
         raw = f.read()
-        name = f.name
-        if name.lower().endswith(".pdf"):
-            txt = extract_text_from_pdf_bytes(raw)
+        f.seek(0)  # volvemos al inicio para reutilizar
+        ext = Path(f.name).suffix.lower()
+
+        if ext == ".txt":
+            txt = raw.decode("utf-8", errors="ignore")
+            score, reason = simple_match_score(txt, keywords)
+            rows.append(
+                {
+                    "Name": f.name,
+                    "Score": score,
+                    "Reasons": reason,
+                    "PDF_text": f"{len(txt)} chars",
+                    "is_pdf": False,
+                }
+            )
         else:
-            try:
-                txt = raw.decode("utf-8", errors="ignore")
-            except Exception:
-                txt = ""
-        file_store[name] = {"bytes": raw, "text": txt}
+            # guardamos raw para visor
+            pdf_buffers[f.name] = raw
+            pseudo_text = f"[pdf:{len(raw)}]"
+            score, reason = simple_match_score(pseudo_text, keywords)
+            rows.append(
+                {
+                    "Name": f.name,
+                    "Score": score,
+                    "Reasons": reason,
+                    "PDF_text": f"{len(raw)} bytes",
+                    "is_pdf": True,
+                }
+            )
 
-    kw_tokens = [k.strip().lower() for k in re.split(r"[;,/\\n]+", kw_text) if k.strip()]
-    for name, blob in file_store.items():
-        text = blob["text"].lower()
-        found = [k for k in kw_tokens if k and k in text]
-        score = len(found)
-        rows.append({
-            "Name": name,
-            "Score": score,
-            "Reasons": f"{score}/{len(kw_tokens)} keywords encontradas — Coincidencias: {', '.join(found[:6]) or '—'}",
-            "PDF_text": f"{len(text)} chars"
-        })
+df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Name", "Score", "Reasons", "PDF_text", "is_pdf"])
 
-df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Name", "Score", "Reasons", "PDF_text"])
+# ===================
+#  UI PRINCIPAL (claro)
+# ===================
+st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Results</span>", unsafe_allow_html=True)
 
-# ========= MAIN =========
-st.title("SelektIA – Evaluation Results")
-st.info("Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.")
+st.info("Define el puesto/JD, ajusta (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.", icon="ℹ️")
 
-if df.empty:
-    st.warning("Sube algunos CVs para ver resultados.")
-    st.stop()
-
-st.table(df)
-
-st.subheader("Score Comparison")
-threshold = st.slider("Umbral de selección", 0, max(1, df["Score"].max()), max(1, df["Score"].max()//2 or 1))
-fig = px.bar(df, x="Name", y="Score", color=df["Score"] >= threshold,
-             color_discrete_map={True: PRIMARY, False: "#D9E4F2"})
-fig.update_layout(showlegend=False, height=380, margin=dict(l=10, r=10, t=10, b=0))
-st.plotly_chart(fig, use_container_width=True)
-
-# ========= VISOR PDF =========
-st.subheader("Visor de CV (PDF)")
-
-colL, colR = st.columns([1, 1])
-with colL:
-    names = list(df["Name"])
-    main_choice = st.selectbox("Elige un candidato", names, index=0)
-    st.caption(f"Mostrando: {main_choice}")
-
-with colR:
-    with st.expander("Elegir candidato (opción alternativa)"):
-        alt_choice = st.selectbox("Candidato", names, key="alt_sel")
-        if alt_choice and alt_choice != main_choice:
-            main_choice = alt_choice
-
-pdf_bytes = file_store.get(main_choice, {}).get("bytes", b"")
-c1, _ = st.columns([0.15, 0.85])
-with c1:
-    if pdf_bytes:
-        st.download_button("Descargar PDF", pdf_bytes, file_name=Path(main_choice).name, type="primary")
-
-if pdf_bytes and Path(main_choice).suffix.lower() == ".pdf" and HAS_PDF_VIEWER:
-    pdf_viewer(input=pdf_bytes, width=1200, height=750, render_text=True, pages_to_render=[1, 9999])
-elif pdf_bytes and Path(main_choice).suffix.lower() == ".pdf":
-    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-    st.markdown(
-        f"""
-        <iframe src="data:application/pdf;base64,{b64}" 
-                width="100%" height="750px" style="border:1.5px solid {BOX_LIGHT_BORDER}; border-radius:{RADIUS};">
-        </iframe>
-        """,
-        unsafe_allow_html=True
+# Tabla
+if not df.empty:
+    st.dataframe(
+        df[["Name", "Score", "Reasons", "PDF_text"]],
+        use_container_width=True,
+        hide_index=True,
     )
+
+    # Gráfico simple
+    fig = px.bar(
+        df.sort_values("Score", ascending=False),
+        x="Name",
+        y="Score",
+        title="Score Comparison",
+    )
+    fig.update_layout(
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        xaxis_title=None,
+        yaxis_title="Score",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("El archivo seleccionado no es PDF o está vacío.")
+    st.warning("Sube algunos CVs (PDF o TXT) para ver resultados.", icon="📄")
+
+st.markdown(f"### <span style='color:{PRIMARY_GREEN}'>Visor de CV (PDF)</span>", unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 1], gap="large")
+with col1:
+    st.caption("Elige un candidato")
+    cand = st.selectbox(
+        "",
+        df["Name"].tolist() if not df.empty else [],
+        key="pdf_candidate",
+        label_visibility="collapsed",
+    )
+
+with col2:
+    with st.expander("Elegir candidato (opción alternativa)", expanded=False):
+        cand_alt = st.selectbox(
+            "Candidato",
+            df["Name"].tolist() if not df.empty else [],
+            key="pdf_candidate_alt",
+        )
+
+# Elegimos el que tenga valor
+selected = cand_alt if cand_alt else cand
+
+# Visor PDF claro (embed)
+if selected and not df.empty:
+    row = df.loc[df["Name"] == selected].iloc[0]
+    if bool(row["is_pdf"]) and selected in pdf_buffers:
+        data_b64 = base64.b64encode(pdf_buffers[selected]).decode("utf-8")
+        st.markdown(
+            f"""
+            <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
+              <iframe src="data:application/pdf;base64,{data_b64}" 
+                      style="width:100%; height:750px; border:0;"
+                      title="PDF Viewer"></iframe>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.download_button("Descargar PDF", data=pdf_buffers[selected], file_name=selected, mime="application/pdf")
+    else:
+        st.info("El candidato seleccionado no es PDF o no tiene contenido PDF. Sube un PDF para previsualizar.", icon="📎")
