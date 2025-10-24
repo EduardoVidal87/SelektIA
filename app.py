@@ -143,7 +143,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background: #fff;
 }}
 
-/* --- TABS VISIBLES (reemplazo robusto) --- */
+/* --- TABS VISIBLES (robusto) --- */
 [data-baseweb="tab-list"] [role="tab"] {{
   color: #1f2937 !important;
   font-weight: 700 !important;
@@ -329,6 +329,14 @@ if "hh_tasks" not in st.session_state:
 if "ofertas" not in st.session_state:
     st.session_state.ofertas = []  # lista de ofertas registradas
 
+# NUEVO: métricas clave por candidata (timestams)
+if "metrics" not in st.session_state:
+    st.session_state.metrics = {}  # {candidate: {"first_seen", "offer_generated_at", "offer_accepted_at", "tto_days", "ttf_days"}}
+
+# NUEVO: onboarding por candidata aceptada
+if "onboarding" not in st.session_state:
+    st.session_state.onboarding = {}  # {candidate: {tareas...}}
+    
 # ======================================================================================
 # SIDEBAR
 # ======================================================================================
@@ -382,6 +390,7 @@ with st.sidebar:
             f.seek(0)
             text = extract_text_from_file(f)
             score, reasons, v_sk, l_sk, t_sk = simple_score(text, jd_text, kw_text)
+            first_seen = datetime.utcnow().isoformat()
             st.session_state.candidates.append({
                 "Name": f.name,
                 "Score": score,
@@ -391,7 +400,10 @@ with st.sidebar:
                 "_validated": v_sk,
                 "_likely": l_sk,
                 "_to_validate": t_sk,
+                "_first_seen": first_seen,  # NUEVO: para TTF
             })
+            # Guarda métricas "first_seen"
+            st.session_state.metrics.setdefault(f.name, {})["first_seen"] = first_seen
 
     st.divider()
     if st.button("Limpiar Lista", use_container_width=True):
@@ -402,7 +414,7 @@ with st.sidebar:
 # ======================================================================================
 # TABS
 # ======================================================================================
-tab_puestos, tab_eval, tab_pipe, tab_ger, tab_hh, tab_oferta = st.tabs(
+tab_puestos, tab_eval, tab_pipe, tab_ger, tab_hh, tab_oferta, tab_onb = st.tabs(
     [
         "📄 Puestos",
         "🧪 Evaluación de CVs",
@@ -410,6 +422,7 @@ tab_puestos, tab_eval, tab_pipe, tab_ger, tab_hh, tab_oferta = st.tabs(
         "👔 Entrevista (Gerencia)",
         "🧰 Tareas del Headhunter",
         "📑 Oferta",
+        "📦 Onboarding",  # NUEVO
     ]
 )
 
@@ -545,7 +558,6 @@ with tab_pipe:
         c_l, c_r = st.columns([1.35, 1])
         with c_l:
             st.markdown("**Candidatos detectados (clic para ver detalle):**")
-            # Lista tabla simple
             show = df[["Name", "Score"]].copy()
             show.rename(columns={"Name": "Candidato", "Score": "Match (%)"}, inplace=True)
             st.dataframe(
@@ -555,12 +567,13 @@ with tab_pipe:
             )
 
             # Selector
+            default_idx = 0
+            if st.session_state.pipeline_selected and st.session_state.pipeline_selected in df["Name"].tolist():
+                default_idx = df["Name"].tolist().index(st.session_state.pipeline_selected)
             selected_name = st.selectbox(
                 "Selecciona para detalle",
                 df["Name"].tolist(),
-                index=0 if st.session_state.pipeline_selected is None else df["Name"].tolist().index(
-                    st.session_state.pipeline_selected
-                ),
+                index=default_idx,
             )
             st.session_state.pipeline_selected = selected_name
 
@@ -697,6 +710,36 @@ with tab_hh:
             st.info("Checklists bloqueados por envío a Comité.")
 
 # --------------------------------------------------------------------------------------
+# Helper onboarding: estructura inicial de tareas
+# --------------------------------------------------------------------------------------
+def _default_onboarding_tasks(inicio_fecha: date):
+    """Crea la estructura por defecto de tareas de onboarding."""
+    today = datetime.utcnow().date()
+    return {
+        "contrato_firmado": {"label":"Contrato firmado","done":False,"due": today + timedelta(days=2),"resp":"RR.HH.","files":[]},
+        "docs_completos": {"label":"Documentos completos (DNI, colegiatura, BLS/ACLS, 2 referencias, cuenta)","done":False,"due": today + timedelta(days=3),"resp":"RR.HH.","files":[]},
+        "usuario_email": {"label":"Usuario/email creado","done":False,"due": today + timedelta(days=1),"resp":"TI","files":[]},
+        "acceso_sap": {"label":"Acceso SAP IS-H","done":False,"due": today + timedelta(days=2),"resp":"TI","files":[]},
+        "examen_medico": {"label":"Examen médico de ingreso","done":False,"due": today + timedelta(days=5),"resp":"Salud Ocupacional","files":[]},
+        "induccion_dia1": {"label":"Inducción día 1 (agenda)","done":False,"due": inicio_fecha,"resp":"RR.HH.","files":[]},
+        "epp_uniforme": {"label":"EPP/Uniforme entregado","done":False,"due": inicio_fecha,"resp":"Seguridad/Almacén","files":[]},
+        "plan_30_60_90": {"label":"Plan 30-60-90 cargado","done":False,"due": inicio_fecha + timedelta(days=7),"resp":"Jefe Directo","files":[]},
+        # asignaciones
+        "asignaciones": {"jefe_directo":"", "tutor":"","rrhh_resp":"","ti_resp":""},
+    }
+
+def _sla_badge(due_date):
+    due = pd.to_datetime(due_date)
+    now = pd.to_datetime(datetime.utcnow().date())
+    delta = (due - now).days
+    if delta < 0:
+        return "<span class='badge badge-red'>Vencido</span>"
+    elif delta <= 1:
+        return "<span class='badge badge-amber'>≤ 24h</span>"
+    else:
+        return "<span class='badge badge-green'>En plazo</span>"
+
+# --------------------------------------------------------------------------------------
 # TAB 6: OFERTA
 # --------------------------------------------------------------------------------------
 with tab_oferta:
@@ -706,48 +749,77 @@ with tab_oferta:
         st.info("No hay candidatos en etapa final.")
     else:
         cand = st.selectbox("Candidata/o para oferta", st.session_state.gerencia_list, index=0)
-        with st.form("form_oferta"):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                puesto_o = st.text_input("Puesto", value=st.session_state.get("puesto",""))
-            with c2:
-                ubic_o = st.selectbox("Ubicación", ["Lima, Perú","Santiago, Chile","Ciudad de México, MX","Remoto LATAM"])
-            with c3:
-                modalidad_o = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"])
 
-            c4, c5, c6 = st.columns(3)
-            with c4:
-                contrato_o = st.selectbox("Tipo de contrato", ["Indeterminado","Plazo fijo","Servicio (honorarios)"])
-            with c5:
-                salario_o = st.text_input("Salario (rango y neto)", placeholder="S/ 4,500 neto")
-            with c6:
-                beneficios_o = st.text_input("Bonos/beneficios", placeholder="Bono anual, EPS…")
+        # Si ya hay una oferta aceptada para esta persona, mostrar modo solo lectura
+        accepted = [o for o in st.session_state.ofertas if o["candidato"]==cand and o["estado"]=="Aceptada"]
+        if accepted:
+            o = accepted[-1]
+            st.success("Propuesta aceptada. Edición bloqueada (solo lectura).")
+            colA, colB, colC = st.columns(3)
+            with colA: st.text_input("Puesto", value=o["puesto"], disabled=True)
+            with colB: st.text_input("Ubicación", value=o["ubicacion"], disabled=True)
+            with colC: st.text_input("Modalidad", value=o["modalidad"], disabled=True)
+            colD, colE, colF = st.columns(3)
+            with colD: st.text_input("Contrato", value=o["contrato"], disabled=True)
+            with colE: st.text_input("Salario (rango/neto)", value=o["salario"], disabled=True)
+            with colF: st.text_input("Beneficios", value=o["beneficios"], disabled=True)
+            colG, colH = st.columns(2)
+            with colG: st.text_input("Inicio", value=o["inicio"], disabled=True)
+            with colH: st.text_input("Caducidad", value=o["caducidad"], disabled=True)
+            st.text_input("Aprobadores", value=", ".join(o["aprobadores"]), disabled=True)
 
-            c7, c8 = st.columns(2)
-            with c7:
-                inicio_o = st.date_input("Fecha de inicio", value=datetime.utcnow().date() + timedelta(days=14))
-            with c8:
-                caduca_o = st.date_input("Caducidad de oferta", value=datetime.utcnow().date() + timedelta(days=7))
+            # Métricas TTO/TTF
+            if cand in st.session_state.metrics:
+                m = st.session_state.metrics[cand]
+                ttostr = f"TTO: {m.get('tto_days','-')} días • TTF: {m.get('ttf_days','-')} días"
+                st.info(ttostr)
+        else:
+            # Formulario normal (no aceptado aún)
+            with st.form("form_oferta"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    puesto_o = st.text_input("Puesto", value=st.session_state.get("puesto",""))
+                with c2:
+                    ubic_o = st.selectbox("Ubicación", ["Lima, Perú","Santiago, Chile","Ciudad de México, MX","Remoto LATAM"])
+                with c3:
+                    modalidad_o = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"])
 
-            aprobadores = st.multiselect("Aprobadores", ["Gerencia","Legal","Finanzas"], default=["Gerencia","Legal","Finanzas"])
+                c4, c5, c6 = st.columns(3)
+                with c4:
+                    contrato_o = st.selectbox("Tipo de contrato", ["Indeterminado","Plazo fijo","Servicio (honorarios)"])
+                with c5:
+                    salario_o = st.text_input("Salario (rango y neto)", placeholder="S/ 4,500 neto")
+                with c6:
+                    beneficios_o = st.text_input("Bonos/beneficios", placeholder="Bono anual, EPS…")
 
-            submitted = st.form_submit_button("Generar oferta (PDF) + Registrar")
-            if submitted:
-                st.session_state.ofertas.append({
-                    "candidato": cand,
-                    "puesto": puesto_o,
-                    "ubicacion": ubic_o,
-                    "modalidad": modalidad_o,
-                    "contrato": contrato_o,
-                    "salario": salario_o,
-                    "beneficios": beneficios_o,
-                    "inicio": str(inicio_o),
-                    "caducidad": str(caduca_o),
-                    "aprobadores": aprobadores,
-                    "estado": "Enviada",
-                    "historial": [f"{datetime.utcnow().isoformat()} - Generada y enviada"]
-                })
-                st.success("Oferta generada y registrada (demo).")
+                c7, c8 = st.columns(2)
+                with c7:
+                    inicio_o = st.date_input("Fecha de inicio", value=datetime.utcnow().date() + timedelta(days=14))
+                with c8:
+                    caduca_o = st.date_input("Caducidad de oferta", value=datetime.utcnow().date() + timedelta(days=7))
+
+                aprobadores = st.multiselect("Aprobadores", ["Gerencia","Legal","Finanzas"], default=["Gerencia","Legal","Finanzas"])
+
+                submitted = st.form_submit_button("Generar oferta (PDF) + Registrar")
+                if submitted:
+                    st.session_state.ofertas.append({
+                        "candidato": cand,
+                        "puesto": puesto_o,
+                        "ubicacion": ubic_o,
+                        "modalidad": modalidad_o,
+                        "contrato": contrato_o,
+                        "salario": salario_o,
+                        "beneficios": beneficios_o,
+                        "inicio": str(inicio_o),
+                        "caducidad": str(caduca_o),
+                        "aprobadores": aprobadores,
+                        "estado": "Enviada",
+                        "historial": [f"{datetime.utcnow().isoformat()} - Generada y enviada"],
+                        "generated_at": datetime.utcnow().isoformat(),
+                    })
+                    # Guarda time to offer base (generación)
+                    st.session_state.metrics.setdefault(cand, {})["offer_generated_at"] = st.session_state.ofertas[-1]["generated_at"]
+                    st.success("Oferta generada y registrada (demo).")
 
         if st.session_state.ofertas:
             st.markdown("### Ofertas registradas")
@@ -762,6 +834,27 @@ with tab_oferta:
                     st.session_state.ofertas[idx]["estado"] = "Aceptada"
                     st.session_state.ofertas[idx]["historial"].append(f"{datetime.utcnow().isoformat()} - Aceptada")
                     st.success("Oferta aceptada.")
+                    # Métricas TTO / TTF
+                    candX = st.session_state.ofertas[idx]["candidato"]
+                    st.session_state.metrics.setdefault(candX, {})
+                    st.session_state.metrics[candX]["offer_accepted_at"] = datetime.utcnow().isoformat()
+                    # TTO
+                    gen_at = st.session_state.metrics[candX].get("offer_generated_at")
+                    if gen_at:
+                        tto = (pd.to_datetime(st.session_state.metrics[candX]["offer_accepted_at"]) - pd.to_datetime(gen_at)).days
+                        st.session_state.metrics[candX]["tto_days"] = int(tto)
+                    # TTF
+                    first_seen = st.session_state.metrics[candX].get("first_seen")
+                    if first_seen:
+                        ttf = (pd.to_datetime(st.session_state.metrics[candX]["offer_accepted_at"]) - pd.to_datetime(first_seen)).days
+                        st.session_state.metrics[candX]["ttf_days"] = int(ttf)
+
+                    # Crear onboarding por defecto
+                    inicio_dt = pd.to_datetime(st.session_state.ofertas[idx]["inicio"]).date()
+                    if candX not in st.session_state.onboarding:
+                        st.session_state.onboarding[candX] = _default_onboarding_tasks(inicio_dt)
+                    # (Opcional) cerrar puesto en positions si aplica (demo: no vinculamos candidato->puesto aquí)
+
             with colI:
                 if st.button("Registrar contraoferta"):
                     st.session_state.ofertas[idx]["estado"] = "Contraoferta"
@@ -772,3 +865,82 @@ with tab_oferta:
                     st.session_state.ofertas[idx]["estado"] = "Rechazada"
                     st.session_state.ofertas[idx]["historial"].append(f"{datetime.utcnow().isoformat()} - Rechazada")
                     st.warning("Oferta rechazada.")
+
+# --------------------------------------------------------------------------------------
+# TAB 7: ONBOARDING (NUEVA)
+# --------------------------------------------------------------------------------------
+with tab_onb:
+    st.markdown("## SelektIA – **Onboarding**")
+
+    # lista de candidatos con oferta aceptada
+    accepted_cands = [o["candidato"] for o in st.session_state.ofertas if o["estado"]=="Aceptada"]
+    if not accepted_cands:
+        st.info("Aún no hay ofertas aceptadas. Marca una oferta como Aceptada para iniciar onboarding.")
+    else:
+        cand = st.selectbox("Candidata/o", sorted(set(accepted_cands)), index=0)
+        # asegúrate de tener estructura
+        if cand not in st.session_state.onboarding:
+            # si no existe (edge), crea con fecha de inicio estimada (si hay)
+            off = [o for o in st.session_state.ofertas if o["candidato"]==cand and o["estado"]=="Aceptada"]
+            if off:
+                inicio_dt = pd.to_datetime(off[-1]["inicio"]).date()
+            else:
+                inicio_dt = datetime.utcnow().date() + timedelta(days=14)
+            st.session_state.onboarding[cand] = _default_onboarding_tasks(inicio_dt)
+
+        data = st.session_state.onboarding[cand]
+
+        # Métricas TTO/TTF si existen
+        if cand in st.session_state.metrics:
+            m = st.session_state.metrics[cand]
+            ttostr = f"TTO: {m.get('tto_days','-')} días • TTF: {m.get('ttf_days','-')} días"
+            st.info(ttostr)
+
+        st.markdown("### Checklist con SLA")
+        # Render de tareas checklist
+        task_keys = [
+            "contrato_firmado","docs_completos","usuario_email","acceso_sap",
+            "examen_medico","induccion_dia1","epp_uniforme","plan_30_60_90"
+        ]
+        for k in task_keys:
+            row = data[k]
+            col1, col2, col3, col4 = st.columns([0.6, 0.2, 0.2, 0.6])
+            with col1:
+                row["done"] = st.checkbox(row["label"], value=row["done"], key=f"onb_done_{cand}_{k}")
+            with col2:
+                row["due"] = st.date_input("Vence", value=row["due"], key=f"onb_due_{cand}_{k}")
+            with col3:
+                row["resp"] = st.selectbox("Resp.", ["RR.HH.","TI","Salud Ocupacional","Seguridad/Almacén","Jefe Directo"], index=["RR.HH.","TI","Salud Ocupacional","Seguridad/Almacén","Jefe Directo"].index(row["resp"]) if row["resp"] in ["RR.HH.","TI","Salud Ocupacional","Seguridad/Almacén","Jefe Directo"] else 0, key=f"onb_resp_{cand}_{k}")
+            with col4:
+                st.markdown(_sla_badge(row["due"]), unsafe_allow_html=True)
+                up = st.file_uploader("Adjuntos", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True, key=f"onb_up_{cand}_{k}")
+                # guardamos nombres (demo)
+                if up:
+                    row["files"] = [u.name for u in up]
+            data[k] = row
+            st.divider()
+
+        st.markdown("### Asignaciones")
+        colA, colB, colC, colD = st.columns(4)
+        with colA:
+            data["asignaciones"]["jefe_directo"] = st.text_input("Jefe directo", value=data["asignaciones"].get("jefe_directo",""))
+        with colB:
+            data["asignaciones"]["tutor"] = st.text_input("Tutor/Buddy", value=data["asignaciones"].get("tutor",""))
+        with colC:
+            data["asignaciones"]["rrhh_resp"] = st.text_input("RR.HH. responsable", value=data["asignaciones"].get("rrhh_resp",""))
+        with colD:
+            data["asignaciones"]["ti_resp"] = st.text_input("TI responsable", value=data["asignaciones"].get("ti_resp",""))
+
+        st.session_state.onboarding[cand] = data
+
+        st.markdown("---")
+        colX, colY, colZ = st.columns(3)
+        with colX:
+            if st.button("Guardar Onboarding", use_container_width=True):
+                st.success("Onboarding guardado.")
+        with colY:
+            if st.button("Generar Carta de bienvenida (PDF)", use_container_width=True):
+                st.info("Carta de bienvenida generada (demo).")
+        with colZ:
+            if st.button("Exportar a Payroll/HRIS", use_container_width=True):
+                st.success("Exportado (demo).")
