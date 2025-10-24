@@ -120,7 +120,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 # utilidades de lectura
 # ======================
 def extract_text_from_file(uploaded_file) -> str:
-    """Extrae texto de un PDF (PyPDF2) o un TXT sin perder los bytes."""
+    """Extrae texto de un PDF (PyPDF2) o un TXT sin perder los bytes en session_state."""
     try:
         data = uploaded_file.getvalue()
         if Path(uploaded_file.name).suffix.lower() == ".pdf":
@@ -155,31 +155,69 @@ def analyze_locally(jd: str, kw_text: str, files):
         })
     return cands
 
-# --------- Visor PDF con Blob URL (más compatible) ----------
-def show_pdf_blob(b64: str, height: int = 750):
+# --------- Visor PDF con pdf.js (sin iframes, sin data URI) ----------
+def show_pdf_pdfjs(b64: str, height: int = 750):
+    """
+    Renderiza todas las páginas con pdf.js en <canvas>.
+    Carga pdf.js desde cdnjs (solo los scripts; el PDF viene en memoria).
+    """
     html = f"""
-    <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
-      <iframe id="pdf_frame" style="width:100%; height:{height}px; border:0;"></iframe>
+    <div id="pdf_container" style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; background:#fff; padding:8px; max-height:{height}px; overflow:auto;">
+      <div id="status" style="font:14px/1.4 sans-serif;color:#444;">Cargando PDF…</div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
       (function() {{
+        // Decodifica base64 a bytes
         const b64 = "{b64}";
         function b64ToUint8(b64) {{
-          const s = atob(b64);
-          const len = s.length;
+          const bin = atob(b64);
+          const len = bin.length;
           const bytes = new Uint8Array(len);
-          for (let i=0; i<len; i++) bytes[i] = s.charCodeAt(i);
+          for (let i=0; i<len; i++) bytes[i] = bin.charCodeAt(i);
           return bytes;
         }}
-        const bytes = b64ToUint8(b64);
-        const blob = new Blob([bytes], {{type: "application/pdf"}});
-        const url = URL.createObjectURL(blob);
-        const frame = document.getElementById("pdf_frame");
-        frame.src = url + "#toolbar=1&zoom=page-width";
+        const data = b64ToUint8(b64);
+
+        const container = document.getElementById("pdf_container");
+        const status = document.getElementById("status");
+
+        // Configura el worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+        // Carga documento desde bytes
+        const task = pdfjsLib.getDocument({{ data }});
+        task.promise.then(async function(pdf) {{
+          status.textContent = "Páginas: " + pdf.numPages;
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
+            const page = await pdf.getPage(pageNum);
+
+            // Escala en función del ancho disponible
+            const viewport = page.getViewport({{ scale: 1.5 }});
+            const scale = Math.min(container.clientWidth / viewport.width, 1.5);
+            const vp = page.getViewport({{ scale }});
+
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = vp.width;
+            canvas.height = vp.height;
+            canvas.style.width = "100%";
+            canvas.style.height = "auto";
+            canvas.style.display = "block";
+            canvas.style.margin = "0 auto 12px auto";
+            container.appendChild(canvas);
+
+            await page.render({{ canvasContext: ctx, viewport: vp }}).promise;
+          }}
+          status.remove();
+        }}).catch(function(err) {{
+          status.textContent = "No se pudo mostrar el PDF embebido. " + err;
+        }});
       }})();
     </script>
     """
-    components.html(html, height=height + 10, scrolling=False)
+    components.html(html, height=height + 20, scrolling=True)
 
 # ======================
 #        SIDEBAR
@@ -245,8 +283,8 @@ else:
     cand = next(c for c in st.session_state.candidates if c["Nombre"] == selected_name)
     if cand["_is_pdf"] and cand["_bytes"]:
         b64 = base64.b64encode(cand["_bytes"]).decode("utf-8")
-        # Visor con Blob URL (más compatible que data:URI)
-        show_pdf_blob(b64, height=750)
+        # Visor con pdf.js (render a canvases)
+        show_pdf_pdfjs(b64, height=750)
         # Botón de descarga
         st.download_button(f"Descargar {selected_name}", data=cand["_bytes"], file_name=selected_name, mime="application/pdf")
     else:
