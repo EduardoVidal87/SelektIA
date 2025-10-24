@@ -290,8 +290,7 @@ with st.sidebar:
 
     st.markdown("### Definición del puesto")
     puesto = st.selectbox(
-        "Puesto",
-        ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
+               ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
         index=0, key="puesto",
     )
 
