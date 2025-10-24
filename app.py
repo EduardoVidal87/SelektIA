@@ -1,4 +1,4 @@
-# app.py — SelektIA (funciona: ranking + gráfico + visor PDF + Excel)
+# app.py — SelektIA (ranking + gráfico + Excel + visor PDF con fallback)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,12 +6,13 @@ from io import BytesIO
 from pdfminer.high_level import extract_text
 import base64, unicodedata, re
 
-# ------------------- utils -------------------
+# ------------------- utilidades -------------------
 def _norm(s: str) -> str:
     s = s.lower()
     s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
     return s
 
+# Sinónimos mínimos (ajústalos a tu realidad)
 SYNONYMS = {
     "his": ["sistema hospitalario", "registro clinico", "erp salud"],
     "sap is-h": ["sap ish", "sap is h", "sap hospital"],
@@ -19,15 +20,19 @@ SYNONYMS = {
     "bls": ["soporte vital basico"],
     "acls": ["soporte vital avanzado"],
     "uci intermedia": ["uci", "cuidados intermedios"],
+    "educacion al paciente": ["educacion a pacientes", "educacion al usuario"],
 }
 
 def expand_keywords(kws):
     out = []
     for k in kws:
         k2 = _norm(k)
+        if not k2:
+            continue
         out.append(k2)
         for syn in SYNONYMS.get(k2, []):
             out.append(_norm(syn))
+    # únicos, mantiene orden
     return list(dict.fromkeys(out))
 
 def pdf_to_text(file_like) -> str:
@@ -36,11 +41,32 @@ def pdf_to_text(file_like) -> str:
     except Exception:
         return ""
 
+def smart_keywords_parse(jd_text: str) -> list[str]:
+    """Acepta coma, punto y coma, salto de línea, ' / ' y ' y '."""
+    # 1) separa por coma, punto y coma o salto de línea
+    parts = [x.strip() for x in re.split(r'[,\n;]+', jd_text) if x.strip()]
+    # 2) divide por "/" y por ' y '
+    out = []
+    for p in parts:
+        sub = [s.strip() for s in re.split(r'/|\\by\\b', p, flags=re.IGNORECASE) if s.strip()]
+        out.extend(sub if sub else [p])
+    # 3) elimina palabras de relleno
+    STOP_PHRASES = ["manejo de", "vigente", "vigentes"]
+    cleaned = []
+    for k in out:
+        kk = k
+        for sp in STOP_PHRASES:
+            kk = re.sub(rf'\\b{sp}\\b', '', kk, flags=re.I)
+        kk = kk.strip(" .")
+        if kk:
+            cleaned.append(kk)
+    return cleaned
+
 def score_candidate(raw_text: str, jd_keywords: list) -> tuple[int, str]:
     text = _norm(" ".join(raw_text.split()))
     base_kws = [k.strip() for k in jd_keywords if k.strip()]
     kws = expand_keywords(base_kws)
-    hits = sum(1 for k in kws if re.search(rf"\b{re.escape(_norm(k))}\b", text))
+    hits = sum(1 for k in kws if re.search(rf"\\b{re.escape(_norm(k))}\\b", text))
     ratio = min(hits / max(1, len(base_kws)), 1.0)
     score = round(100 * ratio)
     return score, f"{hits}/{len(base_kws)} keywords del JD (incl. sinónimos) encontradas"
@@ -53,23 +79,28 @@ def build_excel(shortlist_df: pd.DataFrame, all_df: pd.DataFrame) -> bytes:
     buf.seek(0); return buf.read()
 
 def show_pdf(file_bytes: bytes, height: int = 820):
+    """Visor PDF con fallback a descarga si el navegador no lo renderiza."""
     b64 = base64.b64encode(file_bytes).decode()
-    st.markdown(
-        f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="{height}" type="application/pdf"></iframe>',
-        unsafe_allow_html=True
-    )
+    html_code = f"""
+    <object data="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}">
+        <p>No se pudo previsualizar el PDF.
+        <a download="cv.pdf" href="data:application/pdf;base64,{b64}">Descargar CV</a></p>
+    </object>
+    """
+    st.components.v1.html(html_code, height=height, scrolling=True)
 
 # ------------------- UI -------------------
 st.set_page_config(page_title="SelektIA", layout="wide")
 
 st.sidebar.header("Job Description")
-jd_text = st.sidebar.text_area(
-    "Keywords (coma separada):",
-    "HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, curación avanzada, "
-    "educación al paciente, BLS, ACLS, hospitalización, UCI intermedia",
-    height=120
+default_kws = (
+    "HIS, SAP IS-H, bombas de infusión, 5 correctos, IAAS, bundles VAP, BRC, CAUTI, "
+    "curación avanzada, educación al paciente, BLS, ACLS, hospitalización, UCI intermedia"
 )
-jd_keywords = [k.strip() for k in jd_text.split(",") if k.strip()]
+jd_text = st.sidebar.text_area("Keywords (coma separada):", default_kws, height=120)
+
+# parsing robusto de keywords
+jd_keywords = smart_keywords_parse(jd_text)
 
 st.sidebar.header("Upload CVs (PDF o TXT)")
 files = st.sidebar.file_uploader("Arrastra aquí", type=["pdf","txt"], accept_multiple_files=True)
@@ -106,7 +137,10 @@ if files:
 
         st.subheader("Score Comparison")
         threshold = st.slider("Umbral de selección", 0, 100, 70, 1)
-        fig = px.bar(df, x="Name", y="Score", text="Score")
+
+        fig = px.bar(df, x="Name", y="Score", text="Score",
+                     color=(df["Score"] >= threshold).map({True: "Seleccionado", False: "Revisión"}),
+                     color_discrete_map={"Seleccionado": "#00A36C", "Revisión": "#1f77b4"})
         fig.update_traces(
             textposition="outside",
             customdata=df[["Reasons"]].values,
