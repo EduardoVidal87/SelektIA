@@ -4,3 +4,4 @@ pandas
 plotly
 pdfminer.six
 openpyxl
+streamlit-pdf-viewer
