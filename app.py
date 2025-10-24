@@ -1,10 +1,10 @@
 # app.py
 # ──────────────────────────────────────────────────────────────────────────────
 # SelektIA – Evaluación de CVs (sin IA externa)
-# - Colores y estilos corporativos
-# - Análisis automático cuando se suben archivos
-# - Gráfico con colores: base #E9F3FF y ≥60% en #33FFAC
-# - Visor de PDF compacto y nítido (zoom configurable)
+# - Análisis automático
+# - Gráfico: base #E9F3FF y ≥60% #33FFAC
+# - Visor PDF robusto (object/embed/iframe) con fallback de descarga
+# - Visor compacto y estilo unificado
 # ──────────────────────────────────────────────────────────────────────────────
 
 import io
@@ -30,7 +30,7 @@ BOX_LIGHT_B = "#E3EDF6"
 TITLE_DARK = "#142433"
 
 # Colores del gráfico solicitados
-BAR_BASE = "#E9F3FF"
+BAR_BASE = "#E9F3FF"   # base
 BAR_HIGHLIGHT = "#33FFAC"  # ≥60%
 
 # =============================================================================
@@ -91,7 +91,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
   background: var(--box) !important;
   color: var(--text) !important;
-  border: 1.5px solid var(--box) !important;
+  border: 1.5px solid var(--box) !nant;
   border-radius: 12px !important;
   box-shadow: none !important;
 }}
@@ -163,7 +163,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   color: var(--title-dark) !important;
 }}
 
-/* Select de visor */
+/* Select del visor */
 #pdf_candidate {{
   background: var(--box-light) !important;
   border: 1.5px solid var(--box-light-border) !important;
@@ -195,7 +195,7 @@ def extract_text(uploaded_file) -> str:
         return ""
 
 def score_and_reasons(text: str, keywords: list[str]) -> tuple[int, str]:
-    """Puntaje simple por coincidencias de keywords + razones."""
+    """Puntaje simple según coincidencias de keywords + razones."""
     if not text:
         return 0, "Sin texto extraído."
     text_low = text.lower()
@@ -203,7 +203,6 @@ def score_and_reasons(text: str, keywords: list[str]) -> tuple[int, str]:
     hits = [k for k in kws if k in text_low]
     n_hits = len(hits)
     n_total = max(len(kws), 1)
-    # Score 0..100
     score = round(100 * n_hits / n_total)
     reasons = f"{n_hits}/{n_total} keywords encontradas — Coincidencias: {', '.join(hits) if hits else '—'}"
     return score, reasons
@@ -232,7 +231,7 @@ def analyze(files, jd_text, kw_text):
     return df, cache
 
 # =============================================================================
-# Sidebar (oscuro)
+# Sidebar
 # =============================================================================
 with st.sidebar:
     st.image("assets/logo-wayki.png", use_column_width=True)
@@ -241,25 +240,20 @@ with st.sidebar:
     puesto = st.selectbox(
         "Puesto",
         ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
-        index=0,
-        key="puesto",
+        index=0, key="puesto",
     )
 
     st.markdown("### Descripción del puesto (texto libre)")
     jd_text = st.text_area(
         "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
-        height=120,
-        label_visibility="collapsed",
-        key="jd",
+        height=120, label_visibility="collapsed", key="jd",
     )
 
     st.markdown("### Palabras clave del perfil *(ajústalas si es necesario)*")
     kw_text = st.text_area(
         "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
-        height=110,
-        label_visibility="collapsed",
-        key="kw",
+        height=110, label_visibility="collapsed", key="kw",
     )
 
     st.markdown("### Subir CVs (PDF o TXT)")
@@ -277,59 +271,44 @@ with st.sidebar:
         st.rerun()
 
 # =============================================================================
-# Área principal
+# Principal
 # =============================================================================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Resultados de evaluación</span>", unsafe_allow_html=True)
-st.info("Define el puesto/JD, edita palabras clave y sube CVs (PDF o TXT) para evaluar.")
+st.info("Define el puesto/JD, edita keywords y sube algunos CVs (PDF o TXT). El análisis corre automáticamente.")
 
-# Análisis automático cuando se suben archivos
+# Analiza automáticamente si se suben archivos
 if files:
     df, blob_cache = analyze(files, jd_text, kw_text)
     st.session_state["df"] = df
     st.session_state["blob_cache"] = blob_cache
 
 if "df" not in st.session_state or st.session_state["df"].empty:
-    st.warning("Sube algunos CVs para ver el ranking, el gráfico y el visor.")
+    st.warning("Sube algunos CVs para ver ranking, gráfico y visor.")
     st.stop()
 
 df = st.session_state["df"].copy()
 blob_cache = st.session_state["blob_cache"]
 
-# ===================== Tabla Ranking =====================
+# ===================== Tabla =====================
 st.markdown("### Ranking de candidatos")
 show = df[["Name", "Score", "Reasons", "PDF_text"]].rename(
     columns={"Name": "Nombre", "Score": "Score", "Reasons": "Razones", "PDF_text": "PDF_text"}
 )
-st.dataframe(
-    show,
-    use_container_width=True,
-    hide_index=True
-)
+st.dataframe(show, use_container_width=True, hide_index=True)
 
 # ===================== Gráfico =====================
 st.markdown("### Comparación de puntajes")
-
-# Construir colores barra a barra
 bar_colors = [BAR_HIGHLIGHT if s >= 60 else BAR_BASE for s in df["Score"].tolist()]
-
-fig = px.bar(
-    df,
-    x="Name",
-    y="Score",
-)
+fig = px.bar(df, x="Name", y="Score")
 fig.update_traces(marker_color=bar_colors, hovertemplate="<b>%{x}</b><br>Score: %{y}")
 fig.update_layout(
-    title=None,
-    plot_bgcolor="#FFFFFF",
-    paper_bgcolor="rgba(0,0,0,0)",
-    font=dict(color=TITLE_DARK),
-    xaxis_title=None,
-    yaxis_title="Score",
+    plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score",
     margin=dict(l=10, r=10, t=10, b=10),
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# ===================== Visor compactado de PDF/TXT =====================
+# ===================== Visor PDF/TXT (robusto y compacto) =====================
 st.markdown("### Visor de CV (PDF/TXT)  <sup>↪</sup>", unsafe_allow_html=True)
 
 all_names = df["Name"].tolist()
@@ -340,24 +319,30 @@ is_pdf = candidate_meta.get("_is_pdf", False)
 blob = candidate_meta.get("_bytes", b"")
 
 PDF_BORDER = BOX_LIGHT_B
-VIEW_HEIGHT = 520  # altura más compacta
-# Opciones de zoom mayor para una percepción de nitidez sin ocupar todo el alto
-PDF_ZOOM = 125  # 125%
+VIEW_HEIGHT = 520     # compacto
+PDF_ZOOM = 115        # zoom moderado
 
-if is_pdf and blob:
+if is_pdf and blob and len(blob) > 0:
     b64 = base64.b64encode(blob).decode("utf-8")
-    # Intentamos forzar un zoom cómodo y vista adaptada al ancho
-    pdf_src = f"data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH&toolbar=0&navpanes=0"
-    st.markdown(
-        f"""
-        <div style="border:1px solid {PDF_BORDER}; border-radius:12px; overflow:hidden; background:#fff;">
-          <iframe src="{pdf_src}"
-                  style="width:100%; height:{VIEW_HEIGHT}px; border:0;"
-                  title="Visor PDF"></iframe>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+
+    # 1) <object> (mejor compatibilidad)
+    object_html = f"""
+    <div style="border:1px solid {PDF_BORDER}; border-radius:12px; overflow:hidden; background:#fff;">
+      <object data="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
+              type="application/pdf"
+              width="100%" height="{VIEW_HEIGHT}px">
+        <!-- 2) Fallback <embed> -->
+        <embed src="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
+               type="application/pdf" width="100%" height="{VIEW_HEIGHT}px"/>
+        <!-- 3) Fallback <iframe> -->
+        <iframe src="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
+                width="100%" height="{VIEW_HEIGHT}px" style="border:0;"></iframe>
+      </object>
+    </div>
+    """
+    st.markdown(object_html, unsafe_allow_html=True)
+
+    # Enlace de descarga
     st.download_button(
         f"Descargar {selected_name}",
         data=blob,
@@ -365,15 +350,13 @@ if is_pdf and blob:
         mime="application/pdf",
         use_container_width=False,
     )
-else:
-    # Fallback para TXT u otros
-    if blob:
-        try:
-            txt = blob.decode("utf-8", errors="ignore")
-        except Exception:
-            txt = "(No se pudo decodificar el archivo como texto)."
-    else:
-        txt = "(No hay datos del archivo en memoria)."
+
+elif not is_pdf and blob:
+    # TXT u otros
+    try:
+        txt = blob.decode("utf-8", errors="ignore")
+    except Exception:
+        txt = "(No se pudo decodificar el archivo como texto)."
 
     st.text_area("Contenido del archivo:", value=txt, height=VIEW_HEIGHT, disabled=True)
     st.download_button(
@@ -383,3 +366,13 @@ else:
         mime="text/plain",
         use_container_width=False,
     )
+else:
+    st.warning("No fue posible mostrar el documento incrustado. Puedes descargarlo y abrirlo localmente.")
+    if blob:
+        st.download_button(
+            f"Descargar {selected_name}",
+            data=blob,
+            file_name=selected_name,
+            mime="application/octet-stream",
+            use_container_width=False,
+        )
