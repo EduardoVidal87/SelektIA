@@ -6,12 +6,13 @@ import re # ### NUEVO ###
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import fitz  # PyMuPDF ### NUEVO ###
+# ### MODIFICADO ### - Cambiamos de PyMuPDF a pypdf
 import google.generativeai as genai ### NUEVO ###
+from pypdf import PdfReader ### NUEVO Y REEMPLAZADO ###
 
 # =========================
 # Variables de tema/colores
-# =========================
+# ... (código sin cambios) ...
 PRIMARY_GREEN = "#00CD78"
 # ... (variables de color sin cambios) ...
 TITLE_DARK    = "#142433"    # texto títulos principales
@@ -37,7 +38,7 @@ st.set_page_config(
 )
 
 # ### NUEVO ###
-# Inicializar el estado de la sesión para guardar candidatos
+# ... (estado de sesión sin cambios) ...
 if "applicants" not in st.session_state:
     st.session_state.applicants = []
 
@@ -45,21 +46,11 @@ if "applicants" not in st.session_state:
 #  SIDEBAR (oscuro)
 # ================
 with st.sidebar:
-    # ### MODIFICADO ### - Ruta del logo corregida
+# ... (código del sidebar sin cambios) ...
     st.image("assets/logo-wayki.png", use_column_width=True)
     st.markdown("# SelektIA")
     
-    # ### MODIFICADO ### - Carga la API Key desde Streamlit Secrets
-    st.markdown("### Configuración de IA")
-    if 'api_key_gemini' not in st.secrets:
-        st.error("API Key no configurada.")
-        st.caption("Ve a 'Settings > Secrets' en Streamlit Cloud y añade tu 'api_key_gemini'.")
-        api_key = None
-    else:
-        api_key = st.secrets["api_key_gemini"]
-        st.success("API Key de IA cargada.", icon="✅")
-
-
+# ... (código de API key sin cambios) ...
     st.markdown("### Definición del puesto")
 # ... (definición del puesto sin cambios) ...
     st.markdown("### Subir CVs (PDF o TXT)")
@@ -86,8 +77,22 @@ def call_gemini_api(api_key, system_prompt, user_prompt):
              return "Error: La API Key de Gemini no es válida. Revísala en tus Secrets."
         return f"Error al contactar la API de Gemini. Detalles: {e}"
 
+# ### MODIFICADO ### - Nueva función para leer PDF con pypdf
 def extract_text_from_pdf(pdf_bytes):
-# ... (función sin cambios) ...
+    """Extracts text from PDF bytes using pypdf (pure-Python)."""
+    try:
+        # pypdf lee desde un objeto tipo archivo (file-like object)
+        pdf_file = io.BytesIO(pdf_bytes)
+        reader = PdfReader(pdf_file)
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return text
+    except Exception as e:
+        st.error(f"Error al leer el PDF con pypdf: {e}")
+        return ""
 
 def extract_text_from_txt(txt_bytes):
 # ... (función sin cambios) ...
@@ -100,12 +105,10 @@ def parse_analysis(response_text):
 # ===================
 #  LÓGICA DE PROCESAMIENTO (### MODIFICADA ###)
 # ===================
-
 if analyze_button:
-    # ### MODIFICADO ### - Comprobación de API Key
+# ... (lógica sin cambios) ...
     if not api_key:
         st.error("Acción detenida. API Key no configurada en Streamlit Cloud Secrets.")
-    elif not jd_text:
 # ... (resto de la lógica sin cambios) ...
             if new_applicants_found:
                 st.rerun()
@@ -123,4 +126,5 @@ st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Res
 
 # Ocultamos la tabla de datos crudos (puedes descomentarla si la quieres)
 # ... (código sin cambios) ...
+
 
