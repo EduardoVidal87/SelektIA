@@ -290,17 +290,18 @@ with st.sidebar:
 
     st.markdown("### Definición del puesto")
     puesto = st.selectbox(
-               ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
+        "Puesto",
+        ["Enfermera/o Asistencial", "Tecnólogo Médico", "Recepcionista de Admisión", "Médico General", "Químico Farmacéutico"],
         index=0, key="puesto",
     )
 
-    st.markdown("### Descripción del puesto")
+    st.markdown("### Descripción del puesto (texto libre)")
     jd_text = st.text_area(
         "Resume el objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.",
         height=120, label_visibility="collapsed", key="jd",
     )
 
-    st.markdown("### Palabras clave del perfil")
+    st.markdown("### Palabras clave del perfil *(ajústalas si es necesario)*")
     kw_text = st.text_area(
         "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
