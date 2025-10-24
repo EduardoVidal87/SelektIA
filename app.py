@@ -238,7 +238,6 @@ def pdf_viewer_pdfjs(file_bytes: bytes, height=520, scale=1.1):
 
 def detect_years(text: str) -> int | None:
     """Heurística simple para detectar años de experiencia."""
-    # Busca patrones como "10+ years", "10 años", "más de 10 años"
     text_low = text.lower()
     m = re.search(r"(\d+)\s*(\+|mas|más)?\s*(años|years)", text_low)
     if m:
@@ -252,9 +251,7 @@ def analyze_skills(text: str, kw_csv: str, jd: str):
     """Clasifica skills en validated/likely/to_validate de forma simple."""
     text_low = text.lower()
     kws = [k.strip().lower() for k in kw_csv.split(",") if k.strip()]
-    validated = []
-    likely = []
-    to_validate = []
+    validated, likely, to_validate = [], [], []
 
     syns = {
         "his": ["his", "hospital information system"],
@@ -273,14 +270,12 @@ def analyze_skills(text: str, kw_csv: str, jd: str):
         if any(s in text_low for s in syn_list):
             validated.append(k_norm)
         else:
-            # si aparece terminos parecidos del jd, lo consideramos "likely"
             if any(t in text_low for t in set(jd.lower().split())):
                 likely.append(k_norm)
             else:
                 to_validate.append(k_norm)
 
-    # quitar duplicados conservando orden
-    def uniq(seq): 
+    def uniq(seq):
         seen = set(); out=[]
         for x in seq:
             if x not in seen:
@@ -444,7 +439,7 @@ tab_puestos, tab_eval, tab_pipeline, tab_gerencia = st.tabs(
 )
 
 # --------------------------------------------------------------------------------------
-# TAB 1: PUESTOS (como en tu captura)
+# TAB 1: PUESTOS
 # --------------------------------------------------------------------------------------
 with tab_puestos:
     st.markdown("## SelektIA – **Puestos**")
@@ -584,7 +579,8 @@ with tab_pipeline:
             "Notas": [""] * len(df_sorted),
         })
 
-        colL, colR = st.columns([1.15, 1], vertical_alignment="start")
+        # Sin vertical_alignment (causa error en tu versión)
+        colL, colR = st.columns([1.15, 1])
         with colL:
             st.markdown("#### Pipeline de Candidatos")
             st.caption("Vista solo lectura")
@@ -647,12 +643,10 @@ with tab_pipeline:
                 st.markdown("---")
                 st.markdown("##### Acciones rápidas")
 
-                # Asignación de headhunter al mover
                 headhunters = ["Headhunter A", "Headhunter B", "Headhunter C"]
                 hh = st.selectbox("¿Quién lo tomará?", headhunters, key="hh_assign")
 
                 if st.button("Mover a ‘Entrevista (Gerencia)’", key="move_to_mgr"):
-                    # Evitar duplicados por nombre
                     if not any(x["name"] == sel_name for x in st.session_state.gerencia_queue):
                         st.session_state.gerencia_queue.append({
                             "name": sel_name,
