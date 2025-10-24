@@ -6,9 +6,9 @@ from pdfminer.high_level import extract_text
 import base64, unicodedata, re, pathlib
 
 # ===================== BRAND / RUTAS =====================
-LOGO_PATH = "assets/logo-wayki.png"     # asegúrate de que exista
-PRIMARY   = "#00CD78"                    # verde marca (títulos, botones, barras Seleccionado)
-ACCENT    = "#1F77B4"                    # color secundario para barras Revisión
+LOGO_PATH  = "assets/logo-wayki.png"     # asegúrate de que exista
+PRIMARY    = "#00CD78"                   # verde marca (títulos, botones, barras Seleccionado)
+ACCENT     = "#1F77B4"                   # color secundario para barras Revisión
 SIDEBAR_BG = "#10172A"                   # fondo sidebar
 MAIN_BG    = "#F8FAFC"                   # fondo área principal (claro)
 MAIN_TEXT  = "#0F172A"                   # texto en área principal
@@ -16,19 +16,31 @@ MAIN_TEXT  = "#0F172A"                   # texto en área principal
 # ===================== CONFIG APP =====================
 st.set_page_config(page_title="SelektIA", page_icon=LOGO_PATH, layout="wide")
 
-# --- Estilos finos: sidebar oscuro, main claro y títulos verdes ---
+# ======= ESTILOS: Sidebar oscuro, main claro, labels/títulos del sidebar en verde =======
 st.markdown(f"""
 <style>
-/* Sidebar: fondo oscuro y texto blanco */
+/* Sidebar: fondo oscuro */
 [data-testid="stSidebar"] {{
   background-color: {SIDEBAR_BG} !important;
   color: #FFFFFF !important;
 }}
+/* Texto por defecto del sidebar en blanco */
 [data-testid="stSidebar"] * {{
   color: #FFFFFF !important;
 }}
 
-/* Inputs del sidebar con fondo más oscuro y borde sutil */
+/* Títulos y labels del sidebar en VERDE */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stFileUploader"] label,
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p {{
+  color: {PRIMARY} !important;
+}}
+
+/* Inputs del sidebar con fondo oscuro y texto blanco */
 [data-testid="stSidebar"] input,
 [data-testid="stSidebar"] textarea,
 [data-testid="stSidebar"] select,
@@ -40,34 +52,45 @@ st.markdown(f"""
   color: #FFFFFF !important;
   border: 1px solid #22314d !important;
 }}
+/* Botón del sidebar */
+[data-testid="stSidebar"] .stButton button {{
+  background: {PRIMARY} !important;
+  color: #0B1220 !important;
+  border: 0 !important;
+}}
 
-/* Área principal clara y texto oscuro */
+/* Área principal clara */
 .stApp, .main, section.main .block-container {{
   background-color: {MAIN_BG} !important;
   color: {MAIN_TEXT} !important;
 }}
 
-/* Títulos (H1/H2/H3) en el área principal: verde marca */
+/* Títulos en el área principal */
 section.main h1, section.main h2, section.main h3 {{
   color: {PRIMARY} !important;
 }}
 
-/* Botones */
+/* Botones en el área principal */
 .stButton button, .stDownloadButton button {{
   background: {PRIMARY} !important;
   color: #0B1220 !important;
   border: 0 !important;
 }}
 
-/* Encabezados de tablas levemente resaltados */
+/* Encabezados de tablas */
 [data-testid="stStyledTable"] th {{
-  background: #E6FFF3 !important;  /* verde muy suave */
+  background: #E6FFF3 !important;
   color: {MAIN_TEXT} !important;
+}}
+
+/* Ensanchar selectbox principal de candidatos */
+.select-wide > div[data-baseweb="select"] {{
+  min-width: 100% !important;
 }}
 </style>
 """, unsafe_allow_html=True)
 
-# Logo en sidebar (sin warning deprecado)
+# Logo en sidebar
 st.sidebar.image(LOGO_PATH, use_container_width=True)
 
 # ===================== UTILIDADES DE TEXTO =====================
@@ -109,7 +132,7 @@ def expand_keywords(kws):
 
 # ===================== EXTRACCIÓN TEXTO PDF =====================
 def pdf_to_text_from_bytes(data: bytes) -> str:
-    """PyMuPDF primero; pdfminer como respaldo. Devuelve '' si el PDF no tiene texto."""
+    """PyMuPDF primero; pdfminer como respaldo."""
     try:
         import fitz  # PyMuPDF
         doc = fitz.open(stream=data, filetype="pdf")
@@ -183,7 +206,6 @@ def build_excel(shortlist_df: pd.DataFrame, all_df: pd.DataFrame) -> bytes:
 
 # ===================== VISOR PDF (pdf.js + fallback) =====================
 def show_pdf(file_bytes: bytes, height: int = 820):
-    """Intenta con pdf.js (streamlit-pdf-viewer). Si falla, <object> + link de descarga."""
     try:
         from streamlit_pdf_viewer import pdf_viewer
         pdf_viewer(file_bytes, height=height)
@@ -285,9 +307,22 @@ if files:
 
     with right:
         st.subheader("Visor de CV (PDF)")
-        choice = st.selectbox("Elige un candidato", options=df["Name"].tolist())
-        file_name = df.loc[df["Name"] == choice, "FileName"].iloc[0]
+
+        cand_names = df["Name"].tolist()
+        # Selector ancho (selectbox)
+        st.markdown('<div class="select-wide">', unsafe_allow_html=True)
+        sel_name = st.selectbox("Elige un candidato", options=cand_names, index=0, key="cand_selectbox")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Alternativa visible: radio (por si el select se comporta mal en algún navegador)
+        with st.expander("Elegir candidato (opción alternativa)", expanded=False):
+            sel_name_radio = st.radio("Candidatos", options=cand_names, index=cand_names.index(sel_name))
+            if sel_name_radio != sel_name:
+                sel_name = sel_name_radio
+
+        file_name = df.loc[df["Name"] == sel_name, "FileName"].iloc[0]
         meta = file_store.get(file_name)
+
         if meta and meta["type"] == "application/pdf":
             show_pdf(meta["bytes"])
         elif meta:
