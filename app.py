@@ -1,27 +1,26 @@
 # app.py
 import io
 import base64
+import re
 from pathlib import Path
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from PyPDF2 import PdfReader  # Usamos PyPDF2
-import google.generativeai as genai
-import json
+from PyPDF2 import PdfReader  # Lector PDF
 
 # =========================
 # Variables de tema/colores
 # =========================
 PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG = "#10172A"  # fondo columna izquierda
-BOX_DARK = "#132840"  # fondo y borde de boxes del sidebar
-BOX_DARK_HOV = "#193355"  # borde en hover/focus del sidebar
-TEXT_LIGHT = "#FFFFFF"  # texto blanco
-MAIN_BG = "#F7FBFF"  # fondo del cuerpo (claro)
-BOX_LIGHT = "#F1F7FD"  # fondo claro de inputs principales
+SIDEBAR_BG = "#10172A"   # fondo columna izquierda
+BOX_DARK = "#132840"     # fondo y borde de boxes del sidebar
+BOX_DARK_HOV = "#193355" # borde en hover/focus del sidebar
+TEXT_LIGHT = "#FFFFFF"   # texto blanco
+MAIN_BG = "#F7FBFF"      # fondo del cuerpo (claro)
+BOX_LIGHT = "#F1F7FD"    # fondo claro de inputs principales
 BOX_LIGHT_B = "#E3EDF6"  # borde claro de inputs principales
-TITLE_DARK = "#142433"  # texto títulos principales
+TITLE_DARK = "#142433"   # texto títulos principales
 
 # ==========
 #   ESTILO
@@ -53,7 +52,8 @@ html, body, [data-testid="stAppViewContainer"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
 }}
-/* --- TÍTULOS DEL SIDEBAR EN VERDE --- */
+
+/* --- TÍTULOS DEL SIDEBAR EN VERDE (#00CD78) --- */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
@@ -95,6 +95,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
 }}
+
 /* Dropzone */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background: var(--box) !important;
@@ -104,12 +105,14 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
   color: var(--text) !important;
 }}
+
 /* Pills de archivos subidos */
 [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
   background: var(--box) !important;
   border: 1px solid var(--box) !important;
   color: var(--text) !important;
 }}
+
 /* Botón verde (sidebar y cuerpo) */
 .stButton > button {{
   background: var(--green) !important;
@@ -119,17 +122,11 @@ html, body, [data-testid="stAppViewContainer"] {{
   padding: .45rem .9rem !important;
   font-weight: 600 !important;
 }}
-.stButton > button:hover {{
-  filter: brightness(0.95);
-}}
+.stButton > button:hover {{ filter: brightness(0.95); }}
 
 /* Títulos del cuerpo */
-h1, h2, h3 {{
-  color: var(--title-dark);
-}}
-h1 strong, h2 strong, h3 strong {{
-  color: var(--green);
-}}
+h1, h2, h3 {{ color: var(--title-dark); }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
 /* Controles del área principal (claros) */
 .block-container [data-testid="stSelectbox"] > div > div,
@@ -142,7 +139,7 @@ h1 strong, h2 strong, h3 strong {{
   border-radius: 10px !important;
 }}
 
-/* Tabla clara (dataframe/simple table) */
+/* Tabla clara */
 .block-container table {{
   background: #fff !important;
   border: 1px solid var(--box-light-border) !important;
@@ -172,139 +169,107 @@ h1 strong, h2 strong, h3 strong {{
 }}
 """
 
-# Inyectar CSS
+# Inyectar CSS y configurar página
+st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="SelektIA",
-    page_icon="🧠",
-    layout="wide",
-)
-
 # =================================
-#  CONFIGURACIÓN DE API (SECRETS)
+#  FUNCIONES (sin IA)
 # =================================
-API_KEY = None
-try:
-    # Cargar la API key desde los Secrets de Streamlit
-    API_KEY = st.secrets["api_key_gemini"]
-    genai.configure(api_key=API_KEY)
-    st.session_state.api_key_configured = True
-except (FileNotFoundError, KeyError):
-    st.session_state.api_key_configured = False
-
-# =================================
-#  FUNCIONES DE PROCESAMIENTO
-# =================================
-
-def extract_text_from_file(uploaded_file) -> str:
-    """Extrae texto de PDF (usando PyPDF2) o TXT."""
+def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
+    """Extrae texto de un PDF usando PyPDF2."""
     try:
-        if Path(uploaded_file.name).suffix.lower() == ".pdf":
-            # Usar PyPDF2 para leer PDF
-            pdf_reader = PdfReader(io.BytesIO(uploaded_file.read()))
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() or ""
-            return text
-        else:
-            # Leer TXT
-            return uploaded_file.read().decode("utf-8", errors="ignore")
-    except Exception as e:
-        st.error(f"Error al leer '{uploaded_file.name}': {e}")
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() or ""
+        return text
+    except Exception:
         return ""
 
-def safe_gemini_call(prompt_text):
-    """Llama a la API de Gemini de forma segura y maneja errores."""
-    if not st.session_state.api_key_configured:
-        st.error("Error: La API Key de Gemini no está configurada en los Secrets de Streamlit.")
-        return None
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt_text)
-        return response.text
-    except Exception as e:
-        st.error(f"Error al contactar la IA: {e}")
-        return None
-
-def analyze_cvs(jd, keywords, cv_files):
-    """Función principal para analizar CVs y guardar en session_state."""
-    st.session_state.candidates = []
-    
-    # Preparamos el prompt base
-    prompt_base = f"""
-    Eres un asistente de reclutamiento experto.
-    
-    **Descripción del Puesto (JD):**
-    {jd}
-
-    **Palabras Clave Esenciales:**
-    {keywords}
-
-    **Instrucción:**
-    Para el siguiente CV, analiza su adecuación para el puesto. Devuelve tu análisis estrictamente en formato JSON, sin texto antes ni después.
-    El JSON debe tener 3 claves:
-    1. "score": Un número entero (de 0 a 100) basado en la coincidencia con el JD y las palabras clave.
-    2. "pros": Un resumen en 2 o 3 puntos (bullets) de por qué el candidato es un buen fit.
-    3. "cons": Un resumen en 2 o 3 puntos (bullets) de por qué el candidato podría no ser ideal (ej. falta de experiencia clave).
-    
-    **CV del Candidato:**
-    ---
+def extract_text_from_file(uploaded_file) -> tuple[str, bytes, bool]:
     """
-    
-    progress_bar = st.progress(0, "Analizando CVs...")
-    
-    for i, file in enumerate(cv_files):
-        # Leer el contenido (texto y bytes)
-        file_bytes = file.read()
-        file.seek(0)  # Resetear el puntero para la extracción de texto
-        cv_text = extract_text_from_file(file)
-        
-        if not cv_text:
-            st.warning(f"No se pudo extraer texto de '{file.name}'. Omitiendo.")
+    Devuelve (texto, bytes, es_pdf).
+    - Si es TXT: lee texto directo.
+    - Si es PDF: devuelve texto extraído y bytes para visor.
+    """
+    raw = uploaded_file.read()
+    suffix = Path(uploaded_file.name).suffix.lower()
+    if suffix == ".txt":
+        txt = raw.decode("utf-8", errors="ignore")
+        return txt, raw, False
+    elif suffix == ".pdf":
+        txt = extract_text_from_pdf_bytes(raw)
+        return txt, raw, True
+    else:
+        # Otros tipos: tratarlos como texto si posible
+        try:
+            txt = raw.decode("utf-8", errors="ignore")
+        except Exception:
+            txt = ""
+        return txt, raw, False
+
+def normalize(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9áéíóúüñ\s]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+def simple_match_score(text: str, keywords: list[str]) -> tuple[int, list[str], list[str]]:
+    """Cuenta coincidencias de keywords en el texto (normalizado)."""
+    nt = normalize(text)
+    found, missing = [], []
+    for kw in keywords:
+        k = normalize(kw)
+        if not k:
             continue
-            
-        # Construir el prompt final
-        final_prompt = prompt_base + cv_text
-        
-        # Llamar a la IA
-        response_text = safe_gemini_call(final_prompt)
-        
-        if response_text:
-            try:
-                # Limpiar el response por si Gemini añade "```json"
-                clean_response = response_text.strip().replace("```json", "").replace("```", "")
-                result = json.loads(clean_response)
-                
-                # Guardar el resultado
-                st.session_state.candidates.append({
-                    "Name": file.name,
-                    "Score": int(result.get("score", 0)),
-                    "Pros": result.get("pros", "N/A"),
-                    "Cons": result.get("cons", "N/A"),
-                    "file_bytes": file_bytes,  # Guardamos los bytes para el visor
-                    "is_pdf": Path(file.name).suffix.lower() == ".pdf"
-                })
-                
-            except json.JSONDecodeError:
-                st.error(f"La IA devolvió un formato incorrecto para '{file.name}'. Omitiendo.")
-            except Exception as e:
-                st.error(f"Error procesando '{file.name}': {e}")
-                
-        # Actualizar la barra de progreso
-        progress_bar.progress((i + 1) / len(cv_files), f"Analizando: {file.name}")
+        if re.search(rf"\b{k}\b", nt):
+            found.append(kw)
+        else:
+            missing.append(kw)
+    score = int(round(100 * (len(found) / max(1, len(keywords)))))
+    return score, found, missing
 
-    progress_bar.empty()
-    st.success(f"¡Análisis completo! {len(st.session_state.candidates)} CVs procesados.")
-    # Forzar un 'rerun' para actualizar la UI principal con los nuevos datos
+def pros_cons_from_matches(found: list[str], missing: list[str], top_n: int = 4) -> tuple[str, str]:
+    """Genera bullets simples de pros/cons basados en keywords encontradas/faltantes."""
+    pros_items = [f"- Coincide con: {kw}" for kw in found[:top_n]] or ["- Coincidencias básicas con el perfil."]
+    cons_items = [f"- Falta: {kw}" for kw in missing[:top_n]] or ["- Sin brechas críticas detectadas."]
+    return "\n".join(pros_items), "\n".join(cons_items)
+
+def analyze_cvs_locally(jd: str, keywords_csv: str, cv_files):
+    """Analiza CVs sin IA. Llena st.session_state.candidates."""
+    kws = [k.strip() for k in re.split(r"[;,/\n]+", keywords_csv) if k.strip()]
+    if not kws:
+        st.error("Por favor, define al menos una palabra clave.")
+        return
+
+    st.session_state.candidates = []
+    progress = st.progress(0, "Analizando CVs...")
+
+    for i, f in enumerate(cv_files):
+        text, file_bytes, is_pdf = extract_text_from_file(f)
+        score, found, missing = simple_match_score(text, kws)
+        pros, cons = pros_cons_from_matches(found, missing)
+
+        st.session_state.candidates.append({
+            "Name": f.name,
+            "Score": score,
+            "Pros": pros,
+            "Cons": cons,
+            "file_bytes": file_bytes,
+            "is_pdf": is_pdf
+        })
+
+        progress.progress((i + 1) / len(cv_files), f"Analizando: {f.name}")
+
+    progress.empty()
+    st.success(f"¡Análisis completo! {len(st.session_state.candidates)} CV(s) procesado(s).")
     st.rerun()
-
 
 # ================
 #  SIDEBAR (oscuro)
 # ================
 with st.sidebar:
-    st.image("assets/logo-wayki.png", use_column_width=True) # Logo activado
+    st.image("assets/logo-wayki.png", use_column_width=True)
     st.markdown("### Definición del puesto")
 
     puesto = st.selectbox(
@@ -345,66 +310,51 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    # Botón de análisis
+    # Botón de análisis (SIN IA)
     if st.button("Analizar CVs", type="primary", use_container_width=True):
         if not files:
             st.error("¡Por favor, sube al menos un CV!")
-        elif not st.session_state.api_key_configured:
-            st.error("API Key no configurada. Añádela en los 'Secrets' de Streamlit.")
         else:
-            analyze_cvs(jd_text, kw_text, files)
-            
+            analyze_cvs_locally(jd_text, kw_text, files)
+
     st.divider()
 
-    # Botón de limpiar (Esta es la línea 63, indentación corregida)
+    # Limpiar lista
     if 'candidates' in st.session_state and st.session_state.candidates:
         if st.button("Limpiar Lista", use_container_width=True):
             st.session_state.candidates = []
             st.success("Resultados limpiados.")
             st.rerun()
 
-
 # ===================
 #  UI PRINCIPAL (claro)
 # ===================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Results</span>", unsafe_allow_html=True)
 
-if not st.session_state.api_key_configured:
-    st.error("🔴 **Acción Requerida:** Falta la API Key de Gemini. Por favor, añádela en los 'Secrets' de tu app en Streamlit Cloud.")
-    st.markdown("1. Ve a 'Manage app' > '...' (menú) > 'Secrets'.\n2. Añade un nuevo secreto: `api_key_gemini = \"TU_API_KEY_AQUI\"`")
-elif not 'candidates' in st.session_state or not st.session_state.candidates:
-    st.info("Define el puesto, ajusta keywords y sube CVs. Luego presiona 'Analizar CVs' en la barra lateral.", icon="ℹ️")
+if not ('candidates' in st.session_state and st.session_state.candidates):
+    st.info("Define el puesto, ajusta keywords y sube CVs. Luego presiona **Analizar CVs** en la barra lateral.", icon="ℹ️")
 
-
-# Si hay candidatos, los mostramos
+# Si hay candidatos, mostramos ranking + visor
 if 'candidates' in st.session_state and st.session_state.candidates:
-    
-    # Convertir a DataFrame para mostrar y graficar
     df = pd.DataFrame(st.session_state.candidates)
     df_sorted = df.sort_values("Score", ascending=False)
 
     st.markdown(f"### <span style='color:{PRIMARY_GREEN}'>Ranking de Candidatos</span>", unsafe_allow_html=True)
-    
-    # Usar st.tabs para el ranking y el visor
     tab_ranking, tab_visor = st.tabs(["🏆 Ranking Top 5", "📄 Visor de CV"])
 
     with tab_ranking:
-        st.write("Estos son los 5 candidatos con mayor puntuación según la IA.")
-        
-        # Tomar los 5 mejores
+        st.write("Estos son los 5 candidatos con mayor puntuación según coincidencia de keywords.")
+
         top_5 = df_sorted.head(5).to_dict('records')
-        
         for i, candidate in enumerate(top_5):
             rank = i + 1
-            emoji = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"**#{rank}**"
-            
+            emoji = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
             with st.expander(f"{emoji} {candidate['Name']}  (Score: {candidate['Score']}/100)", expanded=(rank==1)):
                 st.markdown("**✅ A favor (Pros):**")
                 st.markdown(candidate['Pros'])
                 st.markdown("**⚠️ A mejorar (Cons):**")
                 st.markdown(candidate['Cons'])
 
-        # Gráfico simple de todos los candidatos
         st.markdown("---")
         st.markdown("#### Comparativa General de Puntuaciones")
         fig = px.bar(
@@ -426,11 +376,9 @@ if 'candidates' in st.session_state and st.session_state.candidates:
 
     with tab_visor:
         st.markdown(f"#### <span style='color:{PRIMARY_GREEN}'>Visor de CV</span>", unsafe_allow_html=True)
-        st.caption("Elige un candidato de la lista para ver su CV original.")
-        
-        # Selector con todos los candidatos, ordenados por nombre
-        all_names = df.sort_values("Name")["Name"].tolist()
-        
+        st.caption("Elige un candidato de la lista para ver su archivo original.")
+        all_names = df_sorted["Name"].tolist()
+
         selected_name = st.selectbox(
             "Selecciona un candidato:",
             all_names,
@@ -438,17 +386,17 @@ if 'candidates' in st.session_state and st.session_state.candidates:
             label_visibility="collapsed",
         )
 
-        # Visor PDF claro (embed)
         if selected_name:
-            # Encontrar los datos del candidato seleccionado
             candidate_data = next(c for c in st.session_state.candidates if c['Name'] == selected_name)
-            
-            if candidate_data['is_pdf'] and candidate_data['file_bytes']:
-                data_b64 = base64.b64encode(candidate_data['file_bytes']).decode("utf-8")
+            file_bytes = candidate_data.get("file_bytes", b"")
+            is_pdf = candidate_data.get("is_pdf", False)
+
+            if is_pdf and file_bytes:
+                data_b64 = base64.b64encode(file_bytes).decode("utf-8")
                 st.markdown(
                     f"""
                     <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
-                      <iframe src="data:application/pdf;base64,{data_b64}" 
+                      <iframe src="data:application/pdf;base64,{data_b64}"
                               style="width:100%; height:750px; border:0;"
                               title="PDF Viewer"></iframe>
                     </div>
@@ -456,19 +404,12 @@ if 'candidates' in st.session_state and st.session_state.candidates:
                     unsafe_allow_html=True,
                 )
                 st.download_button(
-                    f"Descargar {selected_name}", 
-                    data=candidate_data['file_bytes'], 
-                    file_name=selected_name, 
+                    f"Descargar {selected_name}",
+                    data=file_bytes,
+                    file_name=selected_name,
                     mime="application/pdf"
                 )
             else:
-                # Mostrar TXT
                 st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
-                txt_content = candidate_data['file_bytes'].decode("utf-8", errors="ignore")
+                txt_content = file_bytes.decode("utf-8", errors="ignore")
                 st.text_area("Contenido del TXT:", value=txt_content, height=600, disabled=True)
-
-else:
-    # Esto se muestra si st.session_state.candidates está vacío después de un análisis
-    if 'candidates' in st.session_state and not st.session_state.candidates:
-        st.warning("El análisis finalizó, pero no se procesó ningún candidato con éxito. Revisa los logs de la app si el error persiste.", icon="⚠️")
-
