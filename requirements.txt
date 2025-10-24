@@ -1,6 +1,6 @@
 streamlit
 pandas
 plotly
-pypdf
+PyPDF2
 google-generativeai
 5.  Guarda los cambios (**"Commit changes"**).
