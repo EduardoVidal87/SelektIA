@@ -7,7 +7,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from PyPDF2 import PdfReader
-from streamlit.components.v1 import html
 
 # =========================
 # Paleta / tema (colores)
@@ -173,15 +172,15 @@ def extract_text_from_file(uploaded_file) -> str:
     """Extrae texto de un PDF (PyPDF2) o un TXT sin perder bytes del archivo."""
     try:
         suffix = Path(uploaded_file.name).suffix.lower()
+        data = uploaded_file.getvalue()  # bytes sin mover el puntero
         if suffix == ".pdf":
-            data = uploaded_file.getvalue()  # no mueve el puntero
             reader = PdfReader(io.BytesIO(data))
             text = ""
             for page in reader.pages:
                 text += page.extract_text() or ""
             return text
         else:
-            return uploaded_file.getvalue().decode("utf-8", errors="ignore")
+            return data.decode("utf-8", errors="ignore")
     except Exception as e:
         st.error(f"Error al leer '{uploaded_file.name}': {e}")
         return ""
@@ -193,7 +192,7 @@ def analyze_locally(jd: str, kw_text: str, files):
     total_kw = max(len(kw_list), 1)
 
     for f in files:
-        file_bytes = f.getvalue()  # bytes seguros para visor
+        file_bytes = f.getvalue()
         text = extract_text_from_file(f)
         lower_text = text.lower()
 
@@ -207,8 +206,8 @@ def analyze_locally(jd: str, kw_text: str, files):
             "Score": score,
             "Razones": reasons,
             "PDF_text": len(text),
-            "file_bytes": file_bytes,
-            "is_pdf": Path(f.name).suffix.lower() == ".pdf",
+            "_bytes": file_bytes,
+            "_is_pdf": Path(f.name).suffix.lower() == ".pdf",
         })
 
     return candidates
@@ -268,7 +267,7 @@ with st.sidebar:
 # ======================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Resultados de evaluación</span>", unsafe_allow_html=True)
 
-# Disparador automático
+# Análisis automático
 if files and (jd_text.strip() or kw_text.strip()):
     st.session_state.candidates = analyze_locally(jd_text, kw_text, files)
 
@@ -279,9 +278,7 @@ else:
     df_sorted = df.sort_values("Score", ascending=False)
 
     st.markdown("### Ranking de candidatos")
-    show = df_sorted[["Nombre", "Score", "Razones", "PDF_text"]].rename(
-        columns={"Nombre": "Nombre", "Score": "Score", "Razones": "Razones", "PDF_text": "PDF_text"}
-    )
+    show = df_sorted[["Nombre", "Score", "Razones", "PDF_text"]]
     st.dataframe(show, use_container_width=True, height=240)
 
     st.markdown("### Comparación de puntajes")
@@ -308,30 +305,36 @@ else:
 
     if selected_name:
         cand = next(c for c in st.session_state.candidates if c["Nombre"] == selected_name)
-        if cand["is_pdf"] and cand["file_bytes"]:
-            data_b64 = base64.b64encode(cand["file_bytes"]).decode("utf-8")
-            html(
+        if cand["_is_pdf"] and cand["_bytes"]:
+            b64 = base64.b64encode(cand["_bytes"]).decode("utf-8")
+            # IFRAME directo (sin st.components.html) + fallback <object>
+            st.markdown(
                 f"""
                 <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
                   <iframe
-                    src="data:application/pdf;base64,{data_b64}#zoom=page-width"
+                    src="data:application/pdf;base64,{b64}#zoom=page-width"
                     style="width:100%; height:750px; border:0;"
                     title="Visor PDF">
                   </iframe>
+                  <object data="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="750px">
+                    <p>No se pudo mostrar el PDF embebido.
+                       <a href="data:application/pdf;base64,{b64}" download="{selected_name}">Descargar PDF</a>
+                    </p>
+                  </object>
                 </div>
                 """,
-                height=770,
+                unsafe_allow_html=True,
             )
             st.download_button(
                 f"Descargar {selected_name}",
-                data=cand["file_bytes"],
+                data=cand["_bytes"],
                 file_name=selected_name,
                 mime="application/pdf",
             )
         else:
             st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
             try:
-                txt_content = cand["file_bytes"].decode("utf-8", errors="ignore")
+                txt_content = cand["_bytes"].decode("utf-8", errors="ignore")
             except Exception:
                 txt_content = "(No se pudo decodificar el contenido del TXT)"
             st.text_area("Contenido del TXT:", value=txt_content, height=600, disabled=True)
