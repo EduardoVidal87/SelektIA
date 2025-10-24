@@ -1,4 +1,3 @@
-# app.py
 import io
 import base64
 import re
@@ -7,20 +6,20 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from PyPDF2 import PdfReader  # Lector PDF
+from PyPDF2 import PdfReader
 
 # =========================
 # Variables de tema/colores
 # =========================
 PRIMARY_GREEN = "#00CD78"
-SIDEBAR_BG = "#10172A"   # fondo columna izquierda
-BOX_DARK = "#132840"     # fondo y borde de boxes del sidebar
-BOX_DARK_HOV = "#193355" # borde en hover/focus del sidebar
-TEXT_LIGHT = "#FFFFFF"   # texto blanco
-MAIN_BG = "#F7FBFF"      # fondo del cuerpo (claro)
-BOX_LIGHT = "#F1F7FD"    # fondo claro de inputs principales
-BOX_LIGHT_B = "#E3EDF6"  # borde claro de inputs principales
-TITLE_DARK = "#142433"   # texto títulos principales
+SIDEBAR_BG    = "#10172A"  # fondo columna izquierda
+BOX_DARK      = "#132840"  # fondo y borde de boxes del sidebar
+BOX_DARK_HOV  = "#193355"  # borde en hover/focus del sidebar
+TEXT_LIGHT    = "#FFFFFF"  # texto blanco
+MAIN_BG       = "#F7FBFF"  # fondo del cuerpo (claro)
+BOX_LIGHT     = "#F1F7FD"  # fondo claro de inputs principales
+BOX_LIGHT_B   = "#E3EDF6"  # borde claro de inputs principales
+TITLE_DARK    = "#142433"  # texto títulos principales
 
 # ==========
 #   ESTILO
@@ -47,24 +46,26 @@ html, body, [data-testid="stAppViewContainer"] {{
   background: transparent !important;
 }}
 
-/* Sidebar fondo */
+/* Sidebar fondo + texto */
 [data-testid="stSidebar"] {{
   background: var(--sidebar-bg) !important;
   color: var(--text) !important;
 }}
-
-/* --- TÍTULOS DEL SIDEBAR EN VERDE (#00CD78) --- */
+/* --- TÍTULOS DEL SIDEBAR EN VERDE --- */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6,
-[data-testid="stSidebar"] .stMarkdown p strong {{
+[data-testid="stSidebar"] h6 {{
+  color: var(--green) !important;
+  margin-bottom: .25rem !important;
+}}
+/* Subtítulos/markdown del sidebar */
+[data-testid="stSidebar"] .stMarkdown p strong,
+[data-testid="stSidebar"] .stMarkdown p em {{
   color: var(--green) !important;
 }}
-
-/* Etiquetas del sidebar y texto */
 [data-testid="stSidebar"] label, 
 [data-testid="stSidebar"] p, 
 [data-testid="stSidebar"] span {{
@@ -88,6 +89,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   border-radius: 12px !important;
   box-shadow: none !important;
 }}
+/* Hover/focus */
 [data-testid="stSidebar"] [data-testid="stTextInput"] input:hover,
 [data-testid="stSidebar"] [data-testid="stTextInput"] input:focus,
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea:hover,
@@ -95,7 +97,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:hover {{
   border-color: var(--box-hover) !important;
 }}
-
 /* Dropzone */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
   background: var(--box) !important;
@@ -105,7 +106,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * {{
   color: var(--text) !important;
 }}
-
 /* Pills de archivos subidos */
 [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] {{
   background: var(--box) !important;
@@ -113,7 +113,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   color: var(--text) !important;
 }}
 
-/* Botón verde (sidebar y cuerpo) */
+/* Botón verde */
 .stButton > button {{
   background: var(--green) !important;
   color: #082017 !important;
@@ -125,10 +125,14 @@ html, body, [data-testid="stAppViewContainer"] {{
 .stButton > button:hover {{ filter: brightness(0.95); }}
 
 /* Títulos del cuerpo */
-h1, h2, h3 {{ color: var(--title-dark); }}
-h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
+h1, h2, h3 {{
+  color: var(--title-dark) !important;
+}}
+h1 strong, h2 strong, h3 strong {{
+  color: var(--green) !important;
+}}
 
-/* Controles del área principal (claros) */
+/* Inputs del área principal (claros) */
 .block-container [data-testid="stSelectbox"] > div > div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
@@ -161,7 +165,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 }}
 
 /* Selector del visor de PDF en claro */
-#pdf_candidate, #pdf_candidate_alt {{
+#pdf_candidate {{
   background: var(--box-light) !important;
   border: 1.5px solid var(--box-light-border) !important;
   color: var(--title-dark) !important;
@@ -169,100 +173,77 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 }}
 """
 
-# Inyectar CSS y configurar página
+# Inyectar CSS
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # =================================
-#  FUNCIONES (sin IA)
+#  FUNCIONES DE PROCESAMIENTO
 # =================================
-def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
-    """Extrae texto de un PDF usando PyPDF2."""
+
+def extract_text_from_file_bytes(file_name: str, file_bytes: bytes) -> str:
+    """Extrae texto de PDF (PyPDF2) o TXT usando bytes."""
     try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
-        return text
-    except Exception:
+        if Path(file_name).suffix.lower() == ".pdf":
+            pdf_reader = PdfReader(io.BytesIO(file_bytes))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() or ""
+            return text
+        else:
+            return file_bytes.decode("utf-8", errors="ignore")
+    except Exception as e:
+        st.error(f"Error al leer '{file_name}': {e}")
         return ""
 
-def extract_text_from_file(uploaded_file) -> tuple[str, bytes, bool]:
+def score_by_keywords(text: str, keywords_text: str) -> tuple[int, list[str]]:
     """
-    Devuelve (texto, bytes, es_pdf).
-    - Si es TXT: lee texto directo.
-    - Si es PDF: devuelve texto extraído y bytes para visor.
+    Calcula score por coincidencia simple de keywords.
+    Devuelve (score_0_100, lista_keywords_encontradas).
     """
-    raw = uploaded_file.read()
-    suffix = Path(uploaded_file.name).suffix.lower()
-    if suffix == ".txt":
-        txt = raw.decode("utf-8", errors="ignore")
-        return txt, raw, False
-    elif suffix == ".pdf":
-        txt = extract_text_from_pdf_bytes(raw)
-        return txt, raw, True
-    else:
-        # Otros tipos: tratarlos como texto si posible
-        try:
-            txt = raw.decode("utf-8", errors="ignore")
-        except Exception:
-            txt = ""
-        return txt, raw, False
-
-def normalize(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9áéíóúüñ\s]", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
-
-def simple_match_score(text: str, keywords: list[str]) -> tuple[int, list[str], list[str]]:
-    """Cuenta coincidencias de keywords en el texto (normalizado)."""
-    nt = normalize(text)
-    found, missing = [], []
-    for kw in keywords:
-        k = normalize(kw)
-        if not k:
-            continue
-        if re.search(rf"\b{k}\b", nt):
-            found.append(kw)
-        else:
-            missing.append(kw)
-    score = int(round(100 * (len(found) / max(1, len(keywords)))))
-    return score, found, missing
-
-def pros_cons_from_matches(found: list[str], missing: list[str], top_n: int = 4) -> tuple[str, str]:
-    """Genera bullets simples de pros/cons basados en keywords encontradas/faltantes."""
-    pros_items = [f"- Coincide con: {kw}" for kw in found[:top_n]] or ["- Coincidencias básicas con el perfil."]
-    cons_items = [f"- Falta: {kw}" for kw in missing[:top_n]] or ["- Sin brechas críticas detectadas."]
-    return "\n".join(pros_items), "\n".join(cons_items)
-
-def analyze_cvs_locally(jd: str, keywords_csv: str, cv_files):
-    """Analiza CVs sin IA. Llena st.session_state.candidates."""
-    kws = [k.strip() for k in re.split(r"[;,/\n]+", keywords_csv) if k.strip()]
+    text_l = text.lower()
+    # Separar por coma/; y saltos de línea
+    raw = re.split(r"[,\n;]+", keywords_text)
+    kws = [k.strip().lower() for k in raw if k.strip()]
     if not kws:
-        st.error("Por favor, define al menos una palabra clave.")
-        return
+        return 0, []
 
+    found = []
+    for kw in kws:
+        # Coincidencia sencilla por substring
+        if kw and kw in text_l:
+            found.append(kw)
+    score = int(round(100 * len(found) / len(kws)))
+    return score, found
+
+def analyze_cvs_simple(jd_text: str, keywords_text: str, files):
+    """
+    Analiza CVs sin IA: ranking por coincidencia de keywords.
+    Guarda resultados en st.session_state.candidates (para tabla, gráfico y visor).
+    """
     st.session_state.candidates = []
-    progress = st.progress(0, "Analizando CVs...")
+    for file in files:
+        file_bytes = file.getvalue()  # bytes del archivo
+        text = extract_text_from_file_bytes(file.name, file_bytes)
+        if not text:
+            continue
 
-    for i, f in enumerate(cv_files):
-        text, file_bytes, is_pdf = extract_text_from_file(f)
-        score, found, missing = simple_match_score(text, kws)
-        pros, cons = pros_cons_from_matches(found, missing)
+        score, found = score_by_keywords(text, keywords_text)
+        reasons = f"{len(found)}/{len(re.split(r'[\\n,;]+', keywords_text.strip()))} keywords encontradas — Coincidencias: " \
+                  f"{', '.join(found) if found else 'ninguna'}"
 
         st.session_state.candidates.append({
-            "Name": f.name,
+            "Name": file.name,
             "Score": score,
-            "Pros": pros,
-            "Cons": cons,
-            "file_bytes": file_bytes,
-            "is_pdf": is_pdf
+            "Reasons": reasons,
+            "PDF_text": len(text),           # cantidad de caracteres del texto
+            "file_bytes": file_bytes,        # para visor/descarga
+            "is_pdf": Path(file.name).suffix.lower() == ".pdf"
         })
 
-        progress.progress((i + 1) / len(cv_files), f"Analizando: {f.name}")
-
-    progress.empty()
-    st.success(f"¡Análisis completo! {len(st.session_state.candidates)} CV(s) procesado(s).")
+    # Ordenar por score desc
+    st.session_state.candidates.sort(key=lambda x: x["Score"], reverse=True)
+    st.success(f"¡Análisis completo! {len(st.session_state.candidates)} CV(s) procesados.")
     st.rerun()
 
 # ================
@@ -295,7 +276,7 @@ with st.sidebar:
 
     st.markdown("### Palabras clave del perfil\n*(ajústalas si es necesario)*")
     kw_text = st.text_area(
-        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad, protocolos…",
+        "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos",
         height=110,
         key="kw",
@@ -308,19 +289,17 @@ with st.sidebar:
         type=["pdf", "txt"],
         accept_multiple_files=True,
         label_visibility="collapsed",
+        key="files_uploader"
     )
 
-    # Botón de análisis (SIN IA)
     if st.button("Analizar CVs", type="primary", use_container_width=True):
         if not files:
             st.error("¡Por favor, sube al menos un CV!")
         else:
-            analyze_cvs_locally(jd_text, kw_text, files)
+            analyze_cvs_simple(jd_text, kw_text, files)
 
     st.divider()
-
-    # Limpiar lista
-    if 'candidates' in st.session_state and st.session_state.candidates:
+    if st.session_state.get("candidates"):
         if st.button("Limpiar Lista", use_container_width=True):
             st.session_state.candidates = []
             st.success("Resultados limpiados.")
@@ -330,86 +309,88 @@ with st.sidebar:
 #  UI PRINCIPAL (claro)
 # ===================
 st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Results</span>", unsafe_allow_html=True)
+st.markdown(
+    f"<div style='padding:.6rem 1rem; background:{BOX_LIGHT}; border:1px solid {BOX_LIGHT_B}; border-radius:10px;'>"
+    "Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar."
+    "</div>",
+    unsafe_allow_html=True
+)
 
-if not ('candidates' in st.session_state and st.session_state.candidates):
-    st.info("Define el puesto, ajusta keywords y sube CVs. Luego presiona **Analizar CVs** en la barra lateral.", icon="ℹ️")
-
-# Si hay candidatos, mostramos ranking + visor
-if 'candidates' in st.session_state and st.session_state.candidates:
+if not st.session_state.get("candidates"):
+    st.info("Carga CVs en la barra lateral y pulsa **Analizar CVs** para ver el ranking.", icon="ℹ️")
+else:
+    # DataFrame para tabla y gráfico (como en la 2da imagen)
     df = pd.DataFrame(st.session_state.candidates)
-    df_sorted = df.sort_values("Score", ascending=False)
 
-    st.markdown(f"### <span style='color:{PRIMARY_GREEN}'>Ranking de Candidatos</span>", unsafe_allow_html=True)
-    tab_ranking, tab_visor = st.tabs(["🏆 Ranking Top 5", "📄 Visor de CV"])
+    # ---------- Tabla (Ranking por score) ----------
+    st.markdown("### Ranking de Candidatos")
+    df_table = df[["Name", "Score", "Reasons", "PDF_text"]].copy()
+    df_table = df_table.rename(columns={"Name": "Name", "Score": "Score", "Reasons": "Reasons", "PDF_text": "PDF_text"})
+    # Mostrar la tabla en estilo claro
+    st.dataframe(
+        df_table,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Score": st.column_config.NumberColumn("Score", help="Puntaje 0-100", format="%d"),
+            "PDF_text": st.column_config.NumberColumn("PDF_text", help="Cantidad de caracteres", format="%d chars")
+        }
+    )
 
-    with tab_ranking:
-        st.write("Estos son los 5 candidatos con mayor puntuación según coincidencia de keywords.")
+    # ---------- Gráfico ----------
+    st.markdown("### Score Comparison")
+    fig = px.bar(
+        df.sort_values("Score", ascending=False),
+        x="Name", y="Score",
+        color="Score",
+        color_continuous_scale=px.colors.sequential.Greens_r,
+        title=None
+    )
+    fig.update_layout(
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        xaxis_title=None,
+        yaxis_title="Score",
+        margin=dict(l=10, r=10, t=10, b=10),
+        coloraxis_showscale=False
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        top_5 = df_sorted.head(5).to_dict('records')
-        for i, candidate in enumerate(top_5):
-            rank = i + 1
-            emoji = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
-            with st.expander(f"{emoji} {candidate['Name']}  (Score: {candidate['Score']}/100)", expanded=(rank==1)):
-                st.markdown("**✅ A favor (Pros):**")
-                st.markdown(candidate['Pros'])
-                st.markdown("**⚠️ A mejorar (Cons):**")
-                st.markdown(candidate['Cons'])
+    # ---------- Visor de PDF ----------
+    st.markdown(f"### <span style='color:{PRIMARY_GREEN}'>Visor de CV (PDF)</span>", unsafe_allow_html=True)
+    st.caption("Elige un candidato de la lista para ver su CV original.")
 
-        st.markdown("---")
-        st.markdown("#### Comparativa General de Puntuaciones")
-        fig = px.bar(
-            df_sorted,
-            x="Name",
-            y="Score",
-            title="Score Comparison (Todos los candidatos)",
-            color="Score",
-            color_continuous_scale=px.colors.sequential.Greens_r
-        )
-        fig.update_layout(
-            plot_bgcolor="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color=TITLE_DARK),
-            xaxis_title=None,
-            yaxis_title="Score",
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    names = df["Name"].tolist()
+    selected_name = st.selectbox(
+        "Elige un candidato",
+        names,
+        key="pdf_candidate",
+        label_visibility="collapsed"
+    )
 
-    with tab_visor:
-        st.markdown(f"#### <span style='color:{PRIMARY_GREEN}'>Visor de CV</span>", unsafe_allow_html=True)
-        st.caption("Elige un candidato de la lista para ver su archivo original.")
-        all_names = df_sorted["Name"].tolist()
+    if selected_name:
+        cand = next(c for c in st.session_state.candidates if c["Name"] == selected_name)
 
-        selected_name = st.selectbox(
-            "Selecciona un candidato:",
-            all_names,
-            key="pdf_candidate",
-            label_visibility="collapsed",
-        )
-
-        if selected_name:
-            candidate_data = next(c for c in st.session_state.candidates if c['Name'] == selected_name)
-            file_bytes = candidate_data.get("file_bytes", b"")
-            is_pdf = candidate_data.get("is_pdf", False)
-
-            if is_pdf and file_bytes:
-                data_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                st.markdown(
-                    f"""
-                    <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
-                      <iframe src="data:application/pdf;base64,{data_b64}"
-                              style="width:100%; height:750px; border:0;"
-                              title="PDF Viewer"></iframe>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.download_button(
-                    f"Descargar {selected_name}",
-                    data=file_bytes,
-                    file_name=selected_name,
-                    mime="application/pdf"
-                )
-            else:
-                st.info(f"'{selected_name}' es un archivo de texto. Mostrando contenido:")
-                txt_content = file_bytes.decode("utf-8", errors="ignore")
-                st.text_area("Contenido del TXT:", value=txt_content, height=600, disabled=True)
+        if cand["is_pdf"] and cand["file_bytes"]:
+            data_b64 = base64.b64encode(cand["file_bytes"]).decode("utf-8")
+            st.markdown(
+                f"""
+                <div style="border:1px solid {BOX_LIGHT_B}; border-radius:12px; overflow:hidden; background:#fff;">
+                  <iframe src="data:application/pdf;base64,{data_b64}"
+                          style="width:100%; height:750px; border:0;"
+                          title="PDF Viewer"></iframe>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                f"Descargar {selected_name}",
+                data=cand["file_bytes"],
+                file_name=selected_name,
+                mime="application/pdf"
+            )
+        else:
+            st.info(f"'{selected_name}' es un TXT. Mostrando contenido:")
+            txt = cand["file_bytes"].decode("utf-8", errors="ignore")
+            st.text_area("Contenido del TXT:", value=txt, height=600, disabled=True)
