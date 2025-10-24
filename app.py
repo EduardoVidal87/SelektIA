@@ -6,9 +6,9 @@ import re # ### NUEVO ###
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-# ### MODIFICADO ### - Cambiamos de PyMuPDF a pypdf
+# ### MODIFICADO ### - Cambiamos de pypdf a PyPDF2
 import google.generativeai as genai ### NUEVO ###
-from pypdf import PdfReader ### NUEVO Y REEMPLAZADO ###
+from PyPDF2 import PdfReader ### NUEVO Y REEMPLAZADO ###
 
 # =========================
 # Variables de tema/colores
@@ -79,7 +79,7 @@ def call_gemini_api(api_key, system_prompt, user_prompt):
 
 # ### MODIFICADO ### - Nueva función para leer PDF con pypdf
 def extract_text_from_pdf(pdf_bytes):
-    """Extracts text from PDF bytes using pypdf (pure-Python)."""
+    """Extracts text from PDF bytes using PyPDF2 (pure-Python)."""
     try:
         # pypdf lee desde un objeto tipo archivo (file-like object)
         pdf_file = io.BytesIO(pdf_bytes)
@@ -91,7 +91,8 @@ def extract_text_from_pdf(pdf_bytes):
                 text += page_text + "\n"
         return text
     except Exception as e:
-        st.error(f"Error al leer el PDF con pypdf: {e}")
+        # La sintaxis de PyPDF2 es idéntica a pypdf para esto
+        st.error(f"Error al leer el PDF con PyPDF2: {e}")
         return ""
 
 def extract_text_from_txt(txt_bytes):
@@ -126,5 +127,4 @@ st.markdown(f"## <span style='color:{PRIMARY_GREEN}'>SelektIA – Evaluation Res
 
 # Ocultamos la tabla de datos crudos (puedes descomentarla si la quieres)
 # ... (código sin cambios) ...
-
 
