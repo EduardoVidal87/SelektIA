@@ -1,13 +1,7 @@
 [theme]
-# Acentos de la app (botones, sliders, etc.)
-primaryColor = "#00CD78"
-
-# Fondo del área principal (claro)
-backgroundColor = "#F8FAFC"
-
-# No te preocupes si esto afecta otros contenedores; lo afinamos con CSS debajo
-secondaryBackgroundColor = "#10172A"
-
-# Color de texto por defecto en el área principal
-textColor = "#0F172A"
-font = "sans serif"
+base="light"
+primaryColor="#00CD78"
+backgroundColor="#F6FBFF"
+secondaryBackgroundColor="#E9F3FF"
+textColor="#142433"
+font="sans serif"
