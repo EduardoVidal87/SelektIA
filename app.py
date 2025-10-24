@@ -122,7 +122,7 @@ if "applicants" not in st.session_state:
 #  SIDEBAR (oscuro)
 # ================
 with st.sidebar:
-    # st.image("logo-wayki.png", use_column_width=True) # Descomenta si tienes el logo
+    st.image("logo-wayki.png", use_column_width=True) # Descomenta si tienes el logo
     st.markdown("# SelektIA")
     
     # ### NUEVO ### - Input para la API Key
