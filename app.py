@@ -4,7 +4,7 @@
 import io
 import base64
 from pathlib import Path
-from datetime import date
+from datetime import date, timedelta
 
 import streamlit as st
 import pandas as pd
@@ -151,7 +151,7 @@ h1 strong, h2 strong, h3 strong {{
   background: #fff;
 }}
 
-/* ====== TABS VISIBLES ====== */
+/* ====== TABS VISIBLES (títulos completos) ====== */
 /* >>> TABS-VISIBLES: START >>> */
 [data-testid="stTabs"] [role="tablist"],
 [data-baseweb="tab-list"] {{
@@ -159,19 +159,23 @@ h1 strong, h2 strong, h3 strong {{
   gap: 12px;
   align-items: flex-end;
   padding: 0 .25rem;
-  margin: .4rem 0 1.1rem 0;           /* más aire para que se vean */
+  margin: .4rem 0 1.1rem 0;
   border-bottom: 3px solid #d0e4f7;
+  overflow-x: auto;               /* permite scrollear si hay muchas pestañas */
 }}
 [data-testid="stTabs"] button[role="tab"],
 [data-baseweb="tab"] {{
   background: transparent !important;
-  color: #2b3a55 !important;           /* texto más oscuro */
+  color: #2b3a55 !important;
   padding: .55rem 1rem !important;
   border-radius: 12px 12px 0 0 !important;
   font-weight: 900 !important;
   letter-spacing: .2px;
   border: none !important;
   position: relative;
+  white-space: nowrap;            /* <-- evita corte de texto */
+  max-width: none !important;     /* <-- sin límite de ancho */
+  overflow: visible !important;   /* <-- que no esconda el texto */
 }}
 [data-testid="stTabs"] button[role="tab"]:hover,
 [data-baseweb="tab"]:hover {{
@@ -271,6 +275,8 @@ if "interview_list" not in st.session_state:
     st.session_state.interview_list = []
 if "selected_pipeline" not in st.session_state:
     st.session_state.selected_pipeline = None
+if "hh_tasks" not in st.session_state:
+    st.session_state.hh_tasks = []   # [{candidate, headhunter, contact, schedule, feedback, due, notes}]
 
 # Puestos demo
 if "positions" not in st.session_state:
@@ -327,7 +333,7 @@ with st.sidebar:
         st.session_state.candidates = []
         for f in files:
             b = f.read()
-            f.seek(0)                           # ← IMPORTANTE
+            f.seek(0)
             text = extract_text_from_file(f)
             score, reasons = simple_score(text, jd_text, kw_text)
             st.session_state.candidates.append({
@@ -348,7 +354,7 @@ with st.sidebar:
 # PESTAÑAS
 # ======================================================================================
 tabs = st.tabs(
-    ["🗂️ Puestos", "🧪 Evaluación de CVs", "👥 Pipeline de Candidatos", "📁 Entrevista (Gerencia)"]
+    ["🗂️ Puestos", "🧪 Evaluación de CVs", "👥 Pipeline de Candidatos", "📁 Entrevista (Gerencia)", "🧭 Tareas del Headhunter"]
 )
 
 # --------------------------------------------------------------------------------------
@@ -442,7 +448,7 @@ with tabs[1]:
                 st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
 # --------------------------------------------------------------------------------------
-# TAB 3: PIPELINE DE CANDIDATOS (CUADRO ORIGINAL + DROPDOWN)
+# TAB 3: PIPELINE DE CANDIDATOS (CUADRO + DROPDOWN)
 # --------------------------------------------------------------------------------------
 with tabs[2]:
     st.markdown("## SelektIA – **Pipeline de Candidatos**")
@@ -452,7 +458,6 @@ with tabs[2]:
     else:
         df = pd.DataFrame(st.session_state.candidates).sort_values("Score", ascending=False).reset_index(drop=True)
 
-        # --------- CUADRO (tabla no editable) ---------
         left, right = st.columns([1.3, 1])
         with left:
             st.markdown("#### Candidatos (vista rápida)")
@@ -466,7 +471,6 @@ with tabs[2]:
             })
             st.dataframe(cuadro, use_container_width=True, height=280)
 
-            # Además, un selector (lista desplegable) para mostrar detalle
             st.markdown("**Elegir candidato (lista desplegable):**")
             pick = st.selectbox("Selecciona para ver detalles", df["Name"].tolist(),
                                 key="pipeline_select", label_visibility="collapsed")
@@ -488,8 +492,7 @@ with tabs[2]:
                 st.write("**Validated Skills**")
                 v_items = []
                 if "his" in kw_text.lower(): v_items.append("his")
-                if v_items: st.write(", ".join(v_items))
-                else: st.caption("No se detectaron sinónimos relevantes.")
+                st.write(", ".join(v_items) if v_items else "—")
 
                 st.write("**Likely Skills**")
                 st.caption("No se detectaron sinónimos relevantes.")
@@ -506,7 +509,7 @@ with tabs[2]:
                     if st.button("Mover a ‘Entrevista (Gerencia)’", use_container_width=True):
                         if cand["Name"] not in st.session_state.interview_list:
                             st.session_state.interview_list.append(cand["Name"])
-                        st.success("Candidato movido a Entrevista (Gerencia). Revisa la pestaña correspondiente.")
+                        st.success("Candidato movido a Entrevista (Gerencia).")
 
 # --------------------------------------------------------------------------------------
 # TAB 4: ENTREVISTA (GERENCIA)
@@ -520,5 +523,74 @@ with tabs[3]:
         for name in st.session_state.interview_list:
             st.write(f"• {name}")
         st.markdown("---")
-        hh = st.selectbox("Headhunter asignado", ["Sin asignar", "Carla P.", "Diego R.", "Lucía T."])
-        st.button("Asignar / Reasignar", key="asignar_hh")
+        hh = st.selectbox("Headhunter asignado", ["Carla P.", "Diego R.", "Lucía T."], index=0)
+        if st.button("Asignar / Reasignar", key="asignar_hh"):
+            # Crear tareas para todos los candidatos listados (si no existían)
+            for name in st.session_state.interview_list:
+                exists = any(t["candidate"] == name for t in st.session_state.hh_tasks)
+                if not exists:
+                    st.session_state.hh_tasks.append({
+                        "candidate": name,
+                        "headhunter": hh,
+                        "contact": False,
+                        "schedule": False,
+                        "feedback": False,
+                        "due": (date.today() + timedelta(days=3)).isoformat(),
+                        "notes": "",
+                    })
+            st.success(f"Tareas creadas/asignadas a **{hh}**. Revisa la pestaña ‘Tareas del Headhunter’.")
+            st.rerun()
+
+# --------------------------------------------------------------------------------------
+# TAB 5: TAREAS DEL HEADHUNTER (nuevo)
+# --------------------------------------------------------------------------------------
+with tabs[4]:
+    st.markdown("## SelektIA – **Tareas del Headhunter**")
+
+    if not st.session_state.hh_tasks:
+        st.info("Aún no hay tareas. Asigna desde ‘Entrevista (Gerencia)’ para generarlas automáticamente.")
+    else:
+        df_tasks = pd.DataFrame(st.session_state.hh_tasks)
+        # Filtros
+        colf1, colf2 = st.columns([1,1])
+        with colf1:
+            hh_filter = st.multiselect("Filtrar por Headhunter", sorted(df_tasks["headhunter"].unique().tolist()))
+        with colf2:
+            status = st.selectbox("Estado", ["Todos", "Pendientes", "Completados"], index=0)
+
+        dff = df_tasks.copy()
+        if hh_filter:
+            dff = dff[dff["headhunter"].isin(hh_filter)]
+        if status == "Pendientes":
+            dff = dff[~(dff["contact"] & dff["schedule"] & dff["feedback"])]
+        elif status == "Completados":
+            dff = dff[dff["contact"] & dff["schedule"] & dff["feedback"]]
+
+        st.caption(f"Mostrando **{len(dff)}** tareas")
+        # Editor simple de estado por fila
+        for i, row in dff.reset_index(drop=True).iterrows():
+            st.markdown(f"### {row['candidate']}  —  _{row['headhunter']}_")
+            c1, c2, c3, c4 = st.columns([1,1,1,3])
+            with c1:
+                c_done = st.checkbox("Contacto hecho", value=bool(row["contact"]), key=f"c_{row['candidate']}")
+            with c2:
+                s_done = st.checkbox("Entrevista agendada", value=bool(row["schedule"]), key=f"s_{row['candidate']}")
+            with c3:
+                f_done = st.checkbox("Feedback recibido", value=bool(row["feedback"]), key=f"f_{row['candidate']}")
+            with c4:
+                nota = st.text_input("Notas", value=row.get("notes",""), key=f"n_{row['candidate']}")
+            d1, d2 = st.columns([1,3])
+            with d1:
+                due = st.date_input("Fecha límite", value=pd.to_datetime(row["due"]))
+            with d2:
+                st.write("")
+
+            # Guardar cambios en session_state.hh_tasks
+            for t in st.session_state.hh_tasks:
+                if t["candidate"] == row["candidate"]:
+                    t["contact"] = bool(c_done)
+                    t["schedule"] = bool(s_done)
+                    t["feedback"] = bool(f_done)
+                    t["notes"] = nota
+                    t["due"] = due.isoformat()
+            st.divider()
