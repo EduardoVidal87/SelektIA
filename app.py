@@ -3,7 +3,7 @@
 # SelektIA – Evaluación de CVs (sin IA externa)
 # - Análisis automático
 # - Gráfico: base #E9F3FF y ≥60% #33FFAC
-# - Visor PDF robusto (object/embed/iframe) con fallback de descarga
+# - Visor PDF robusto con PDF.js (cliente) + fallback de descarga
 # - Visor compacto y estilo unificado
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
+import streamlit.components.v1 as components
 
 # =============================================================================
 # Colores / tema
@@ -32,6 +33,10 @@ TITLE_DARK = "#142433"
 # Colores del gráfico solicitados
 BAR_BASE = "#E9F3FF"   # base
 BAR_HIGHLIGHT = "#33FFAC"  # ≥60%
+
+# Visor
+VIEW_HEIGHT = 520     # alto del visor
+PDFJS_SCALE = 1.1     # zoom (1.0 = 100%)
 
 # =============================================================================
 # Configuración de página
@@ -91,7 +96,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] [data-testid="stTextArea"] textarea {{
   background: var(--box) !important;
   color: var(--text) !important;
-  border: 1.5px solid var(--box) !nant;
+  border: 1.5px solid var(--box) !important;
   border-radius: 12px !important;
   box-shadow: none !important;
 }}
@@ -153,22 +158,14 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   color: var(--title-dark) !important;
 }}
 
-/* Expander claro */
-[data-testid="stExpander"] {{
-  background: #fff !important;
-  border: 1px solid var(--box-light-border) !important;
-  border-radius: 12px !important;
-}}
-[data-testid="stExpander"] [data-testid="stExpanderHeader"] p {{
-  color: var(--title-dark) !important;
-}}
-
-/* Select del visor */
-#pdf_candidate {{
-  background: var(--box-light) !important;
-  border: 1.5px solid var(--box-light-border) !important;
-  color: var(--title-dark) !important;
-  border-radius: 10px !important;
+/* Marco del visor PDF.js */
+.pdf-frame {{
+  border: 1px solid var(--box-light-border);
+  border-radius: 12px;
+  background: #fff;
+  height: {VIEW_HEIGHT}px;
+  overflow: auto;
+  padding: 6px;
 }}
 """
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -195,7 +192,7 @@ def extract_text(uploaded_file) -> str:
         return ""
 
 def score_and_reasons(text: str, keywords: list[str]) -> tuple[int, str]:
-    """Puntaje simple según coincidencias de keywords + razones."""
+    """Puntaje simple por coincidencias."""
     if not text:
         return 0, "Sin texto extraído."
     text_low = text.lower()
@@ -208,7 +205,7 @@ def score_and_reasons(text: str, keywords: list[str]) -> tuple[int, str]:
     return score, reasons
 
 def analyze(files, jd_text, kw_text):
-    """Devuelve DataFrame + caché de bytes para visor."""
+    """Genera DF y cache de bytes para visor."""
     data = []
     cache = {}  # name -> dict(bytes,is_pdf)
     kw_list = [k.strip() for k in kw_text.split(",") if k.strip()]
@@ -229,6 +226,61 @@ def analyze(files, jd_text, kw_text):
 
     df = pd.DataFrame(data) if data else pd.DataFrame(columns=["Name","Score","Reasons","PDF_text"])
     return df, cache
+
+def render_pdf_with_pdfjs(b64: str, height: int = VIEW_HEIGHT, scale: float = PDFJS_SCALE):
+    """
+    Renderiza un PDF base64 con PDF.js en un componente HTML.
+    """
+    # Usamos jsDelivr (CDN fiable)
+    html = f"""
+    <div class="pdf-frame" id="pdfjs_container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script>
+      const container = document.getElementById('pdfjs_container');
+      container.style.height = '{height}px';
+
+      // Config PDF.js worker (misma versión del script)
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+      const raw = "{b64}";
+      const data = atob(raw);
+
+      // Convierte base64 a Uint8Array
+      const len = data.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {{
+        bytes[i] = data.charCodeAt(i);
+      }}
+
+      (async () => {{
+        try {{
+          const pdf = await pdfjsLib.getDocument({{ data: bytes }}).promise;
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({{ scale: {scale} }});
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.style.display = 'block';
+            canvas.style.margin = '0 auto 12px auto';
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            const renderContext = {{
+              canvasContext: context,
+              viewport: viewport
+            }};
+            await page.render(renderContext).promise;
+            container.appendChild(canvas);
+          }}
+        }} catch (err) {{
+          container.innerHTML = '<div style="padding:12px;color:#B00020;">No se pudo renderizar el PDF en el navegador.</div>';
+          console.error(err);
+        }}
+      }})();
+    </script>
+    """
+    components.html(html, height=height + 24, scrolling=False)
 
 # =============================================================================
 # Sidebar
@@ -308,7 +360,7 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# ===================== Visor PDF/TXT (robusto y compacto) =====================
+# ===================== Visor PDF/TXT (PDF.js) =====================
 st.markdown("### Visor de CV (PDF/TXT)  <sup>↪</sup>", unsafe_allow_html=True)
 
 all_names = df["Name"].tolist()
@@ -318,38 +370,25 @@ candidate_meta = blob_cache.get(selected_name, {})
 is_pdf = candidate_meta.get("_is_pdf", False)
 blob = candidate_meta.get("_bytes", b"")
 
-PDF_BORDER = BOX_LIGHT_B
-VIEW_HEIGHT = 520     # compacto
-PDF_ZOOM = 115        # zoom moderado
-
 if is_pdf and blob and len(blob) > 0:
     b64 = base64.b64encode(blob).decode("utf-8")
-
-    # 1) <object> (mejor compatibilidad)
-    object_html = f"""
-    <div style="border:1px solid {PDF_BORDER}; border-radius:12px; overflow:hidden; background:#fff;">
-      <object data="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
-              type="application/pdf"
-              width="100%" height="{VIEW_HEIGHT}px">
-        <!-- 2) Fallback <embed> -->
-        <embed src="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
-               type="application/pdf" width="100%" height="{VIEW_HEIGHT}px"/>
-        <!-- 3) Fallback <iframe> -->
-        <iframe src="data:application/pdf;base64,{b64}#zoom={PDF_ZOOM}&view=FitH"
-                width="100%" height="{VIEW_HEIGHT}px" style="border:0;"></iframe>
-      </object>
-    </div>
-    """
-    st.markdown(object_html, unsafe_allow_html=True)
-
-    # Enlace de descarga
-    st.download_button(
-        f"Descargar {selected_name}",
-        data=blob,
-        file_name=selected_name,
-        mime="application/pdf",
-        use_container_width=False,
-    )
+    try:
+        render_pdf_with_pdfjs(b64, height=VIEW_HEIGHT, scale=PDFJS_SCALE)
+    except Exception as e:
+        st.warning("No se pudo renderizar el PDF incrustado. Puedes descargarlo y abrirlo localmente.")
+        st.download_button(
+            f"Descargar {selected_name}",
+            data=blob,
+            file_name=selected_name,
+            mime="application/pdf",
+        )
+    else:
+        st.download_button(
+            f"Descargar {selected_name}",
+            data=blob,
+            file_name=selected_name,
+            mime="application/pdf",
+        )
 
 elif not is_pdf and blob:
     # TXT u otros
@@ -364,7 +403,6 @@ elif not is_pdf and blob:
         data=blob,
         file_name=selected_name,
         mime="text/plain",
-        use_container_width=False,
     )
 else:
     st.warning("No fue posible mostrar el documento incrustado. Puedes descargarlo y abrirlo localmente.")
@@ -374,5 +412,4 @@ else:
             data=blob,
             file_name=selected_name,
             mime="application/octet-stream",
-            use_container_width=False,
         )
