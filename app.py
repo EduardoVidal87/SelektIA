@@ -67,7 +67,6 @@ def extract_text_from_bytes(file_bytes: bytes, file_name: str) -> str:
     """Extrae texto de un PDF o TXT a partir de bytes."""
     name_lower = file_name.lower()
     if name_lower.endswith(".txt"):
-        # Intentamos decodificar como UTF-8, luego latin-1
         for enc in ("utf-8", "latin-1"):
             try:
                 return file_bytes.decode(enc, errors="ignore")
@@ -94,7 +93,6 @@ def extract_text_from_bytes(file_bytes: bytes, file_name: str) -> str:
             except Exception:
                 pass
         return ""
-    # otros formatos no soportados
     return ""
 
 
@@ -104,21 +102,14 @@ def tokenize(text: str) -> List[str]:
 
 
 def suggest_keywords_from_jd(jd_text: str) -> List[str]:
-    """
-    Sugiere keywords desde el JD: combina un set sanitario base + palabras frecuentes
-    (excluyendo stopwords). Editables luego.
-    """
+    """Sugiere keywords desde el JD."""
     base_health = [
         "his", "sap is-h", "bls", "acls",
-        "iaas", "iap", "indicadores",
-        "educacion al paciente", "vigilancia de iaas",
-        "protocolos", "seguridad del paciente",
-        "bombas de infusion", "curacion avanzada",
-        "emr", "excel basico", "registro clinico",
-        "habilidades blandas",
+        "iaas", "indicadores",
+        "educacion al paciente", "seguridad del paciente",
+        "protocolos", "bombas de infusion", "curacion avanzada",
+        "excel basico", "registro clinico"
     ]
-
-    # Stopwords básicas en español
     stop = set("""
         de la las los y e a o del en para con por un una unas unos al el lo le les se que
         por sobre entre hacia contra sin tras como donde cuando mientras durante
@@ -128,15 +119,13 @@ def suggest_keywords_from_jd(jd_text: str) -> List[str]:
     toks = tokenize(jd_text)
     freq: Dict[str, int] = {}
     for t in toks:
-        if len(t) < 3: 
+        if len(t) < 3:
             continue
         if t in stop:
             continue
         freq[t] = freq.get(t, 0) + 1
 
-    # Top términos del JD
     top = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:12]]
-    # Merge y limpiamos duplicados, preservando orden
     merged = []
     for w in base_health + top:
         if w not in merged:
@@ -145,10 +134,7 @@ def suggest_keywords_from_jd(jd_text: str) -> List[str]:
 
 
 def score_document(doc_text: str, keywords: List[str]) -> Tuple[int, str, int]:
-    """
-    Calcula score = #coincidencias / len(keywords) * 100 (o simple #coincidencias)
-    Devuelve: (score_simple, reasons, length_text)
-    """
+    """Calcula score simple por coincidencias de keywords."""
     normalized = normalize_text(doc_text)
     hits = []
     total = len(keywords)
@@ -185,31 +171,24 @@ def inject_css():
         color: {TEXT_MAIN};
     }}
 
-    /* Header principal */
+    /* Títulos */
     h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
         color: {PRIMARY} !important;
         font-weight: 800 !important;
         letter-spacing: .2px;
     }}
 
-    /* Texto secundario y la banda informativa */
-    .muted, .small, .stCaption, .stText, .stMarkdown p, .stMarkdown li {{
-        color: {TEXT_MAIN};
-    }}
-    .info-card {{
+    /* Banda informativa */
+    .pill {{
         background: {CARD_BG};
         border: 1px solid #D8E6FF;
-        border-radius: 12px;
-        padding: 12px 16px;
         color: #0B2447;
+        padding: 10px 14px;
+        border-radius: 10px;
+        margin: 4px 0 14px 0;
     }}
 
-    /* Tabla */
-    .stDataFrame, .stTable {{
-        background: white !important;
-    }}
-
-    /* === Selects y inputs en el MAIN (claro) === */
+    /* Selects e inputs del MAIN (claro) */
     .stSelectbox > div > div,
     .stMultiSelect > div > div,
     .stTextInput > div > div > input,
@@ -233,7 +212,7 @@ def inject_css():
         background: {SIDEBAR_BG};
     }}
 
-    /* Títulos del sidebar */
+    /* Titulares del sidebar */
     [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3 {{
@@ -247,43 +226,73 @@ def inject_css():
         font-weight: 700;
     }}
 
-    /* Inputs del sidebar: cajas y bordes #132840 */
-    [data-testid="stSidebar"] .stTextInput > div > div > input,
+    /* ====== FORZAR TODOS LOS INPUTS/SELECTS EN EL SIDEBAR ====== */
+    [data-testid="stSidebar"] input,
     [data-testid="stSidebar"] textarea,
+    [data-testid="stSidebar"] select,
+    [data-testid="stSidebar"] .stTextInput > div > div > input,
+    [data-testid="stSidebar"] .stTextArea textarea,
     [data-testid="stSidebar"] .stNumberInput input,
     [data-testid="stSidebar"] .stSelectbox > div > div,
-    [data-testid="stSidebar"] .stMultiSelect > div > div {{
+    [data-testid="stSidebar"] .stMultiSelect > div > div,
+    [data-testid="stSidebar"] div[data-baseweb="select"] > div {{
         background-color: {BOX_BG} !important;
         border: 1px solid {BOX_BORDER} !important;
         color: #FFFFFF !important;
         border-radius: 8px !important;
     }}
+
     [data-testid="stSidebar"] ::placeholder {{
         color: #C9D1D9 !important;
         opacity: .9 !important;
     }}
+
     [data-testid="stSidebar"] input:focus,
     [data-testid="stSidebar"] textarea:focus,
     [data-testid="stSidebar"] .stSelectbox > div > div:focus,
-    [data-testid="stSidebar"] .stMultiSelect > div > div:focus {{
+    [data-testid="stSidebar"] .stMultiSelect > div > div:focus,
+    [data-testid="stSidebar"] div[data-baseweb="select"] > div:focus {{
         outline: none !important;
         border: 1px solid {BOX_BORDER} !important;
         box-shadow: 0 0 0 2px {PRIMARY}33 !important;
     }}
 
-    /* File uploader del sidebar */
+    /* ====== FILE UPLOADER EN SIDEBAR ====== */
+    /* Dropzone */
     [data-testid="stSidebar"] .stFileUploader div[data-testid="stFileUploadDropzone"] {{
         background-color: {BOX_BG} !important;
         border: 1px dashed {BOX_BORDER} !important;
         color: #FFFFFF !important;
         border-radius: 10px !important;
     }}
+    [data-testid="stSidebar"] .stFileUploader div[data-testid="stFileUploadDropzone"] * {{
+        color: #FFFFFF !important;
+    }}
+
+    /* Botón "Browse files" */
     [data-testid="stSidebar"] .stFileUploader div[role="button"] {{
         background: {PRIMARY} !important;
         color: #0B1220 !important;
         border: 1px solid {PRIMARY} !important;
         font-weight: 700;
         border-radius: 8px !important;
+    }}
+
+    /* Lista de archivos subidos (chips/filas) */
+    [data-testid="stSidebar"] div[data-testid="stFileUploaderFile"] {{
+        background: #0F1B30 !important;
+        border: 1px solid {BOX_BORDER} !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        padding: 6px 8px !important;
+        margin-bottom: 6px !important;
+    }}
+    [data-testid="stSidebar"] div[data-testid="stFileUploaderFile"] * {{
+        color: #FFFFFF !important;
+    }}
+    [data-testid="stSidebar"] div[data-testid="stFileUploaderFile"] svg path {{
+        fill: #FFFFFF !important;
+        stroke: #FFFFFF !important;
     }}
 
     /* Botones */
@@ -298,14 +307,11 @@ def inject_css():
         filter: brightness(1.05) !important;
     }}
 
-    /* Cinta informativa debajo del título */
-    .pill {{
-        background: {CARD_BG};
-        border: 1px solid #D8E6FF;
-        color: #0B2447;
-        padding: 10px 14px;
-        border-radius: 10px;
-        margin: 4px 0 14px 0;
+    /* Aclarar el select principal del visor (barra clara) */
+    .viewer-select .stSelectbox > div > div {{
+        background-color: #F6F9FC !important;
+        border: 1px solid #D7E1EC !important;
+        color: {TEXT_MAIN} !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -319,7 +325,6 @@ def main():
     inject_css()
 
     # ====== Sidebar ======
-    col_logo, = st.sidebar.columns(1)
     try:
         st.sidebar.image("assets/logo-wayki.png", use_column_width=True)
     except Exception:
@@ -356,33 +361,29 @@ def main():
             "protocolos", "bombas de infusion"
         ]
 
-    # Botón para sugerir
     if st.sidebar.button("Sugerir keywords"):
-        sug = suggest_keywords_from_jd(jd_text)
-        st.session_state["keywords"] = sug
+        st.session_state["keywords"] = suggest_keywords_from_jd(jd_text)
 
     kw_text = st.sidebar.text_area(
         "Palabras clave",
         value=", ".join(st.session_state["keywords"]),
         height=120
     )
-    # Normalizamos lista de keywords
     keywords = [k.strip() for k in kw_text.split(",") if k.strip()]
     st.session_state["keywords"] = keywords
 
-    # Uploader
     st.sidebar.markdown("### Subir CVs (PDF o TXT)")
     files = st.sidebar.file_uploader("Arrastra aquí", type=["pdf", "txt"], accept_multiple_files=True)
 
+    # ====== Main ======
     st.markdown("# SelektIA – Evaluation Results")
     st.markdown(
         "<div class='pill'>Define el puesto/JD, sugiere (o edita) keywords y sube algunos CVs (PDF o TXT) para evaluar.</div>",
         unsafe_allow_html=True
     )
 
-    # ====== Procesamiento ======
     rows = []
-    file_store = {}  # para visor/descarga
+    file_store = {}
 
     if files:
         for f in files:
@@ -398,25 +399,17 @@ def main():
             })
 
     if rows:
-        # Ordenamos por Score desc
         df = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
-
-        # Tabla
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-        # ====== Gráfico Comparativo ======
         st.markdown("### Score Comparison")
-
-        # Límite para destacar (umbral) => % si quisieras. Aquí umbral = 50 puntos (o 50% de keywords)
-        # Como score es #coincidencias, fijamos una guía visual arbitraria: 50 (línea punteada) no aplica,
-        # por simplicidad dejamos una línea con y= media. Aquí colocamos 50 para referencia.
         names = df["Name"].tolist()
         scores = df["Score"].tolist()
 
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=names, y=scores,
-            marker_color=[PRIMARY] + ["#C9D7E8"]*(len(scores)-1),  # colorea el 1° como seleccionado visualmente
+            marker_color=[PRIMARY] + ["#C9D7E8"]*(len(scores)-1),
             hovertemplate="<b>%{x}</b><br>Score: %{y}<extra></extra>"
         ))
         fig.update_layout(
@@ -427,22 +420,7 @@ def main():
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # ====== Visor de CV ======
         st.markdown("### Visor de CV (PDF)")
-
-        # Barra clara para select
-        st.markdown(
-            """
-            <style>
-            /* Aclara solo el select principal del visor (en el main) */
-            .viewer-select .stSelectbox > div > div {
-                background-color: #F6F9FC !important;
-                border: 1px solid #D7E1EC !important;
-            }
-            </style>
-            """, unsafe_allow_html=True
-        )
-
         col_select, col_alt = st.columns([0.7, 0.3])
         with col_select:
             st.markdown("**Elige un candidato**")
@@ -453,7 +431,6 @@ def main():
                 key="viewer_select",
                 label_visibility="collapsed"
             )
-
         with col_alt:
             with st.expander("Elegir candidato (opción alternativa)"):
                 selected_alt = st.selectbox("Candidato", names, index=0, key="viewer_select_alt")
@@ -465,14 +442,11 @@ def main():
         if selected in file_store:
             pdf_bytes = file_store[selected]
             if selected.lower().endswith(".pdf") and HAS_PDF_VIEWER:
-                # Visor embebido
                 pdf_viewer(pdf_bytes, width=1200)
             else:
-                # Fallback: descarga
                 st.warning("No se pudo previsualizar el archivo. Puedes descargarlo a continuación.")
                 st.markdown(get_download_button(pdf_bytes, selected, "Descargar CV"), unsafe_allow_html=True)
 
-        # ====== Descargar Excel ======
         st.markdown("----")
         st.markdown("**Descargar Excel (Selected + All)**")
         out = io.BytesIO()
@@ -484,11 +458,9 @@ def main():
             file_name="selektia_resultados.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
     else:
         st.info("Sube algunos CVs para ver el demo.")
 
 
 if __name__ == "__main__":
     main()
-
