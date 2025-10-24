@@ -1,3 +1,9 @@
+# Al inicio de app.py (o donde tengas set_page_config)
+st.set_page_config(page_title="SelektIA", page_icon="assets/logo-wayki.png", layout="wide")
+
+# Logo en el sidebar
+st.sidebar.image("assets/logo-wayki.png", use_column_width=True)
+
 # app.py — SelektIA (PyMuPDF extractor + ranking + gráfico + Excel + visor PDF + keywords sugeridas)
 import streamlit as st
 import pandas as pd
