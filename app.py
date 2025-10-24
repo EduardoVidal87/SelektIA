@@ -232,7 +232,7 @@ if "ofertas" not in st.session_state: st.session_state.ofertas = []
 if "onboarding" not in st.session_state: st.session_state.onboarding = []
 
 # ======================================================================================
-# SIDEBAR: Logo + acceso rápido (no cambia pestañas, sirve de índice)
+# SIDEBAR: Logo + acceso rápido (índice)
 # ======================================================================================
 with st.sidebar:
     st.image("assets/logo-wayki.png", use_column_width=True)
@@ -246,7 +246,7 @@ with st.sidebar:
     st.caption("1) Define JD y sube CVs en **Definición & Carga**.\n2) Revisa **Evaluación de CVs**.\n3) Gestiona **Pipeline** y **Entrevista**.\n4) Avanza a **Oferta** y **Onboarding**.")
 
 # ======================================================================================
-# TABS (nuevo orden: primero Asistente IA, luego Definición & Carga y resto sin cambios)
+# TABS (orden actualizado)
 # ======================================================================================
 tabs = st.tabs([
     "🤖 Asistente IA",
@@ -262,7 +262,7 @@ tabs = st.tabs([
 ])
 
 # --------------------------------------------------------------------------------------
-# 0) ASISTENTE IA (primera pestaña)
+# 0) ASISTENTE IA
 # --------------------------------------------------------------------------------------
 with tabs[0]:
     st.markdown("## SelektIA – **Asistente IA**")
@@ -283,7 +283,7 @@ with tabs[0]:
         st.info("Tip: usa esta configuración para guiar evaluaciones en la pestaña *Evaluación de CVs*.")
 
 # --------------------------------------------------------------------------------------
-# 1) DEFINICIÓN & CARGA (movimos JD y subida de CVs aquí)
+# 1) DEFINICIÓN & CARGA (JD + CVs)
 # --------------------------------------------------------------------------------------
 with tabs[1]:
     st.markdown("## SelektIA – **Definición & Carga**")
@@ -350,7 +350,7 @@ with tabs[1]:
     colD.metric("Listos para evaluar", sum(1 for c in st.session_state.candidates if c["_bytes"]))
 
 # --------------------------------------------------------------------------------------
-# 2) PUESTOS (igual que antes)
+# 2) PUESTOS
 # --------------------------------------------------------------------------------------
 with tabs[2]:
     st.markdown("## SelektIA – **Puestos**")
@@ -392,7 +392,7 @@ with tabs[2]:
     )
 
 # --------------------------------------------------------------------------------------
-# 3) EVALUACIÓN DE CVS (misma base, colores de barras)
+# 3) EVALUACIÓN DE CVS
 # --------------------------------------------------------------------------------------
 with tabs[3]:
     st.markdown("## SelektIA – **Resultados de evaluación**  ↪️")
@@ -429,7 +429,7 @@ with tabs[3]:
                 st.text_area("Contenido", value=txt, height=400, label_visibility="collapsed")
 
 # --------------------------------------------------------------------------------------
-# 4) PIPELINE (panel izquierdo y detalle a la derecha, solo lectura)
+# 4) PIPELINE – lista izquierda + detalle derecha (solo lectura)
 # --------------------------------------------------------------------------------------
 with tabs[4]:
     st.markdown("## SelektIA – **Pipeline de Candidatos**")
@@ -447,7 +447,6 @@ with tabs[4]:
             st.write(sel)
             match_txt = "Alto" if cand["Score"] >= 60 else "Medio" if cand["Score"] >= 40 else "Bajo"
             st.write("Match estimado:", match_txt)
-
             st.markdown("**Validated Skills**")
             chips(cand.get("Validated", []) or ["—"])
             st.markdown("**Likely Skills**")
@@ -456,7 +455,7 @@ with tabs[4]:
             chips(cand.get("ToValidate", []) or ["—"])
 
 # --------------------------------------------------------------------------------------
-# 5) ENTREVISTA (GERENCIA) – igual que antes, con pool desde Tareas HH
+# 5) ENTREVISTA (GERENCIA)
 # --------------------------------------------------------------------------------------
 with tabs[5]:
     st.markdown("## SelektIA – **Entrevista (Gerencia)**")
@@ -511,7 +510,7 @@ with tabs[6]:
                 st.success("Enviado a **Entrevista (Gerencia)** y bloqueado para edición.")
 
 # --------------------------------------------------------------------------------------
-# 7) OFERTA – minimal (se integra con Onboarding)
+# 7) OFERTA
 # --------------------------------------------------------------------------------------
 with tabs[7]:
     st.markdown("## SelektIA – **Oferta**")
@@ -582,4 +581,3 @@ with tabs[8]:
 with tabs[9]:
     st.markdown("## SelektIA – **Analytics**")
     st.caption("KPIs de conversión por etapa, time-to-fill, SLA, razones de descarte, etc. (en construcción)")
-
