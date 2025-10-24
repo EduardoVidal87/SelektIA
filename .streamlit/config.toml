@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#0AAE8F"              # Botones, sliders, acentos
+backgroundColor = "#FFFFFF"           # Fondo principal
+secondaryBackgroundColor = "#F6FAF9"  # Fondo de tarjetas/sidebars
+textColor = "#0F172A"                 # Texto
+font = "sans serif"                   # "sans serif" | "serif" | "monospace"
