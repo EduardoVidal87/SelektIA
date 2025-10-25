@@ -46,11 +46,11 @@ EVAL_INSTRUCTION = (
   "nice-to-have, brechas y hallazgos relevantes."
 )
 
-# ===== Avatares por defecto para agentes (simulación) =====
+# ===== Avatares por defecto para agentes (ROBOT/BOT por rol; simulación) =====
 AGENT_DEFAULT_IMAGES = {
-  "Headhunter": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=512&auto=format&fit=crop",
-  "Coordinador RR.HH.": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=512&auto=format&fit=crop",
-  "Admin RR.HH.": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=512&auto=format&fit=crop",
+  "Headhunter": "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto=format&fit=crop",        # robot recruiter
+  "Coordinador RR.HH.": "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto=format&fit=crop",   # robot dashboard
+  "Admin RR.HH.": "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto=format&fit=crop",      # robot assistant
 }
 # Modelos LLM — SOLO PARA SIMULAR (no se consumen)
 LLM_MODELS = [
@@ -120,7 +120,7 @@ ROLE_PRESETS = {
     "nice": ["Farmacovigilancia","Control de stock"],
     "synth_skills": ["HIS","ERP","BPM","Farmacovigilancia","Control de stock","Protocolos"]
   },
-  # ——— Roles generales (no clínicos) solicitados ———
+  # ——— Roles generales (no clínicos) ———
   "Asistente Administrativo": {
     "jd": (
       "Brindar soporte administrativo: gestión documental, agenda, compras menores, logística de reuniones y "
@@ -167,7 +167,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS — (botones a la IZQUIERDA + branding alineado)
+# CSS — (botones a la IZQUIERDA + branding + mejoras agentes)
 # =========================================================
 CSS = f"""
 :root {{
@@ -301,6 +301,20 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;
   padding:4px 10px;font-size:12px;color:#1B2A3C;
 }}
+
+/* ====== MEJORAS para cards de agentes ====== */
+.agent-card .stButton > button {{
+  background: var(--body) !important;        /* mismo color panel derecho */
+  color: {TITLE_DARK} !important;
+  border: 1px solid #E3EDF6 !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  padding: 6px 10px !important;
+}}
+.agent-detail {{
+  background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;
+  box-shadow: 0 6px 18px rgba(14,25,43,.08);
+}}
 """
 
 CSS += """
@@ -359,7 +373,7 @@ if "agents_loaded" not in ss:
   ss.agents = load_agents()
   ss.agents_loaded = True
 
-# Carga de puestos base
+# Carga de puestos base (resumida aquí; igual al bloque previo que ya te funcionaba)
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -393,7 +407,6 @@ if "positions" not in ss:
 # TAXONOMÍA DE SKILLS (demo sin IA)
 # =========================================================
 SKILL_SYNONYMS = {
-  # Clínico / hospitalario
   "HIS": ["his", "hospital information system"],
   "SAP IS-H": ["sap is-h", "sap is h", "sap hospital"],
   "BLS": ["bls", "basic life support"],
@@ -402,13 +415,11 @@ SKILL_SYNONYMS = {
   "Educación al paciente": ["educación al paciente", "patient education"],
   "Seguridad del paciente": ["seguridad del paciente", "patient safety"],
   "Protocolos": ["protocolos", "protocol"],
-  # Administración y soporte
   "Gestión documental": ["gestión documental", "archivo", "document control"],
   "Redacción": ["redacción", "writing", "composición de documentos"],
   "Atención al cliente": ["atención al cliente", "customer service"],
   "Facturación": ["facturación", "billing"],
   "Caja": ["caja", "cash handling"],
-  # Tech genéricas y datos
   "Python": ["python"],
   "APIs REST": ["api rest", "apis rest", "rest api", "restful"],
   "SQL": ["sql", "postgres", "mysql", "t-sql"],
@@ -419,7 +430,6 @@ SKILL_SYNONYMS = {
   "Tableau": ["tableau"],
   "ETL": ["etl", "extract transform load"],
   "KPIs": ["kpi", "kpis", "indicadores"],
-  # Ingeniería de proyectos
   "MS Project": ["ms project", "microsoft project"],
   "AutoCAD": ["autocad"],
   "BIM": ["bim", "revit"],
@@ -428,7 +438,6 @@ SKILL_SYNONYMS = {
   "Riesgos": ["riesgos", "risk management"],
   "PMBOK": ["pmbok"],
   "Agile": ["agile", "scrum", "kanban"],
-  # UX
   "Figma": ["figma"],
   "UX Research": ["ux research", "investigación de usuarios"],
   "Prototipado": ["prototipado", "prototype", "prototipos"],
@@ -436,7 +445,6 @@ SKILL_SYNONYMS = {
   "Accesibilidad": ["accesibilidad", "accessibility", "wcag"],
   "Heurísticas": ["heurísticas", "heuristic"],
   "Design System": ["design system"],
-  # Otros
   "ERP": ["erp", "sap", "oracle ebs"],
   "Bioseguridad": ["bioseguridad"],
 }
@@ -458,7 +466,6 @@ def infer_skills(text: str) -> set:
   return found
 
 def score_fit_by_skills(jd_text: str, must_list: list[str], nice_list: list[str], cv_text: str):
-  """Puntaje por skills: 65% must, 20% nice, 15% extras relevantes."""
   jd_skills = infer_skills(jd_text)
   must = set([m.strip() for m in must_list if m.strip()]) or jd_skills
   nice = set([n.strip() for n in nice_list if n.strip()]) - must
@@ -498,7 +505,6 @@ def build_analysis_text(name: str, explain: dict) -> str:
   )
 
 def pdf_viewer_embed(file_bytes: bytes, height=520):
-  """Visor PDF integrado (sin depender de PDF.js externo)."""
   try:
     b64 = base64.b64encode(file_bytes).decode("utf-8")
     html = f'''
@@ -698,7 +704,6 @@ def generate_sample_cvs_for_role(role: str, jd_text: str, n: int = 25) -> list[d
   return out
 
 def _file_to_data_uri(uploaded_image) -> str | None:
-  """Convierte una imagen subida a data URI base64 para persistir localmente."""
   try:
     mime = uploaded_image.type or "image/png"
     b = uploaded_image.read()
@@ -706,6 +711,12 @@ def _file_to_data_uri(uploaded_image) -> str | None:
     return f"data:{mime};base64,{b64}"
   except Exception:
     return None
+
+def _safe_index(seq, val, default=0):
+  try:
+    return seq.index(val)
+  except Exception:
+    return default
 
 # =========================================================
 # SIDEBAR (branding + navegación)
@@ -754,20 +765,16 @@ with st.sidebar:
 def page_def_carga():
   st.header("Definición & Carga")
 
-  # Selector de puesto con presets
   roles = list(ROLE_PRESETS.keys())
-  default_role_idx = roles.index("Enfermera/o Asistencial")
-  role = st.selectbox("Puesto", roles, index=default_role_idx)
+  role = st.selectbox("Puesto", roles, index=_safe_index(roles, "Enfermera/o Asistencial", 0))
   preset = ROLE_PRESETS.get(role, {})
 
-  # JD y keywords precargados (editables)
   jd_text = st.text_area("Descripción / JD", height=180, value=preset.get("jd",""))
   kw_text = st.text_area("Palabras clave (coma separada)", height=100, value=preset.get("keywords",""))
   ss["last_role"] = role
   ss["last_jd_text"] = jd_text
   ss["last_kw_text"] = kw_text
 
-  # Carga manual
   files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf","txt"], accept_multiple_files=True)
   if files:
     if st.button("Procesar CVs cargados"):
@@ -784,7 +791,6 @@ def page_def_carga():
         })
       st.success("CVs cargados y analizados.")
 
-  # Integraciones demo
   with st.expander("🔌 Importar desde portales (demo)"):
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
@@ -804,7 +810,6 @@ def page_def_carga():
       ss.candidates = (ss.candidates or []) + imported
       st.success(f"Importados {len(imported)} CVs simulados desde: {', '.join(sources)}.")
 
-  # Generar CVs de muestra para el rol actual
   with st.expander("🧪 Generar CVs de muestra para este puesto (demo)"):
     n = st.slider("Cantidad", min_value=10, max_value=40, value=25, step=5)
     st.caption("Crea CVs sintéticos con skills acordes al puesto seleccionado.")
@@ -852,7 +857,7 @@ def page_puestos():
         labels_for_radio.append(f"{row['Puesto']} — {row.get('Ubicación','')} · {label}")
       preselect = ss.get("selected_position_id", options[0] if options else None)
       selected_id = st.radio("Selecciona un puesto", options=options,
-                             index=options.index(preselect) if preselect in options else 0,
+                             index=options.index(preselect) if (preselect in options) else 0,
                              format_func=lambda x: labels_for_radio[options.index(x)])
       ss["selected_position_id"] = selected_id
 
@@ -928,7 +933,7 @@ def page_puestos():
       use_container_width=True, height=320
     )
 
-  # Crear puesto
+  # Crear puesto (igual que antes; lo dejo intacto por brevedad)
   with st.expander("➕ Crear nuevo puesto"):
     c1, c2 = st.columns(2)
     with c1:
@@ -955,14 +960,12 @@ def page_puestos():
       target_date = st.date_input("Fecha objetivo de contratación", value=date.today()+timedelta(days=30))
       expiry_date = st.date_input("Fecha de expiración de publicación", value=date.today()+timedelta(days=45))
       approvers = st.text_input("Aprobadores", value="Gerencia, Legal, Finanzas")
-
     jd = st.text_area("Descripción / Responsabilidades (JD)", height=150)
     must = st.text_area("Must-have (skills/tecnologías clave, coma separada)", height=90, value="")
     nice = st.text_area("Nice-to-have (deseables, coma separada)", height=90, value="")
     benefits = st.text_area("Beneficios / Bonos", height=90, value="")
     screening = st.text_area("Preguntas de screening (una por línea)", height=120, value="")
     post_urls = st.text_area("URLs de publicación (una por línea o separadas por coma)", height=70, value="")
-
     st.markdown("---")
     st.subheader("Aprobación de requisición")
     require_approval = st.toggle("Requiere aprobación antes de publicar", value=True)
@@ -974,25 +977,19 @@ def page_puestos():
     if save:
       new_row = {
         "ID": req_id or f"AUT-{int(datetime.now().timestamp())}",
-        "Puesto": job_title, "Días Abierto": 0,
-        "Leads": 0, "Nuevos": 0, "Recruiter Screen": 0, "HM Screen": 0,
-        "Entrevista Telefónica": 0, "Entrevista Presencial": 0,
-        "Ubicación": location, "Hiring Manager": hiring_manager or recruiter,
-        "Estado": "Abierto",
-        "Departamento": department, "Tipo Empleo": emp_type, "Seniority": seniority,
-        "Modalidad": work_model, "Vacantes": openings, "Recruiter": recruiter,
-        "Razón": reason, "Moneda": currency, "Salario Min": sal_min, "Salario Max": sal_max,
-        "Turno": shift, "Idiomas": languages, "Educación": education,
-        "Experiencia Min": years_exp, "Prioridad": priority,
-        "Fecha Objetivo": str(target_date), "Expira": str(expiry_date),
-        "Aprobadores": approvers, "JD": jd, "MustHave": must, "NiceToHave": nice,
+        "Puesto": job_title, "Días Abierto": 0, "Leads": 0, "Nuevos": 0,
+        "Recruiter Screen": 0, "HM Screen": 0, "Entrevista Telefónica": 0, "Entrevista Presencial": 0,
+        "Ubicación": location, "Hiring Manager": hiring_manager or recruiter, "Estado": "Abierto",
+        "Departamento": department, "Tipo Empleo": emp_type, "Seniority": seniority, "Modalidad": work_model,
+        "Vacantes": openings, "Recruiter": recruiter, "Razón": reason, "Moneda": currency,
+        "Salario Min": sal_min, "Salario Max": sal_max, "Turno": shift, "Idiomas": languages, "Educación": education,
+        "Experiencia Min": years_exp, "Prioridad": priority, "Fecha Objetivo": str(target_date),
+        "Expira": str(expiry_date), "Aprobadores": approvers, "JD": jd, "MustHave": must, "NiceToHave": nice,
         "Beneficios": benefits, "Screening Qs": screening, "Publicaciones": post_urls,
-        "Requiere Aprobación": require_approval,
-        "Estado Aprobación": approval_status,
+        "Requiere Aprobación": require_approval, "Estado Aprobación": approval_status,
         "Aprobado Por": approved_by if approval_status == "Aprobado" else "",
         "Fecha Aprobación": str(approval_date) if approval_status == "Aprobado" else "",
-        "Notas Aprobación": approval_notes,
-        "Estado Publicación": "Borrador", "Fecha Publicación": "", "Publicado En": ""
+        "Notas Aprobación": approval_notes, "Estado Publicación": "Borrador", "Fecha Publicación": "", "Publicado En": ""
       }
       should_publish = (not require_approval) or (approval_status == "Aprobado")
       if should_publish:
@@ -1016,7 +1013,6 @@ def page_eval():
     return
 
   jd_text = st.text_area("JD para matching por skills (opcional)", ss.get("last_jd_text",""), height=140)
-
   with st.expander("Configurar skills objetivo (opcional)"):
     preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
     c1, c2 = st.columns(2)
@@ -1029,22 +1025,17 @@ def page_eval():
   must_list = [s.strip() for s in (must_default or "").split(",") if s.strip()]
   nice_list = [s.strip() for s in (nice_default or "").split(",") if s.strip()]
 
-  # Calcular FIT por skills
   enriched = []
   for cand in ss.candidates:
     cv_text = cand.get("_text") or (cand.get("_bytes") or b"").decode("utf-8","ignore")
     fit, explain = score_fit_by_skills(jd_text, must_list, nice_list, cv_text or "")
     enriched.append({
-      "Name": cand["Name"],
-      "Fit": fit,
+      "Name": cand["Name"], "Fit": fit,
       "Must (ok/total)": f"{len(explain['matched_must'])}/{explain['must_total']}",
       "Nice (ok/total)": f"{len(explain['matched_nice'])}/{explain['nice_total']}",
       "Extras": ", ".join(explain["extras"])[:60],
-      "_exp": explain,
-      "_is_pdf": cand["_is_pdf"],
-      "_bytes": cand["_bytes"],
-      "_text": cv_text or "",
-      "meta": cand.get("meta", {})
+      "_exp": explain, "_is_pdf": cand["_is_pdf"], "_bytes": cand["_bytes"],
+      "_text": cv_text or "", "meta": cand.get("meta", {})
     })
 
   df = pd.DataFrame(enriched).sort_values("Fit", ascending=False).reset_index(drop=True)
@@ -1074,13 +1065,11 @@ def page_eval():
       st.markdown("  - ✓ " + ", ".join(exp["matched_must"]))
     if exp["gaps_must"]:
       st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_must"]))
-
     st.markdown(f"- **Nice-to-have (ok/total):** {len(exp['matched_nice'])}/{exp['nice_total']}")
     if exp["matched_nice"]:
       st.markdown("  - ✓ " + ", ".join(exp["matched_nice"]))
     if exp["gaps_nice"]:
       st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_nice"]))
-
     if exp["extras"]:
       st.markdown("- **Extras relevantes:** " + ", ".join(exp["extras"]))
 
@@ -1110,7 +1099,6 @@ def page_pipeline():
     st.info("Primero carga o genera CVs en **Definición & Carga**.")
     return
 
-  # Calculamos FIT por skills para ordenar el pipeline
   jd_text = ss.get("last_jd_text", "") or ""
   must_list = ROLE_PRESETS.get(ss.get("last_role",""), {}).get("must", [])
   nice_list = ROLE_PRESETS.get(ss.get("last_role",""), {}).get("nice", [])
@@ -1121,7 +1109,6 @@ def page_pipeline():
     ranked.append((fit, c, exp))
   ranked.sort(key=lambda x: x[0], reverse=True)
 
-  # Lista + selección
   c1, c2 = st.columns([1.2, 1])
   with c1:
     st.markdown("**Candidatos**")
@@ -1129,27 +1116,22 @@ def page_pipeline():
     for fit, c, _exp in ranked:
       m = c.get("meta", {})
       table_rows.append({
-        "Candidato": c["Name"],
-        "Fit": fit,
-        "Años Exp.": m.get("anios_exp", 0),
-        "Universidad": m.get("universidad", "—"),
+        "Candidato": c["Name"], "Fit": fit,
+        "Años Exp.": m.get("anios_exp", 0), "Universidad": m.get("universidad", "—"),
         "Actualizado": m.get("ultima_actualizacion", "—"),
       })
     df_table = pd.DataFrame(table_rows).sort_values(["Fit","Años Exp."], ascending=[False, False])
     st.dataframe(df_table, use_container_width=True, height=300)
-
     names = df_table["Candidato"].tolist()
     preselect = ss.get("selected_cand", names[0] if names else "")
     sel_name = st.radio("Selecciona un candidato", names, index=names.index(preselect) if preselect in names else 0)
     ss["selected_cand"] = sel_name
 
-  # Ficha de Evaluación + visor
   with c2:
     st.markdown("**Detalle del candidato**")
     if "selected_cand" not in ss:
       st.caption("Selecciona un candidato de la lista.")
       return
-
     tup = next((t for t in ranked if t[1]["Name"] == ss["selected_cand"]), None)
     if not tup:
       st.caption("Candidato no encontrado.")
@@ -1304,6 +1286,7 @@ def page_agents():
       for idx, ag in enumerate(row):
         with cols[idx]:
           img_url = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+          st.markdown('<div class="agent-card">', unsafe_allow_html=True)
           st.markdown(
             f"""
             <div style="background:#fff;border:1px solid #E3EDF6;border-radius:16px;padding:16px;text-align:center;">
@@ -1315,7 +1298,7 @@ def page_agents():
             """,
             unsafe_allow_html=True
           )
-          c1, c2, c3 = st.columns([1,1,1])
+          c1, c2, c3, c4 = st.columns([1,1,1,1])
           with c1:
             if st.button("👁️ Ver", key=f"ag_view_{i+idx}"):
               ss["agent_view_idx"] = i+idx
@@ -1330,28 +1313,26 @@ def page_agents():
               ss.agents.append(clone)
               save_agents(ss.agents)
               st.success("Agente clonado.")
+          with c4:
+            if st.button("🗑️ Del", key=f"ag_del_{i+idx}"):
+              ss["agent_delete_idx"] = i+idx
+          st.markdown('</div>', unsafe_allow_html=True)
 
   st.markdown("---")
 
-  # ---------- DETALLE tipo "segunda imagen" ----------
+  # ---------- DETALLE (vista) ----------
   v_idx = ss.get("agent_view_idx", None)
   if v_idx is not None and 0 <= v_idx < len(ss.agents):
     ag = ss.agents[v_idx]
     st.subheader("Detalle del agente")
-    c1, c2 = st.columns([0.45, 0.55])
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+    c1, c2 = st.columns([0.42, 0.58])
     with c1:
       img_url = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
-      st.markdown(
-        f"""
-        <div style="background:#fff;border:1px solid #E3EDF6;border-radius:16px;padding:16px;text-align:center;">
-          <img src="{img_url}" alt="avatar" style="width:160px;height:160px;border-radius:999px;object-fit:cover;border:6px solid #F1F7FD;">
-        </div>
-        """, unsafe_allow_html=True
-      )
+      st.image(img_url, width=200, caption=None, use_column_width=False)
       st.write("")
       st.caption("Modelo LLM (simulado)")
       st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
-
     with c2:
       st.text_input("Role*", value=ag.get("rol",""), disabled=True)
       st.text_input("Goal*", value=ag.get("objetivo",""), disabled=True)
@@ -1359,14 +1340,31 @@ def page_agents():
       st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
       st.caption("Herramientas habilitadas")
       st.write(", ".join(ag.get("herramientas", [])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  # ---------- Confirmación borrado ----------
+  if "agent_delete_idx" in ss:
+    di = ss["agent_delete_idx"]
+    if 0 <= di < len(ss.agents):
+      st.warning(f"¿Eliminar agente **{ss.agents[di].get('rol','Agente')}**? Esta acción no se puede deshacer.")
+      cc1, cc2 = st.columns(2)
+      with cc1:
+        if st.button("Sí, eliminar definitivamente"):
+          ss.agents.pop(di)
+          save_agents(ss.agents)
+          ss.pop("agent_delete_idx", None)
+          st.success("Agente eliminado.")
+      with cc2:
+        if st.button("Cancelar"):
+          ss.pop("agent_delete_idx", None)
 
   # ---------- FORM alta/edición ----------
   st.subheader("Crear / Editar agente")
 
-  edit_idx = ss.get("agent_edit_idx", "Nuevo")
+  edit_idx = ss.get("agent_edit_idx", None)
   options = ["Nuevo"] + [f"{i} — {ss.agents[i]['rol']}" for i in range(len(ss.agents))]
-  pick = st.selectbox("Selecciona para editar (o 'Nuevo')", options=options,
-                      index=0 if edit_idx == "Nuevo" else (int(edit_idx) + 1 if isinstance(edit_idx,int) else 0))
+  default_idx = 0 if (edit_idx is None or not isinstance(edit_idx,int)) else min(len(options)-1, edit_idx+1)
+  pick = st.selectbox("Selecciona para editar (o 'Nuevo')", options=options, index=default_idx)
   current_idx = None
   if pick != "Nuevo":
     current_idx = int(pick.split(" — ")[0])
@@ -1377,8 +1375,8 @@ def page_agents():
   with st.form("agent_form"):
     c1, c2 = st.columns(2)
     with c1:
-      rol = st.selectbox("Rol*", ["Headhunter","Coordinador RR.HH.","Admin RR.HH."],
-                         index=["Headhunter","Coordinador RR.HH.","Admin RR.HH."].index(base.get("rol","Headhunter")))
+      rol_options = ["Headhunter","Coordinador RR.HH.","Admin RR.HH."]
+      rol = st.selectbox("Rol*", rol_options, index=_safe_index(rol_options, base.get("rol","Headhunter"), 0))
       objetivo = st.text_input("Objetivo*", base.get("objetivo",""))
       backstory = st.text_area("Backstory*", base.get("backstory","Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums."), height=120)
       guardrails = st.text_area("Guardrails", base.get("guardrails","No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar."), height=90)
@@ -1387,9 +1385,10 @@ def page_agents():
                                     ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
                                     default=base.get("herramientas", ["Parser de PDF","Recomendador de skills"]))
       llm_model = st.selectbox("Modelo LLM (simulado)", LLM_MODELS,
-                               index=LLM_MODELS.index(base.get("llm_model", LLM_MODELS[0])))
+                               index=_safe_index(LLM_MODELS, base.get("llm_model", LLM_MODELS[0]), 0))
       st.caption("Imagen del agente")
-      img_src = st.text_input("URL de imagen (opcional)", value=base.get("image", AGENT_DEFAULT_IMAGES.get(base.get("rol","Headhunter"), "")))
+      default_img = base.get("image", AGENT_DEFAULT_IMAGES.get(base.get("rol","Headhunter"), ""))
+      img_src = st.text_input("URL de imagen (opcional)", value=default_img)
       up = st.file_uploader("…o sube una imagen", type=["png","jpg","jpeg","webp"])
       if up is not None:
         data_uri = _file_to_data_uri(up)
@@ -1398,13 +1397,8 @@ def page_agents():
     ok = st.form_submit_button("Guardar/Actualizar Agente")
     if ok:
       record = {
-        "rol": rol,
-        "objetivo": objetivo,
-        "backstory": backstory,
-        "guardrails": guardrails,
-        "herramientas": herramientas,
-        "llm_model": llm_model,
-        "image": img_src,
+        "rol": rol, "objetivo": objetivo, "backstory": backstory, "guardrails": guardrails,
+        "herramientas": herramientas, "llm_model": llm_model, "image": img_src,
         "ts": datetime.utcnow().isoformat()
       }
       if current_idx is None:
@@ -1414,7 +1408,6 @@ def page_agents():
       save_agents(ss.agents)
       st.success("Agente guardado (con imagen y modelo).")
 
-  # ---------- Exportar / Importar ----------
   st.markdown("---")
   c1, c2, c3 = st.columns([1,1,2])
   with c1:
