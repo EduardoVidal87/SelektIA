@@ -809,30 +809,53 @@ def page_agents():
               ag.update({"rol":rol,"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,"llm_model":llm_model,"image":img_src,"perms":perms})
               save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-  st.markdown("---")
-  st.subheader("Crear / Editar agente")
-  with st.form("agent_form"):
-    rol_opts=["Headhunter","Coordinador RR.HH.","Admin RR.HH."]
-    rol = st.selectbox("Rol*", rol_opts, index=0)
+# --- BLOQUE NUEVO CON ROL PERSONALIZADO ---
+st.markdown("---")
+st.subheader("Crear / Editar agente")
+with st.form("agent_form"):
+    # 1) Rol con opción de personalizado
+    rol_opts = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH.", "Otro (personalizado)"]
+    rol_pick = st.selectbox("Rol*", rol_opts, index=0)
+
+    if rol_pick == "Otro (personalizado)":
+        rol = st.text_input("Nuevo rol*", value="", placeholder="Escribe el nombre del rol")
+    else:
+        rol = rol_pick
+
+    # 2) Resto de campos
     objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
     backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
     guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
     herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
     llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+
+    # Imagen por defecto (si el rol existe en el diccionario usamos esa; si es nuevo, no ponemos default)
     default_img = AGENT_DEFAULT_IMAGES.get(rol, "")
     img_src     = st.text_input("URL de imagen (opcional)", value=default_img)
     perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+
     ok = st.form_submit_button("Guardar/Actualizar Agente")
+
+    # 3) Validación y guardado
     if ok:
-      ss.agents.append({
-        "rol": rol, "objetivo": objetivo, "backstory": backstory,
-        "guardrails": guardrails, "herramientas": herramientas,
-        "llm_model": llm_model, "image": img_src, "perms": perms,
-        "ts": datetime.utcnow().isoformat()
-      })
-      save_agents(ss.agents)
-      st.success("Agente guardado.")
-      st.rerun()
+        if not rol.strip():
+            st.error("Por favor, ingresa un nombre para el rol.")
+        else:
+            ss.agents.append({
+                "rol": rol.strip(),
+                "objetivo": objetivo,
+                "backstory": backstory,
+                "guardrails": guardrails,
+                "herramientas": herramientas,
+                "llm_model": llm_model,
+                "image": img_src,
+                "perms": perms,
+                "ts": datetime.utcnow().isoformat()
+            })
+            save_agents(ss.agents)
+            st.success("Agente guardado.")
+            st.rerun()
+
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
