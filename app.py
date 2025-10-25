@@ -227,8 +227,86 @@ if "positions" not in ss:
   ])
 
 # =========================================================
+# TAXONOMÍA DE SKILLS (demo sin IA)
+# =========================================================
+SKILL_SYNONYMS = {
+  # Clínico / hospitalario
+  "HIS": ["his", "hospital information system"],
+  "SAP IS-H": ["sap is-h", "sap is h", "sap hospital"],
+  "BLS": ["bls", "basic life support"],
+  "ACLS": ["acls", "advanced cardiac life support"],
+  "IAAS": ["iaas", "infecciones asociadas a la atención", "infecciones nosocomiales"],
+  "Educación al paciente": ["educación al paciente", "patient education"],
+  "Seguridad del paciente": ["seguridad del paciente", "patient safety"],
+  "Protocolos": ["protocolos", "protocol"],
+  # Tech genéricas
+  "Python": ["python"],
+  "APIs REST": ["api rest", "apis rest", "rest api", "restful"],
+  "SQL": ["sql", "postgres", "mysql", "t-sql"],
+  "Docker": ["docker", "containers"],
+  "AWS": ["aws", "amazon web services"],
+  "Power BI": ["power bi"],
+  "Excel": ["excel", "xlsx"],
+  "Forecasting": ["forecasting", "pronóstico", "demand planning", "planificación de la demanda"],
+  # Marketing
+  "SEO": ["seo", "search engine optimization"],
+  "CRM": ["crm", "salesforce", "hubspot"],
+  "Performance": ["performance marketing", "paid media", "sem", "ads", "campañas"],
+}
+
+# =========================================================
 # UTILS
 # =========================================================
+def _normalize(t: str) -> str:
+  return re.sub(r"\s+", " ", (t or "")).strip().lower()
+
+def infer_skills(text: str) -> set:
+  """Devuelve skills 'canónicas' detectadas en el texto (demo por sinónimos)."""
+  t = _normalize(text)
+  found = set()
+  for canonical, syns in SKILL_SYNONYMS.items():
+    for s in syns:
+      if s in t:
+        found.add(canonical)
+        break
+  return found
+
+def score_fit_by_skills(jd_text: str, must_list: list[str], nice_list: list[str], cv_text: str):
+  """
+  Scoring por skills:
+    - must coverage (65%)
+    - nice coverage (20%)
+    - extras relevantes (15%) = skills del CV que también aparecen en taxonomía + JD (no marcadas como must/nice)
+  Devuelve: score (0-100), dict con matched/gaps/extras
+  """
+  jd_skills = infer_skills(jd_text)
+  must = set([m.strip() for m in must_list if m.strip()]) or jd_skills  # si no definiste must, usamos lo que salga del JD
+  nice = set([n.strip() for n in nice_list if n.strip()]) - must
+
+  cv_sk = infer_skills(cv_text)
+
+  matched_must = sorted(list(must & cv_sk))
+  matched_nice = sorted(list(nice & cv_sk))
+  gaps_must = sorted(list(must - cv_sk))
+  gaps_nice = sorted(list(nice - cv_sk))
+
+  # extras: skills del CV que también están en taxonomía/tema del JD pero no eran must/nice
+  extras = sorted(list((cv_sk & (jd_skills | must | nice)) - set(matched_must) - set(matched_nice)))
+
+  cov_must = len(matched_must)/len(must) if must else 0
+  cov_nice = len(matched_nice)/len(nice) if nice else 0
+  extra_factor = min(len(extras), 5)/5  # cap a 5 extras
+
+  score = 100 * (0.65*cov_must + 0.20*cov_nice + 0.15*extra_factor)
+  score = int(round(score))
+
+  explain = {
+    "matched_must": matched_must, "matched_nice": matched_nice,
+    "gaps_must": gaps_must, "gaps_nice": gaps_nice, "extras": extras,
+    "must_total": len(must), "nice_total": len(nice)
+  }
+  return score, explain
+
 def pdf_viewer_embed(file_bytes: bytes, height=520):
   """Visor PDF embebido robusto (sin depender de PDF.js externo)."""
   try:
@@ -288,6 +366,7 @@ def extract_meta(cv_text: str) -> dict:
   }
 
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
+  # conservamos tu score simple por compatibilidad (no se usa en ranking nuevo)
   base = 0; reasons = []
   text_low = cv_text.lower(); jd_low = jd.lower()
   hits = 0; kws = [k.strip().lower() for k in keywords.split(",") if k.strip()]
@@ -323,7 +402,6 @@ def _offers_to_df(offers_dict: dict) -> pd.DataFrame:
 
 # ===== Publicación simulada =====
 def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
-  """Devuelve (estado_publicacion, fecha_publicacion, publicados_en) según URLs."""
   urls = [u.strip() for u in (urls_text or "").splitlines() if u.strip()] \
          or [u.strip() for u in (urls_text or "").split(",") if u.strip()]
   if urls:
@@ -335,7 +413,6 @@ def _skills_from_csv(text: str) -> list[str]:
   return [s.strip() for s in (text or "").split(",") if s.strip()]
 
 def _match_level(row: dict | pd.Series) -> tuple[str, str]:
-  """Devuelve (label, clase_css) basado en señales simples."""
   try:
     leads = int(row.get("Leads", 0))
     nuevos = int(row.get("Nuevos", 0))
@@ -357,7 +434,7 @@ def _dummy_name(board: str, idx: int) -> str:
     "Indeed": "IND",
     "LinkedIn Jobs": "LIJ",
   }.get(board, "EXT")
-  return f"{base}_Candidato_{idx:02d}.pdf"  # nombre con .pdf aunque el contenido sea TXT
+  return f"{base}_Candidato_{idx:02d}.pdf"
 
 def _dummy_cv_text(query: str, location: str) -> str:
   skills = ["HIS", "SAP IS-H", "BLS", "ACLS", "IAAS", "educación al paciente", "seguridad del paciente", "protocolos"]
@@ -378,6 +455,7 @@ def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str
     "Reasons": reasons,
     "_bytes": text.encode("utf-8"),
     "_is_pdf": False,
+    "_text": text,
     "meta": meta
   }
 
@@ -437,6 +515,10 @@ def page_def_carga():
   kw_text = st.text_area("Palabras clave (coma separada)", height=100,
                          value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos")
 
+  # Guardamos referencia para la pestaña de evaluación
+  ss["last_jd_text"] = jd_text
+  ss["last_kw_text"] = kw_text
+
   # ---- Carga manual de CVs ----
   files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf","txt"], accept_multiple_files=True)
   if files:
@@ -449,7 +531,8 @@ def page_def_carga():
         meta = extract_meta(text)
         ss.candidates.append({
           "Name": f.name, "Score": score, "Reasons": reasons,
-          "_bytes": f_bytes, "_is_pdf": Path(f.name).suffix.lower()==".pdf", "meta": meta
+          "_bytes": f_bytes, "_is_pdf": Path(f.name).suffix.lower()==".pdf",
+          "_text": text, "meta": meta
         })
       st.success("CVs cargados y analizados.")
 
@@ -490,7 +573,6 @@ def page_puestos():
       df_list = ss.positions.copy()
       df_list = df_list.sort_values(["Estado", "Días Abierto", "Leads"], ascending=[True, True, False]).reset_index(drop=True)
 
-      # Render visual tipo “cards” y construir opciones para radio
       options = []
       labels_for_radio = []
       for _, row in df_list.iterrows():
@@ -607,7 +689,7 @@ def page_puestos():
       use_container_width=True, height=320
     )
 
-  # ---------- Crear nuevo puesto (formulario completo) ----------
+  # ---------- Crear nuevo puesto ----------
   with st.expander("➕ Crear nuevo puesto"):
     c1, c2 = st.columns(2)
     with c1:
@@ -674,12 +756,11 @@ def page_puestos():
         "Aprobado Por": approved_by if approval_status == "Aprobado" else "",
         "Fecha Aprobación": str(approval_date) if approval_status == "Aprobado" else "",
         "Notas Aprobación": approval_notes,
-        # Publicación (se calcula abajo)
+        # Publicación
         "Estado Publicación": "Borrador",
         "Fecha Publicación": "",
         "Publicado En": ""
       }
-      # Publicación automática
       should_publish = (not require_approval) or (approval_status == "Aprobado")
       if should_publish:
         pub_status, pub_date, pub_sites = _simulate_publish(post_urls)
@@ -698,30 +779,113 @@ def page_puestos():
 
 def page_eval():
   st.header("Resultados de evaluación")
+
   if not ss.candidates:
     st.info("Carga CVs en **Definición & Carga**.")
     return
-  df = pd.DataFrame(ss.candidates)
-  df_sorted = df.sort_values("Score", ascending=False)
-  st.subheader("Ranking de Candidatos")
-  st.dataframe(df_sorted[["Name","Score","Reasons"]], use_container_width=True, height=230)
 
-  st.subheader("Comparación de puntajes")
-  bar_colors = [BAR_GOOD if s >= 60 else BAR_DEFAULT for s in df_sorted["Score"]]
-  fig = px.bar(df_sorted, x="Name", y="Score", title="Comparación de puntajes (todos los candidatos)")
-  fig.update_traces(marker_color=bar_colors, hovertemplate="%{x}<br>Score: %{y}")
-  fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
-  st.plotly_chart(fig, use_container_width=True)
+  jd_text = ss.get("last_jd_text", "") or ""
+  # Permite sobreescribir JD aquí si quieres afinar el match sin ir atrás
+  jd_text = st.text_area("JD para matching por skills (opcional, usa el último ingresado por defecto)", jd_text, height=140)
 
-  st.subheader("Visor de CV (PDF/TXT)")
-  selected = st.selectbox("Elige un candidato", df_sorted["Name"].tolist())
-  cand = df[df["Name"]==selected].iloc[0]
-  if cand["_is_pdf"]:
-    pdf_viewer_embed(cand["_bytes"], height=480)
-  else:
-    st.info(f"'{selected}' es TXT.")
-    st.text_area("Contenido", cand["_bytes"].decode("utf-8","ignore"), height=380)
+  must_default = ""
+  nice_default = ""
+  # Si el usuario viene desde “Puestos” con Must/Nice definidos, podría pegarlos aquí.
+  with st.expander("Configurar skills objetivo (opcional)"):
+    c1, c2 = st.columns(2)
+    with c1:
+      must_default = st.text_area("Must-have (coma separada)", value="")
+    with c2:
+      nice_default = st.text_area("Nice-to-have (coma separada)", value="")
+
+  must_list = [s.strip() for s in must_default.split(",") if s.strip()]
+  nice_list = [s.strip() for s in nice_default.split(",") if s.strip()]
+
+  # ===== Calcular Fit por skills =====
+  enriched = []
+  for cand in ss.candidates:
+    cv_text = cand.get("_text")
+    if not cv_text:
+      # recuperar texto desde bytes si es TXT; si es PDF lo dejamos vacío (se evaluó antes)
+      if not cand.get("_is_pdf") and cand.get("_bytes"):
+        try:
+          cv_text = cand["_bytes"].decode("utf-8", "ignore")
+        except Exception:
+          cv_text = ""
+    score, explain = score_fit_by_skills(jd_text, must_list, nice_list, cv_text or "")
+    enriched.append({
+      "Name": cand["Name"],
+      "Fit": score,
+      "Must (ok/total)": f"{len(explain['matched_must'])}/{explain['must_total']}",
+      "Nice (ok/total)": f"{len(explain['matched_nice'])}/{explain['nice_total']}",
+      "Extras": ", ".join(explain["extras"])[:60],
+      "_exp": explain,
+      "_is_pdf": cand["_is_pdf"],
+      "_bytes": cand["_bytes"],
+      "_text": cv_text or "",
+      "meta": cand.get("meta", {})
+    })
+
+  df = pd.DataFrame(enriched).sort_values("Fit", ascending=False).reset_index(drop=True)
+
+  st.subheader("Ranking por Fit de Skills")
+  st.dataframe(df[["Name","Fit","Must (ok/total)","Nice (ok/total)","Extras"]],
+               use_container_width=True, height=250)
+
+  # ===== Detalle =====
+  st.subheader("Detalle y explicación")
+  selected = st.selectbox("Elige un candidato", df["Name"].tolist())
+  row = df[df["Name"] == selected].iloc[0]
+  exp = row["_exp"]
+
+  c1, c2 = st.columns([1.1, 0.9])
+
+  with c1:
+    # Fit bar
+    fig = px.bar(pd.DataFrame([{"Candidato": row["Name"], "Fit": row["Fit"]}]), x="Candidato", y="Fit",
+                 title="Fit por skills")
+    fig.update_traces(marker_color=BAR_GOOD if row["Fit"] >= 60 else BAR_DEFAULT, hovertemplate="%{x}<br>Fit: %{y}%")
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                      font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Fit")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("**Explicación**")
+    st.markdown(f"- **Must-have (ok/total):** {len(exp['matched_must'])}/{exp['must_total']}")
+    if exp["matched_must"]:
+      st.markdown("  - ✓ " + ", ".join(exp["matched_must"]))
+    if exp["gaps_must"]:
+      st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_must"]))
+
+    st.markdown(f"- **Nice-to-have (ok/total):** {len(exp['matched_nice'])}/{exp['nice_total']}")
+    if exp["matched_nice"]:
+      st.markdown("  - ✓ " + ", ".join(exp["matched_nice"]))
+    if exp["gaps_nice"]:
+      st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_nice"]))
+
+    if exp["extras"]:
+      st.markdown("- **Extras relevantes:** " + ", ".join(exp["extras"]))
+
+  with c2:
+    st.markdown("**CV (visor)**")
+    if row["_is_pdf"]:
+      pdf_viewer_embed(row["_bytes"], height=420)
+    else:
+      st.text_area("Contenido (TXT)", row["_text"], height=260)
+
+  st.markdown("---")
+  # Pills rápidas
+  def _pills(lst, checked=False):
+    if not lst: return ""
+    cls = "skill-pill checked" if checked else "skill-pill"
+    return "".join([f'<span class="{cls}">{"✓ " if checked else ""}{s}</span>' for s in lst])
+
+  st.markdown("**Pills de coincidencia (must / nice / extras):**", unsafe_allow_html=True)
+  st.markdown(_pills(exp["matched_must"], checked=True), unsafe_allow_html=True)
+  st.markdown(_pills(exp["matched_nice"], checked=True), unsafe_allow_html=True)
+  if exp["extras"]:
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+    st.caption("Extras")
+    st.markdown(_pills(exp["extras"], checked=False), unsafe_allow_html=True)
 
 def page_pipeline():
   st.header("Pipeline de Candidatos")
@@ -766,7 +930,7 @@ def page_pipeline():
     st.markdown('<div class="k-card">', unsafe_allow_html=True)
     match_txt = "✅ Alto" if row["Score"] >= 60 else "🟡 Medio"
     st.markdown(f"**Match estimado:** {match_txt}")
-    st.markdown(f"**Score:** {row['Score']}%")
+    st.markdown(f"**Score (keywords):** {row['Score']}%")
     st.markdown("---")
     st.markdown("**Universidad**  \n" + m.get("universidad", "—"))
     st.markdown(f"**Años de experiencia**  \n{m.get('anios_exp', 0)}")
@@ -780,7 +944,7 @@ def page_pipeline():
     if row["_is_pdf"]:
       pdf_viewer_embed(row["_bytes"], height=420)
     else:
-      st.text_area("Contenido (TXT)", row["_bytes"].decode("utf-8","ignore"), height=260)
+      st.text_area("Contenido (TXT)", row.get("_text",""), height=260)
 
     cbtn1, cbtn2 = st.columns(2)
     with cbtn1:
@@ -793,7 +957,7 @@ def page_pipeline():
     if row["_is_pdf"]:
       st.download_button("Descargar CV (PDF)", data=row["_bytes"], file_name=row["Name"], mime="application/pdf")
     else:
-      st.download_button("Descargar CV (TXT)", data=row["_bytes"], file_name=row["Name"], mime="text/plain")
+      st.download_button("Descargar CV (TXT)", data=row.get("_text","").encode("utf-8"), file_name=row["Name"], mime="text/plain")
 
 def page_interview():
   st.header("Entrevista (Gerencia)")
