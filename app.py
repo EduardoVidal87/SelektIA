@@ -144,17 +144,28 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .agent-title{{font-weight:800;color:{TITLE_DARK};font-size:15px;margin-top:6px}}
 .agent-sub{{font-size:12px;opacity:.8;margin-top:4px;min-height:30px}}
 
-/* Toolbar de iconos integrada en la tarjeta */
-.toolbar{{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}}
-.toolbar .stButton>button{{
-  background:#fff !important;               /* mimético con el card */
+/* Toolbar de iconos integrada en la tarjeta (ghost) */
+.toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  margin-top:8px
+}
+.toolbar .stButton>button{
+  background: transparent !important;   /* ghost */
   color:#2b3b4d !important;
-  border:1px solid #E3EDF6 !important;
+  border: 0 !important;                 /* sin borde */
+  box-shadow: none !important;
   border-radius:10px !important;
   padding:6px 8px !important;
   min-width:36px !important;
-}}
-.toolbar .stButton>button:hover{{ background:#F7FBFF !important; }}
+}
+.toolbar .stButton>button:hover{
+  background:#F5FAFF !important;        /* sutil hover */
+  border: 0 !important;
+}
+
 
 /* Detalle/edición */
 .agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
@@ -572,14 +583,13 @@ def page_agents():
 
   # ---------- GRID de agentes (5 por fila) ----------
   st.subheader("Tus agentes")
-  if not ss.agents:
-    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
-    return
-
-  cols_per_row = 5
+if not ss.agents:
+  st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+else:
+  cols_per_row = 6  # ← ahora son 6 por fila
   for i in range(0, len(ss.agents), cols_per_row):
     row_agents = ss.agents[i:i+cols_per_row]
-    cols = st.columns(cols_per_row)
+    cols = st.columns(cols_per_row, gap="small")
     for j, ag in enumerate(row_agents):
       idx = i + j
       with cols[j]:
@@ -591,9 +601,10 @@ def page_agents():
             <div class="agent-title">{ag.get('rol','—')}</div>
             <div class="agent-sub">{ag.get('objetivo','—')}</div>
           </div>
-          """, unsafe_allow_html=True
+          """,
+          unsafe_allow_html=True
         )
-        # Toolbar centrada y mimética (dentro del card)
+        # Toolbar de iconos centrada (ghost)
         st.markdown('<div class="toolbar">', unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -609,10 +620,12 @@ def page_agents():
         with c3:
           if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
             clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
-            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
+            ss.agents.append(clone); save_agents(ss.agents)
+            st.success("Agente clonado."); st.rerun()
         with c4:
           if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
-            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
+            ss.agents.pop(idx); save_agents(ss.agents)
+            st.success("Agente eliminado."); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
   # ---------- Secciones debajo (no rompen la grilla) ----------
