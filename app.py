@@ -79,12 +79,12 @@ html, body, [data-testid="stAppViewContainer"] {{
   margin: 10px 10px 6px 10px !important;
 }}
 
-/* Botones del sidebar */
+/* Botones del sidebar (texto a la izquierda SIEMPRE) */
 [data-testid="stSidebar"] .stButton > button {{
   width: 100% !important;
-  text-align: left !important;            /* SIEMPRE a la izquierda */
+  text-align: left !important;            /* a la izquierda */
   padding: 10px 14px !important;
-  margin: 6px 10px !important;            /* menos separación */
+  margin: 6px 10px !important;            /* menos separación vertical */
   border-radius: 12px !important;
   background: var(--sb-card) !important;  /* mismo color del panel */
   border: 1px solid var(--sb-bg) !important; /* contorno mismo color del panel */
@@ -150,7 +150,7 @@ def init_state():
     ss.setdefault("candidates", [])
     ss.setdefault("uploader_key", "u1")
     ss.setdefault("entrevista_queue", [])
-    ss.setdefault("hh_tasks", {})         # por candidato: checklist/notes/files/locked
+    ss.setdefault("hh_tasks", {})         # por candidato
     ss.setdefault("oferta_queue", [])
     ss.setdefault("offers", {})           # ofertas por candidato
     ss.setdefault("onboarding", {})       # onboarding por candidato
@@ -302,9 +302,6 @@ def sidebar():
 
     # DASHBOARD
     st.sidebar.markdown("<div class='sb-section-title'>Dashboard</div>", unsafe_allow_html=True)
-    if st.sidebar.button("Bienvenido a Selektia", key="SB_home"):
-        go("dashboard")
-    # Botón "Analytics" aquí mismo (sin sección "Analytics")
     if st.sidebar.button("Analytics", key="SB_analytics"):
         go("analytics")
 
@@ -341,10 +338,6 @@ def sidebar():
 # =============================================================================
 # PAGES IMPLEMENTATION
 # =============================================================================
-def page_dashboard():
-    st.markdown("# Bienvenido a Selektia")
-    st.write("Usa el menú izquierdo para navegar por el proceso completo.")
-
 def page_definicion():
     st.markdown("# Definición & Carga")
     ss = st.session_state
@@ -485,7 +478,7 @@ def page_pipeline():
             if cand["_is_pdf"]:
                 st.download_button("Descargar PDF", data=cand["_bytes"], file_name=cand["Name"], mime="application/pdf")
 
-# ----------- TAREAS HEADHUNTER (funcional) -----------
+# ----------- TAREAS HEADHUNTER -----------
 def page_tareas_hh():
     st.markdown("# Tareas del Headhunter")
     ss = st.session_state
@@ -524,7 +517,6 @@ def page_tareas_hh():
     st.markdown("### Adjuntos (BLS/ACLS, colegiatura)")
     up = st.file_uploader("Sube PDF/IMG", type=["pdf","png","jpg","jpeg"], accept_multiple_files=True, disabled=hh["locked"])
     if up:
-        # solo guardamos nombres para mostrar; en prod almacenarías bytes
         hh["files"] = [f.name for f in up]
     if hh["files"]:
         st.caption("Archivos cargados: " + ", ".join(hh["files"]))
@@ -543,7 +535,7 @@ def page_tareas_hh():
                 ss.entrevista_queue.append(selected)
             st.success("Enviado a Comité y bloqueadas ediciones del HH.")
 
-# ----------- ENTREVISTA (funcional) -----------
+# ----------- ENTREVISTA -----------
 def page_entrevista():
     st.markdown("# Entrevista (Gerencia)")
     ss = st.session_state
@@ -590,7 +582,7 @@ def page_entrevista():
             ss.oferta_queue.append(name)
         st.success("Candidato movido a **Oferta**.")
 
-# ----------- OFERTA (funcional) -----------
+# ----------- OFERTA (con FIX a KeyError) -----------
 def page_oferta():
     st.markdown("# Oferta")
     ss = st.session_state
@@ -599,11 +591,14 @@ def page_oferta():
         return
 
     cand = st.selectbox("Candidato", ss.oferta_queue, key="offer_sel")
-    offer = ss.offers.get(cand, {
+
+    # Aseguramos que exista una entrada en offers ANTES de presionar cualquier botón
+    default_offer = {
         "puesto":"", "ubicacion":"", "modalidad":"Presencial", "contrato":"Indeterminado",
         "salario":"", "beneficios":"", "inicio":str(date.today()+timedelta(days=14)), "caduca":str(date.today()+timedelta(days=7)),
         "aprobadores":"Gerencia; Legal; Finanzas", "estado":"Borrador", "timeline":[("Creado", datetime.utcnow().isoformat())]
-    })
+    }
+    offer = ss.offers.setdefault(cand, default_offer)
 
     with st.form("form_oferta"):
         c1, c2, c3 = st.columns(3)
@@ -639,7 +634,6 @@ def page_oferta():
         if st.button("Marcar aceptada"):
             ss.offers[cand]["estado"] = "Aceptada"
             ss.offers[cand]["timeline"].append(("Aceptada", datetime.utcnow().isoformat()))
-            # crear checklist onboarding
             if cand not in ss.onboarding:
                 ss.onboarding[cand] = default_onboarding()
             st.success("Oferta aceptada. Se generaron tareas de Onboarding.")
@@ -662,7 +656,7 @@ def default_onboarding():
         "Plan 30-60-90 cargado": {"due": today + timedelta(days=7), "done": False},
     }
 
-# ----------- ONBOARDING (funcional) -----------
+# ----------- ONBOARDING -----------
 def page_onboarding():
     st.markdown("# Onboarding")
     ss = st.session_state
@@ -713,7 +707,7 @@ def page_flujos():
     st.markdown("# Flujos")
     st.info("Configura flujos y automatizaciones (pendiente).")
 
-# ======== AGENTES (con persistencia en sesión) ========
+# ======== AGENTES ========
 def page_agentes():
     st.markdown("# Agentes")
     st.caption("Crea asistentes especializados. Se guardan en esta sesión.")
@@ -766,9 +760,7 @@ def page_tareas_agente():
 # =============================================================================
 def router():
     page = st.session_state.page
-    if page == "dashboard":
-        page_dashboard()
-    elif page == "definicion":
+    if page == "definicion":
         page_definicion()
     elif page == "puestos":
         page_puestos()
