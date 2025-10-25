@@ -187,27 +187,41 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-# Compactar aún más los botones del sidebar
+# Sidebar ultra-compacto (mínimo espacio vertical)
 st.markdown("""
 <style>
-/* Quita margen al contenedor de cada botón */
-[data-testid="stSidebar"] .stButton{ margin:0 !important; }
-
-/* Botón casi pegado: sin margen vertical y padding mínimo */
-[data-testid="stSidebar"] .stButton > button{
-  margin:0 4px !important;        /* <<< sin separación vertical */
-  padding:7px 10px !important;    /* un pelín más compacto */
-  gap:6px !important;             /* menos espacio entre icono y texto */
-  line-height:1.05 !important;    /* reduce altura visual */
+/* 1) Quita casi todo el espacio entre bloques del sidebar */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+  gap: 2px !important;                 /* espacio entre hijos del bloque */
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{
+  margin: 0 !important;                /* elimina margen inferior por widget */
+  padding: 0 !important;
 }
 
-/* Títulos del sidebar también más compactos */
+/* 2) Títulos (h4) con margen mínimo */
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] .stMarkdown h4{
-  margin:6px 8px 2px !important;  /* menos espacio antes y después */
+  margin: 4px 8px 2px !important;      /* arriba | lados | abajo */
+  line-height: 1.1 !important;
+}
+
+/* 3) Markdown normal (los textos como "Analytics", etc.) más pegados */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{
+  margin: 2px 8px !important;          /* reduce el espacio de los <p> */
+}
+
+/* 4) Botones: sin separación vertical y padding compacto */
+[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
+[data-testid="stSidebar"] .stButton > button{
+  margin: 0 8px !important;            /* sin margen arriba/abajo */
+  padding: 6px 10px !important;
+  line-height: 1.05 !important;
+  gap: 6px !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
