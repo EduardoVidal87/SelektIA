@@ -954,8 +954,7 @@ def page_flows():
     puede_aprobar = vista_como in ("Supervisor","Administrador")
 
     left, right = st.columns([0.9, 1.1])
-   
-  with left:
+    with left:
     st.subheader("Mis flujos")
     if not ss.workflows:
       st.info("No hay flujos aún. Crea uno a la derecha.")
