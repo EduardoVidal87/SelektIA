@@ -86,7 +86,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS — (botones a la IZQUIERDA + branding) + LOGIN/TOPBAR
+# CSS (sidebar, login centrado, títulos verde, botón logout estilo chip)
 # =========================================================
 CSS = f"""
 :root {{
@@ -99,40 +99,40 @@ CSS = f"""
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
 .block-container {{ background: transparent !important; padding-top: 1.25rem !important; }}
 
-/* Ocultar menú de 3 puntos / Share */
+/* Ocultar menú/toolbar superior Streamlit */
 #MainMenu {{visibility:hidden;}}
 [data-testid="stToolbar"] {{ display:none !important; }}
 header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; }}
-/* ---- Sidebar ---- */
+
+/* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] {{ background: var(--sb-bg) !important; color: var(--sb-tx) !important; }}
 [data-testid="stSidebar"] * {{ color: var(--sb-tx) !important; }}
-/* Títulos del sidebar en VERDE */
-[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{
-  color: var(--green) !important;
-}}
+/* Títulos en verde original */
+[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{ color: var(--green) !important; }}
+
 .sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:-10px; position:relative; top:-2px; text-align:center; }}
 .sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:44px !important; line-height:1.05 !important; }}
 .sidebar-brand .brand-sub {{ margin-top:2px !important; color: var(--green) !important; font-size:11.5px !important; opacity:.95 !important; }}
 
-/* Sidebar buttons */
+/* Botones del sidebar */
 [data-testid="stSidebar"] .stButton>button {{
   width: 100% !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
   gap:8px !important; background: var(--sb-card) !important; border:1px solid var(--sb-bg) !important; color:#fff !important;
   border-radius:12px !important; padding:9px 12px !important; margin:6px 8px !important; font-weight:600 !important;
 }}
 
-/* Body buttons */
+/* Botones del body */
 .block-container .stButton>button {{
   width:auto !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
   background: var(--green) !important; color:#082017 !important; border-radius:10px !important; border:none !important; padding:.50rem .90rem !important; font-weight:700 !important;
 }}
 .block-container .stButton>button:hover {{ filter: brightness(.96); }}
 
-/* Typography */
+/* Tipografía */
 h1, h2, h3 {{ color: {TITLE_DARK}; }}
 h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Inputs (generales) */
+/* Inputs generales */
 .block-container [data-testid="stSelectbox"]>div>div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
@@ -140,15 +140,13 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
 }}
 
-/* Tables */
+/* Tablas y tarjetas */
 .block-container table {{ background:#fff !important; border:1px solid #E3EDF6 !important; border-radius:8px !important; }}
 .block-container thead th {{ background:#F1F7FD !important; color:{TITLE_DARK} !important; }}
-
-/* Cards */
 .k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
 .badge {{ display:inline-flex;align-items:center;gap:6px;background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;padding:4px 10px;font-size:12px;color:#1B2A3C; }}
 
-/* Agents */
+/* Agentes */
 .agent-wrap .stButton>button{{background:var(--body)!important;color:{TITLE_DARK}!important;border:1px solid #E3EDF6!important;border-radius:10px!important;font-weight:700!important;padding:6px 10px!important}}
 .agent-wrap .stButton>button:hover{{background:#fff!important}}
 .agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
@@ -159,29 +157,32 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .step{{display:flex;gap:10px;align-items:center;margin:8px 0}}
 .status-chip{{display:inline-flex;gap:8px;align-items:center;border:1px solid #E3EDF6;background:#F6FAFF;border-radius:999px;padding:4px 10px;font-size:12px}}
 
-/* ---------- LOGIN FULL-SCREEN (dos boxes centrados) ---------- */
+/* ---------- LOGIN (centrado con 2 boxes) ---------- */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
-/* Eliminamos tarjeta; dejamos wrapper ancho fijo tipo 'pill form' */
 .login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
 .login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
 .login-sub{{color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px}}
-/* Campos estilo 'pill' oscuro y grandes como el resaltado en rojo */
 .login-card [data-testid="stTextInput"] input {{
-  background:#10283f !important;            /* tono más oscuro dentro del navy */
-  color:#E7F0FA !important;
-  border:1.5px solid #1d3a57 !important;
-  border-radius:24px !important;            /* pill */
-  height:48px !important;
-  padding:0 16px !important;
+  background:#10283f !important; color:#E7F0FA !important; border:1.5px solid #1d3a57 !important;
+  border-radius:24px !important; height:48px !important; padding:0 16px !important;
 }}
-.login-card .stButton>button{{
-  width:160px !important;
-  border-radius:24px !important;
-}}
+.login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
 
-/* Topbar (usuario + logout) */
+/* ---------- Topbar ---------- */
 .topbar{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px}}
-.user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:5px 10px;font-weight:700;color:#123;}}
+.user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:6px 12px;font-weight:700;color:#123;}}
+
+/* Botón logout con look de chip */
+.topbar .stButton>button{{
+  background:#eef5ff !important;
+  border:1px solid #d7e7fb !important;
+  color:#123 !important;
+  border-radius:999px !important;
+  padding:6px 12px !important;
+  font-weight:700 !important;
+  box-shadow:none !important;
+}}
+.topbar .stButton>button:hover{{ background:#e9f2ff !important; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -211,7 +212,7 @@ def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 # ESTADO
 # =========================================================
 ss = st.session_state
-if "auth" not in ss: ss.auth = None  # {"username":..., "role":..., "name":...}
+if "auth" not in ss: ss.auth = None
 if "section" not in ss:  ss.section = "def_carga"
 if "tasks" not in ss:    ss.tasks = []
 if "candidates" not in ss: ss.candidates = []
@@ -338,12 +339,10 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
 def asset_logo_wayki():
   local = Path("assets/logo-wayki.png")
   if local.exists(): return str(local)
-  # fallback muy ligero
   return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
 
 def login_screen():
   st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
-  # Logo centrado
   try:
     st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
     st.image(asset_logo_wayki(), width=120)
@@ -357,31 +356,25 @@ def login_screen():
     ok = st.form_submit_button("Ingresar")
     if ok:
       if u in USERS and USERS[u]["password"] == p:
-        ss.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
+        st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
         st.success("Bienvenido.")
-        st.rerun()  # evita el doble click
+        st.rerun()
       else:
         st.error("Usuario o contraseña incorrectos.")
   st.markdown("</div></div>", unsafe_allow_html=True)
 
 def render_topbar():
   if ss.auth is None: return
-  st.markdown(
-    f"""
-    <div class="topbar">
-      <div class="user-chip">👤 {ss.auth['name']}</div>
-      <form action="#" method="get">
-        <button type="button" id="logout-btn" style="background:#fff;border:1px solid #E3EDF6;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer">Cerrar sesión</button>
-      </form>
-    </div>
-    """, unsafe_allow_html=True
-  )
-  # Botón de logout real:
-  col1, col2 = st.columns([0.85,0.15])
-  with col2:
+  # Chip + botón con estilo de chip, alineados a la derecha
+  st.markdown("<div class='topbar'>", unsafe_allow_html=True)
+  col_sp, col_chip, col_btn = st.columns([0.82, 0.10, 0.08])
+  with col_chip:
+    st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
+  with col_btn:
     if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
-      ss.auth=None
+      ss.auth = None
       st.rerun()
+  st.markdown("</div>", unsafe_allow_html=True)
 
 def require_auth():
   if ss.auth is None:
@@ -402,7 +395,7 @@ def render_sidebar():
       </div>
       """, unsafe_allow_html=True
     )
-    # Eliminado "Rol: Administrador" (lo pediste quitar)
+    # (Se eliminó el "Rol: ...")
 
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
@@ -425,7 +418,7 @@ def render_sidebar():
       ss.section = "create_task"
 
 # =========================================================
-# PÁGINAS (proceso y módulos)
+# PÁGINAS
 # =========================================================
 def page_def_carga():
   st.header("Definición & Carga")
@@ -789,13 +782,11 @@ def page_agents():
 def page_flows():
   st.header("Flujos")
 
-  # Permisos de aprobación: Supervisor y Administrador
   vista_como = ss.auth["role"]
   puede_aprobar = vista_como in ("Supervisor","Administrador")
 
   left, right = st.columns([0.9, 1.1])
 
-  # Bandeja
   with left:
     st.subheader("Mis flujos")
     if not ss.workflows:
@@ -843,11 +834,9 @@ def page_flows():
                   wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
                   save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
 
-  # Constructor
   with right:
     st.subheader("Crear / Editar flujo")
     with st.form("wf_form"):
-      # Paso 1 — Task
       st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
       name = st.text_input("Name*", value="Analizar CV")
       role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
@@ -864,7 +853,6 @@ def page_flows():
         st.text_area("Preview", jd_from_file[:4000], height=160)
 
       st.markdown("---")
-      # Paso 2 — Staff in charge
       st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
       if ss.agents:
         agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
@@ -875,7 +863,6 @@ def page_flows():
         agent_idx = -1
 
       st.markdown("---")
-      # Paso 3 — Save & Schedule (con control humano)
       st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
       run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
       run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
@@ -919,7 +906,7 @@ def page_flows():
         save_workflows(ss.workflows)
         st.rerun()
 
-# ===================== ANALYTICS (funcional) =====================
+# ===================== ANALYTICS =====================
 def page_analytics():
   st.header("Analytics")
 
@@ -1016,9 +1003,6 @@ ROUTES = {
 # APP
 # =========================================================
 if require_auth():
-  # topbar (usuario + cerrar sesión)
   render_topbar()
-  # sidebar navegación
   render_sidebar()
-  # router
   ROUTES.get(ss.section, page_def_carga)()
