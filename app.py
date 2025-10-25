@@ -14,10 +14,10 @@ from PyPDF2 import PdfReader
 # PALETA / CONST
 # =========================================================
 PRIMARY    = "#00CD78"
-SIDEBAR_BG = "#0E192B"
-SIDEBAR_TX = "#B9C7DF"
+SIDEBAR_BG = "#0E192B"     # fondo panel izquierdo
+SIDEBAR_TX = "#B9C7DF"     # texto gris azulado
 BODY_BG    = "#F7FBFF"
-CARD_BG    = "#0E192B"
+CARD_BG    = "#0E192B"     # mismo color que sidebar
 TITLE_DARK = "#142433"
 
 BAR_DEFAULT = "#E9F3FF"
@@ -31,6 +31,7 @@ EVAL_INSTRUCTION = (
   "nice-to-have, brechas y hallazgos relevantes."
 )
 
+# ===== Login simulado (usuarios de demo) =====
 USERS = {
   "colab": {"password":"colab123","role":"Colaborador","name":"Colab"},
   "super": {"password":"super123","role":"Supervisor","name":"Sup"},
@@ -44,6 +45,7 @@ AGENT_DEFAULT_IMAGES = {
 }
 LLM_MODELS = ["gpt-4o-mini","gpt-4.1","gpt-4o","claude-3.5-sonnet","claude-3-haiku","gemini-1.5-pro","mixtral-8x7b","llama-3.1-70b"]
 
+# ===== Presets de puestos (precargados) =====
 ROLE_PRESETS = {
   "Asistente Administrativo": {
     "jd": "Brindar soporte administrativo: gestión documental, agenda, compras menores, logística de reuniones y reportes para las áreas internas. Atención a proveedores y coordinación de requerimientos; manejo de caja chica y apoyo en facturación básica. Se valora comunicación clara, orden y manejo de prioridades.",
@@ -84,7 +86,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS (ajustes + login centrado + títulos verde en sidebar)
+# CSS (sidebar, login centrado, títulos verde, botón logout estilo chip)
 # =========================================================
 CSS = f"""
 :root {{
@@ -97,65 +99,48 @@ CSS = f"""
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
 .block-container {{ background: transparent !important; padding-top: 1.25rem !important; }}
 
-/* Sidebar base */
+/* Ocultar menú/toolbar superior Streamlit */
+#MainMenu {{visibility:hidden;}}
+[data-testid="stToolbar"] {{ display:none !important; }}
+header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; }}
+
+/* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] {{ background: var(--sb-bg) !important; color: var(--sb-tx) !important; }}
 [data-testid="stSidebar"] * {{ color: var(--sb-tx) !important; }}
+/* Títulos en verde original */
+[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{ color: var(--green) !important; }}
+
 .sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:-10px; position:relative; top:-2px; text-align:center; }}
 .sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:44px !important; line-height:1.05 !important; }}
 .sidebar-brand .brand-sub {{ margin-top:2px !important; color: var(--green) !important; font-size:11.5px !important; opacity:.95 !important; }}
 
-/* Títulos de sección del sidebar en VERDE */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6 {{
-  color: var(--green) !important;
-  letter-spacing: .5px;
-  margin: 12px 10px 6px !important;
-  line-height: 1.05 !important;
+/* Botones del sidebar */
+[data-testid="stSidebar"] .stButton>button {{
+  width: 100% !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
+  gap:8px !important; background: var(--sb-card) !important; border:1px solid var(--sb-bg) !important; color:#fff !important;
+  border-radius:12px !important; padding:9px 12px !important; margin:6px 8px !important; font-weight:600 !important;
 }}
 
-/* Botones en sidebar */
-[data-testid="stSidebar"] .stButton > button {{
-  width: 100% !important;
-  display:flex !important;
-  justify-content:flex-start !important;
-  align-items:center !important;
-  text-align:left !important;
-  gap:8px !important;
-  background: var(--sb-card) !important;
-  border: 1px solid var(--sb-bg) !important;
-  color:#fff !important;
-  border-radius:12px !important;
-  padding:9px 12px !important;
-  margin:6px 8px !important;
-  font-weight:600 !important;
+/* Botones del body */
+.block-container .stButton>button {{
+  width:auto !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
+  background: var(--green) !important; color:#082017 !important; border-radius:10px !important; border:none !important; padding:.50rem .90rem !important; font-weight:700 !important;
 }}
+.block-container .stButton>button:hover {{ filter: brightness(.96); }}
 
-/* Botones en cuerpo */
-.block-container .stButton > button {{
-  width:auto !important;
-  display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
-  background: var(--green) !important; color:#082017 !important; border-radius:10px !important; border:none !important;
-  padding:.50rem .90rem !important; font-weight:700 !important;
-}}
-.block-container .stButton > button:hover {{ filter:brightness(.96); }}
-
-/* Titulación general del cuerpo */
-h1, h2, h3 {{ color:{TITLE_DARK}; }}
-h1 strong, h2 strong, h3 strong {{ color:var(--green); }}
+/* Tipografía */
+h1, h2, h3 {{ color: {TITLE_DARK}; }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
 /* Inputs generales */
-.block-container [data-testid="stSelectbox"] > div > div,
+.block-container [data-testid="stSelectbox"]>div>div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
 .block-container [data-testid="stTextArea"] textarea {{
   background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
 }}
 
-/* Tables & cards */
+/* Tablas y tarjetas */
 .block-container table {{ background:#fff !important; border:1px solid #E3EDF6 !important; border-radius:8px !important; }}
 .block-container thead th {{ background:#F1F7FD !important; color:{TITLE_DARK} !important; }}
 .k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
@@ -172,60 +157,92 @@ h1 strong, h2 strong, h3 strong {{ color:var(--green); }}
 .step{{display:flex;gap:10px;align-items:center;margin:8px 0}}
 .status-chip{{display:inline-flex;gap:8px;align-items:center;border:1px solid #E3EDF6;background:#F6FAFF;border-radius:999px;padding:4px 10px;font-size:12px}}
 
-/* Login compacto centrado */
-.login-outer{{display:flex;align-items:center;justify-content:center;min-height:86vh;background:{SIDEBAR_BG};}}
-.login-card{{background:#0f223d;border:1px solid #24344d;border-radius:16px;padding:22px;width:min(380px,92vw);box-shadow:0 16px 38px rgba(0,0,0,.35)}}
-.login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:10px}}
-.login-sub{{color:#9fb2d3;text-align:center;margin:2px 0 12px 0;font-size:12.5px}}
-/* inputs del login: aspecto “pastilla” */
-.login-scope [data-testid="stTextInput"] input {{
-  background:#0f223d !important; border:1px solid #24344d !important; color:#E6F1FF !important; border-radius:10px !important;
+/* ---------- LOGIN (centrado con 2 boxes) ---------- */
+.login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
+.login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
+.login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
+.login-sub{{color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px}}
+.login-card [data-testid="stTextInput"] input {{
+  background:#10283f !important; color:#E7F0FA !important; border:1.5px solid #1d3a57 !important;
+  border-radius:24px !important; height:48px !important; padding:0 16px !important;
 }}
-"""
+.login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
 
+/* ---------- Topbar ---------- */
+.topbar{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px}}
+.user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:6px 12px;font-weight:700;color:#123;}}
+
+/* Botón logout con look de chip */
+.topbar .stButton>button{{
+  background:#eef5ff !important;
+  border:1px solid #d7e7fb !important;
+  color:#123 !important;
+  border-radius:999px !important;
+  padding:6px 12px !important;
+  font-weight:700 !important;
+  box-shadow:none !important;
+}}
+.topbar .stButton>button:hover{{ background:#e9f2ff !important; }}
+"""
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # =========================================================
-# Persistencia
+# Persistencia (Agentes / Flujos)
 # =========================================================
 DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
-def load_json(p, d): 
-  try:
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else d
-  except: return d
-def save_json(p, data): p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def load_json(path: Path, default):
+  if path.exists():
+    try: return json.loads(path.read_text(encoding="utf-8"))
+    except: return default
+  return default
+
+def save_json(path: Path, data):
+  path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
 def load_agents(): return load_json(AGENTS_FILE, [])
-def save_agents(a): save_json(AGENTS_FILE, a)
+def save_agents(agents): save_json(AGENTS_FILE, agents)
 def load_workflows(): return load_json(WORKFLOWS_FILE, [])
-def save_workflows(w): save_json(WORKFLOWS_FILE, w)
+def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 
 # =========================================================
-# Estado
+# ESTADO
 # =========================================================
 ss = st.session_state
-if "auth" not in ss: ss.auth=None
-if "section" not in ss: ss.section="def_carga"
-if "tasks" not in ss: ss.tasks=[]
-if "candidates" not in ss: ss.candidates=[]
-if "offers" not in ss: ss.offers={}
+if "auth" not in ss: ss.auth = None
+if "section" not in ss:  ss.section = "def_carga"
+if "tasks" not in ss:    ss.tasks = []
+if "candidates" not in ss: ss.candidates = []
+if "offers" not in ss:  ss.offers = {}
 if "agents_loaded" not in ss:
-  ss.agents=load_agents(); ss.agents_loaded=True
+  ss.agents = load_agents()
+  ss.agents_loaded = True
 if "workflows_loaded" not in ss:
-  ss.workflows=load_workflows(); ss.workflows_loaded=True
-if "agent_view_open" not in ss: ss.agent_view_open={}
-if "agent_edit_open" not in ss: ss.agent_edit_open={}
+  ss.workflows = load_workflows()
+  ss.workflows_loaded = True
+if "agent_view_open" not in ss: ss.agent_view_open = {}
+if "agent_edit_open" not in ss: ss.agent_edit_open = {}
 if "positions" not in ss:
-  ss.positions=pd.DataFrame([
-    {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,"Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,"Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú","Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
-    {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,"Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,"Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile","Hiring Manager":"Angela Cruz","Estado":"Abierto"},
-    {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,"Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,"Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX","Hiring Manager":"Rivers Brykson","Estado":"Abierto"}
+  ss.positions = pd.DataFrame([
+      {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
+       "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
+       "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
+       "Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
+      {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
+       "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
+       "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
+       "Hiring Manager":"Angela Cruz","Estado":"Abierto"},
+      {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
+       "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
+       "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
+       "Hiring Manager":"Rivers Brykson","Estado":"Abierto"}
   ])
 
 # =========================================================
-# Utils (PDF/Docx, skills, scoring, visor)
+# UTILS
 # =========================================================
 SKILL_SYNONYMS = {
   "Excel":["excel","xlsx"], "Gestión documental":["gestión documental","document control"], "Redacción":["redacción","writing"],
@@ -240,8 +257,10 @@ def infer_skills(text:str)->set:
   for k,syns in SKILL_SYNONYMS.items():
     if any(s in t for s in syns): out.add(k)
   return out
+
 def score_fit_by_skills(jd_text, must_list, nice_list, cv_text):
-  jd_skills=infer_skills(jd_text); must=set([m.strip() for m in must_list if m.strip()]) or jd_skills
+  jd_skills = infer_skills(jd_text)
+  must=set([m.strip() for m in must_list if m.strip()]) or jd_skills
   nice=set([n.strip() for n in nice_list if n.strip()])-must
   cv=infer_skills(cv_text)
   mm=sorted(list(must&cv)); mn=sorted(list(nice&cv))
@@ -251,89 +270,111 @@ def score_fit_by_skills(jd_text, must_list, nice_list, cv_text):
   cov_n=len(mn)/len(nice) if nice else 0
   sc=int(round(100*(0.65*cov_m+0.20*cov_n+0.15*min(len(extras),5)/5)))
   return sc, {"matched_must":mm,"matched_nice":mn,"gaps_must":gm,"gaps_nice":gn,"extras":extras,"must_total":len(must),"nice_total":len(nice)}
+
 def build_analysis_text(name,ex):
   ok_m=", ".join(ex["matched_must"]) if ex["matched_must"] else "sin must-have claros"
   ok_n=", ".join(ex["matched_nice"]) if ex["matched_nice"] else "—"
   gaps=", ".join(ex["gaps_must"][:3]) if ex["gaps_must"] else "sin brechas críticas"
   extras=", ".join(ex["extras"][:3]) if ex["extras"] else "—"
   return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
+
+def pdf_viewer_embed(file_bytes: bytes, height=520):
+  b64=base64.b64encode(file_bytes).decode("utf-8")
+  st.components.v1.html(
+    f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>',
+    height=height
+  )
+
 def _extract_docx_bytes(b: bytes) -> str:
   try:
     with zipfile.ZipFile(io.BytesIO(b)) as z:
-      xml=z.read("word/document.xml").decode("utf-8","ignore")
-      text=re.sub(r"<.*?>"," ",xml)
-      return re.sub(r"\s+"," "," ".join(text.split())).strip()
-  except Exception: return ""
+      xml = z.read("word/document.xml").decode("utf-8", "ignore")
+      text = re.sub(r"<.*?>", " ", xml)
+      return re.sub(r"\s+", " ", text).strip()
+  except Exception:
+    return ""
+
 def extract_text_from_file(uploaded_file) -> str:
   try:
-    suffix=Path(uploaded_file.name).suffix.lower()
-    if suffix==".pdf":
-      pdf_reader=PdfReader(io.BytesIO(uploaded_file.read()))
-      text=""; 
-      for page in pdf_reader.pages: text += page.extract_text() or ""
+    suffix = Path(uploaded_file.name).suffix.lower()
+    if suffix == ".pdf":
+      pdf_reader = PdfReader(io.BytesIO(uploaded_file.read()))
+      text = ""
+      for page in pdf_reader.pages:
+        text += page.extract_text() or ""
       return text
-    elif suffix==".docx":
+    elif suffix == ".docx":
       return _extract_docx_bytes(uploaded_file.read())
     else:
-      return uploaded_file.read().decode("utf-8","ignore")
+      return uploaded_file.read().decode("utf-8", errors="ignore")
   except Exception as e:
-    st.error(f"Error al leer '{uploaded_file.name}': {e}"); return ""
+    st.error(f"Error al leer '{uploaded_file.name}': {e}")
+    return ""
+
 def _max_years(t):
   t=t.lower(); years=0
-  for m in re.finditer(r'(\d{1,2})\s*(años|year|years)', t): years=max(years,int(m.group(1)))
+  for m in re.finditer(r'(\d{1,2})\s*(años|year|years)', t):
+    years=max(years, int(m.group(1)))
   if years==0 and any(w in t for w in ["años","experiencia","years"]): years=5
   return years
-def extract_meta(text): return {"universidad":"—","anios_exp":_max_years(text),"titulo":"—","ubicacion":"—","ultima_actualizacion":date.today().isoformat()}
+
+def extract_meta(text):
+  t=text.lower(); years=_max_years(t)
+  return {"universidad":"—","anios_exp":years,"titulo":"—","ubicacion":"—","ultima_actualizacion":date.today().isoformat()}
+
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
-  base=0; reasons=[]; text_low=(cv_text or "").lower()
-  kws=[k.strip().lower() for k in (keywords or "").split(",") if k.strip()]
-  hits=sum(1 for k in kws if k in text_low)
-  if kws: base += int((hits/len(kws))*70); reasons.append(f"{hits}/{len(kws)} keywords encontradas")
-  base=max(0,min(100,base)); return base," — ".join(reasons)
-def pdf_viewer_embed(file_bytes: bytes, height=520):
-  b64=base64.b64encode(file_bytes).decode("utf-8")
-  st.components.v1.html(f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>', height=height)
+  base = 0; reasons = []
+  text_low = (cv_text or "").lower()
+  kws = [k.strip().lower() for k in (keywords or "").split(",") if k.strip()]
+  hits = sum(1 for k in kws if k in text_low)
+  if kws:
+    base += int((hits/len(kws))*70)
+    reasons.append(f"{hits}/{len(kws)} keywords encontradas")
+  base = max(0, min(100, base))
+  return base, " — ".join(reasons)
 
 # =========================================================
-# Login + Topbar
+# LOGIN + TOPBAR
 # =========================================================
 def asset_logo_wayki():
   local = Path("assets/logo-wayki.png")
-  return str(local) if local.exists() else "https://raw.githubusercontent.com/waykiconsulting/assets/main/logo-wayki.png"
+  if local.exists(): return str(local)
+  return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
 
 def login_screen():
-  st.markdown('<div class="login-outer"><div class="login-card login-scope">', unsafe_allow_html=True)
-  st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
-  st.image(asset_logo_wayki(), width=120)
-  st.markdown('</div>', unsafe_allow_html=True)
+  st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
+  try:
+    st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
+    st.image(asset_logo_wayki(), width=120)
+    st.markdown("</div>", unsafe_allow_html=True)
+  except:
+    pass
   st.markdown('<div class="login-sub">Acceso a SelektIA — Demo</div>', unsafe_allow_html=True)
-
-  # centrado real con columnas para evitar glitches
-  col = st.container()
-  with col:
-    with st.form("login_form", clear_on_submit=False):
-      u = st.text_input("Usuario")
-      p = st.text_input("Contraseña", type="password")
-      ok = st.form_submit_button("Ingresar")
-      if ok:
-        if u in USERS and USERS[u]["password"] == p:
-          st.session_state.auth = {"username":u,"role":USERS[u]["role"],"name":USERS[u]["name"]}
-          st.success("Bienvenido."); st.rerun()
-        else:
-          st.error("Usuario o contraseña incorrectos.")
-  st.markdown('</div></div>', unsafe_allow_html=True)
+  with st.form("login_form", clear_on_submit=False):
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
+    ok = st.form_submit_button("Ingresar")
+    if ok:
+      if u in USERS and USERS[u]["password"] == p:
+        st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
+        st.success("Bienvenido.")
+        st.rerun()
+      else:
+        st.error("Usuario o contraseña incorrectos.")
+  st.markdown("</div></div>", unsafe_allow_html=True)
 
 def render_topbar():
   if ss.auth is None: return
-  # fila superior con usuario + botón logout (único)
-  c1,c2 = st.columns([0.85,0.15])
-  with c2:
-    ucol1, ucol2 = st.columns([0.55,0.45])
-    with ucol1:
-      st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
-    with ucol2:
-      if st.button("Cerrar sesión", key="logout_btn"):
-        ss.auth=None; st.rerun()
+  # Chip + botón con estilo de chip, alineados a la derecha
+  st.markdown("<div class='topbar'>", unsafe_allow_html=True)
+  col_sp, col_chip, col_btn = st.columns([0.82, 0.10, 0.08])
+  with col_chip:
+    st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
+  with col_btn:
+    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
+      ss.auth = None
+      st.rerun()
+  st.markdown("</div>", unsafe_allow_html=True)
 
 def require_auth():
   if ss.auth is None:
@@ -342,7 +383,7 @@ def require_auth():
   return True
 
 # =========================================================
-# Sidebar navegación
+# SIDEBAR (solo navegación)
 # =========================================================
 def render_sidebar():
   with st.sidebar:
@@ -354,8 +395,8 @@ def render_sidebar():
       </div>
       """, unsafe_allow_html=True
     )
+    # (Se eliminó el "Rol: ...")
 
-    # Títulos de grupo (verdes)
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
       ss.section = "analytics"
@@ -377,26 +418,35 @@ def render_sidebar():
       ss.section = "create_task"
 
 # =========================================================
-# Páginas (las mismas funcionales de antes)
+# PÁGINAS
 # =========================================================
 def page_def_carga():
   st.header("Definición & Carga")
-  role_names=list(ROLE_PRESETS.keys())
+  role_names = list(ROLE_PRESETS.keys())
   puesto = st.selectbox("Puesto", role_names, index=0)
   preset = ROLE_PRESETS[puesto]
+
   jd_text = st.text_area("Descripción / JD", height=180, value=preset["jd"])
   kw_text = st.text_area("Palabras clave (coma separada)", height=100, value=preset["keywords"])
-  ss["last_role"]=puesto; ss["last_jd_text"]=jd_text; ss["last_kw_text"]=kw_text
+
+  ss["last_role"] = puesto
+  ss["last_jd_text"] = jd_text
+  ss["last_kw_text"] = kw_text
 
   files = st.file_uploader("Subir CVs (PDF / DOCX / TXT)", type=["pdf","docx","txt"], accept_multiple_files=True)
   if files and st.button("Procesar CVs cargados"):
-    ss.candidates=[]
+    ss.candidates = []
     for f in files:
-      b=f.read(); f.seek(0)
-      text=extract_text_from_file(f)
-      score,_=simple_score(text, jd_text, kw_text)
-      ss.candidates.append({"Name":f.name,"Score":score,"Reasons":"demo","_bytes":b,"_is_pdf":Path(f.name).suffix.lower()==".pdf","_text":text,"meta":extract_meta(text)})
-    st.success("CVs cargados y analizados."); st.rerun()
+      b = f.read(); f.seek(0)
+      text = extract_text_from_file(f)
+      score, reasons = simple_score(text, jd_text, kw_text)
+      ss.candidates.append({
+        "Name": f.name, "Score": score, "Reasons": reasons,
+        "_bytes": b, "_is_pdf": Path(f.name).suffix.lower()==".pdf",
+        "_text": text, "meta": extract_meta(text)
+      })
+    st.success("CVs cargados y analizados.")
+    st.rerun()
 
   with st.expander("🔌 Importar desde portales (demo)"):
     srcs=st.multiselect("Portales", JOB_BOARDS, default=["laborum.pe"])
@@ -407,45 +457,65 @@ def page_def_carga():
       for board in srcs:
         for i in range(1,int(qty)+1):
           txt=f"{puesto} — {search_q} en {location}. Experiencia 5 años. Excel, SQL, gestión documental."
-          ss.candidates.append({"Name":f"{board}_Candidato_{i:02d}.txt","Score":60,"Reasons":"demo","_bytes":txt.encode(),"_is_pdf":False,"_text":txt,"meta":extract_meta(txt)})
-      st.success("Importados CVs simulados."); st.rerun()
+          ss.candidates.append({
+            "Name":f"{board}_Candidato_{i:02d}.txt","Score":60,"Reasons":"demo",
+            "_bytes":txt.encode(),"__":None,"_is_pdf":False,"_text":txt,"meta":extract_meta(txt)
+          })
+      st.success("Importados CVs simulados.")
+      st.rerun()
 
 def page_puestos():
   st.header("Puestos")
   st.dataframe(
-    ss.positions[["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]]
-      .sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
+    ss.positions[
+      ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen","HM Screen",
+       "Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]
+    ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
     use_container_width=True, height=380
   )
 
 def page_eval():
   st.header("Resultados de evaluación")
-  if not ss.candidates: st.info("Carga CVs en **Definición & Carga**."); return
+  if not ss.candidates:
+    st.info("Carga CVs en **Definición & Carga**.")
+    return
+
   jd_text = st.text_area("JD para matching por skills (opcional)", ss.get("last_jd_text",""), height=140)
   preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
   col1,col2 = st.columns(2)
   with col1: must_default = st.text_area("Must-have (coma separada)", value=", ".join(preset.get("must",[])))
   with col2: nice_default = st.text_area("Nice-to-have (coma separada)", value=", ".join(preset.get("nice",[])))
-  must=[s.strip() for s in (must_default or "").split(",") if s.strip()]
-  nice=[s.strip() for s in (nice_default or "").split(",") if s.strip()]
+  must = [s.strip() for s in (must_default or "").split(",") if s.strip()]
+  nice = [s.strip() for s in (nice_default or "").split(",") if s.strip()]
+
   enriched=[]
   for c in ss.candidates:
     cv=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
     fit,exp=score_fit_by_skills(jd_text,must,nice,cv or "")
-    enriched.append({"Name":c["Name"],"Fit":fit,"Must (ok/total)":f"{len(exp['matched_must'])}/{exp['must_total']}","Nice (ok/total)":f"{len(exp['matched_nice'])}/{exp['nice_total']}","Extras":", ".join(exp["extras"])[:60],
-                     "_exp":exp,"_is_pdf":c["_is_pdf"],"_bytes":c["_bytes"],"_text":cv,"meta":c.get("meta",{})})
+    enriched.append({
+      "Name":c["Name"],"Fit":fit,
+      "Must (ok/total)":f"{len(exp['matched_must'])}/{exp['must_total']}",
+      "Nice (ok/total)":f"{len(exp['matched_nice'])}/{exp['nice_total']}",
+      "Extras":", ".join(exp["extras"])[:60],
+      "_exp":exp,"_is_pdf":c["_is_pdf"],"_bytes":c["_bytes"],"_text":cv,"meta":c.get("meta",{})
+    })
+
   df=pd.DataFrame(enriched).sort_values("Fit", ascending=False).reset_index(drop=True)
   st.subheader("Ranking por Fit de Skills")
   st.dataframe(df[["Name","Fit","Must (ok/total)","Nice (ok/total)","Extras"]], use_container_width=True, height=250)
+
   st.subheader("Detalle y explicación")
   selected = st.selectbox("Elige un candidato", df["Name"].tolist())
   row=df[df["Name"]==selected].iloc[0]; exp=row["_exp"]
+
   c1,c2=st.columns([1.1,0.9])
   with c1:
     fig=px.bar(pd.DataFrame([{"Candidato":row["Name"],"Fit":row["Fit"]}]), x="Candidato", y="Fit", title="Fit por skills")
     fig.update_traces(marker_color=BAR_GOOD if row["Fit"]>=60 else BAR_DEFAULT, hovertemplate="%{x}<br>Fit: %{y}%")
-    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Fit")
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                      font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Fit")
     st.plotly_chart(fig, use_container_width=True)
+
     st.markdown("**Explicación**")
     st.markdown(f"- **Must-have:** {len(exp['matched_must'])}/{exp['must_total']}")
     if exp["matched_must"]: st.markdown("  - ✓ " + ", ".join(exp["matched_must"]))
@@ -461,8 +531,11 @@ def page_eval():
 
 def page_pipeline():
   st.header("Pipeline de Candidatos")
-  if not ss.candidates: st.info("Primero carga CVs en **Definición & Carga**."); return
-  jd=ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+  if not ss.candidates:
+    st.info("Primero carga CVs en **Definición & Carga**.")
+    return
+  jd=ss.get("last_jd_text","")
+  preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
   must, nice = preset.get("must",[]), preset.get("nice",[])
   ranked=[]
   for c in ss.candidates:
@@ -470,6 +543,7 @@ def page_pipeline():
     fit,ex=score_fit_by_skills(jd,must,nice,txt or "")
     ranked.append((fit,c,ex))
   ranked.sort(key=lambda x:x[0], reverse=True)
+
   c1, c2 = st.columns([1.2, 1])
   with c1:
     table=[{"Candidato":c["Name"],"Fit":fit,"Años Exp.":c.get("meta",{}).get("anios_exp",0),"Actualizado":c.get("meta",{}).get("ultima_actualizacion","—")} for fit,c,_ in ranked]
@@ -506,20 +580,39 @@ def page_interview():
     comp = st.slider("Compensación (0-10)", 0, 10, 6)
     notas = st.text_area("Notas")
     submitted = st.form_submit_button("Guardar evaluación")
-    if submitted: st.success("Evaluación guardada.")
+    if submitted:
+      st.success("Evaluación guardada.")
   c1, c2 = st.columns(2)
-  if c1.button("Mover a Oferta"): ss.section = "offer"; st.rerun()
-  if c2.button("Descartar con feedback"): st.warning("Marcado como descartado.")
+  with c1:
+    if st.button("Mover a Oferta"):
+      ss.section = "offer"; st.rerun()
+  with c2:
+    if st.button("Descartar con feedback"):
+      st.warning("Marcado como descartado.")
 
 def _ensure_offer_record(cand_name: str):
   if cand_name not in ss.offers:
-    ss.offers[cand_name] = {"puesto":"","ubicacion":"","modalidad":"Presencial","salario":"","beneficios":"","fecha_inicio":date.today()+timedelta(days=14),
-                            "caducidad":date.today()+timedelta(days=7),"aprobadores":"Gerencia, Legal, Finanzas","estado":"Borrador"}
+    ss.offers[cand_name] = {
+      "puesto": "",
+      "ubicacion": "",
+      "modalidad": "Presencial",
+      "salario": "",
+      "beneficios": "",
+      "fecha_inicio": date.today() + timedelta(days=14),
+      "caducidad": date.today() + timedelta(days=7),
+      "aprobadores": "Gerencia, Legal, Finanzas",
+      "estado": "Borrador"
+    }
 
 def page_offer():
   st.header("Oferta")
-  if "selected_cand" not in ss: st.info("Selecciona un candidato en Pipeline o Entrevista."); return
-  cand = ss["selected_cand"]; _ensure_offer_record(cand); offer = ss.offers[cand]
+  if "selected_cand" not in ss:
+    st.info("Selecciona un candidato en Pipeline o Entrevista.")
+    return
+  cand = ss["selected_cand"]
+  _ensure_offer_record(cand)
+  offer = ss.offers[cand]
+
   with st.form("offer_form"):
     c1, c2 = st.columns(2)
     with c1:
@@ -532,40 +625,360 @@ def page_offer():
       offer["fecha_inicio"] = st.date_input("Fecha de inicio", value=offer["fecha_inicio"])
       offer["caducidad"] = st.date_input("Caducidad de oferta", value=offer["caducidad"])
       offer["aprobadores"] = st.text_input("Aprobadores", offer["aprobadores"])
-    if st.form_submit_button("Guardar oferta"):
-      ss.offers[cand] = offer; st.success("Oferta guardada.")
+    saved = st.form_submit_button("Guardar oferta")
+    if saved:
+      ss.offers[cand] = offer
+      st.success("Oferta guardada.")
+
   c1, c2, c3 = st.columns(3)
-  if c1.button("Enviar"): offer["estado"] = "Enviada"; ss.offers[cand] = offer; st.success("Oferta enviada.")
-  if c2.button("Registrar contraoferta"): offer["estado"] = "Contraoferta"; ss.offers[cand] = offer; st.info("Contraoferta registrada.")
-  if c3.button("Marcar aceptada"): offer["estado"] = "Aceptada"; ss.offers[cand] = offer; st.success("¡Felicitaciones!")
+  if c1.button("Enviar"):
+    offer["estado"] = "Enviada"; ss.offers[cand] = offer
+    st.success("Oferta enviada.")
+  if c2.button("Registrar contraoferta"):
+    offer["estado"] = "Contraoferta"; ss.offers[cand] = offer
+    st.info("Contraoferta registrada.")
+  if c3.button("Marcar aceptada"):
+    offer["estado"] = "Aceptada"; ss.offers[cand] = offer
+    st.success("¡Felicitaciones! Propuesta aceptada. Se generan tareas de Onboarding automáticamente.")
   st.write(f"**Estado actual:** {ss.offers[cand]['estado']}")
 
 def page_onboarding():
   st.header("Onboarding")
-  data={"Tarea":["Contrato firmado","Documentos completos","Usuario/email creado","Acceso SAP IS-H","Examen médico","Inducción día 1","EPP/Uniforme entregado","Plan 30-60-90 cargado"],
-        "SLA":["48 h","72 h","24 h","24–48 h","según agenda","día 1","día 1","primer semana"],
-        "Responsable":["RR.HH.","RR.HH.","TI","TI","Salud Ocup.","RR.HH.","RR.HH.","Jefe/Tutor"]}
+  st.write("Checklist y responsables tras aceptar la oferta.")
+  data = {
+    "Tarea":["Contrato firmado","Documentos completos","Usuario/email creado","Acceso SAP IS-H","Examen médico",
+             "Inducción día 1","EPP/Uniforme entregado","Plan 30-60-90 cargado"],
+    "SLA":["48 h","72 h","24 h","24–48 h","según agenda","día 1","día 1","primer semana"],
+    "Responsable":["RR.HH.","RR.HH.","TI","TI","Salud Ocup.","RR.HH.","RR.HH.","Jefe/Tutor"]
+  }
   st.dataframe(pd.DataFrame(data), use_container_width=True, height=260)
 
 def page_hh_tasks():
   st.header("Tareas del Headhunter")
-  st.text_input("Candidata/o", ss.get("selected_cand",""))
+  cand = st.text_input("Candidata/o", ss.get("selected_cand",""))
   col1, col2, col3 = st.columns(3)
-  col1.checkbox("✅ Contacto hecho"); col2.checkbox("✅ Entrevista agendada"); col3.checkbox("✅ Feedback recibido")
+  with col1:
+    st.checkbox("✅ Contacto hecho")
+  with col2:
+    st.checkbox("✅ Entrevista agendada")
+  with col3:
+    st.checkbox("✅ Feedback recibido")
   st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
   st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
+
   c1, c2 = st.columns(2)
-  if c1.button("Guardar"): st.success("Checklist y notas guardadas.")
-  if c2.button("Enviar a Comité"): st.info("Bloqueo de edición del HH y acta breve generada.")
+  if c1.button("Guardar"):
+    st.success("Checklist y notas guardadas.")
+  if c2.button("Enviar a Comité"):
+    st.info("Bloqueo de edición del HH y acta breve generada.")
 
-# --------- Agentes, Flujos, Analytics (sin cambios de lógica relevante) ----------
-# (Por brevedad de esta respuesta, el resto del código de Agentes, Flujos y Analytics
-#  permanece idéntico al que te entregué en el mensaje anterior. Si necesitas que lo vuelva
-#  a pegar completo, dímelo y lo incluyo otra vez sin recortar).
+# ===================== AGENTES =====================
+def page_agents():
+  st.header("Agentes")
+  st.markdown("### Tus agentes")
+  can_edit_any = (ss.auth["role"] == "Administrador")
 
-# Para esta entrega seguimos utilizando exactamente las mismas funciones ya probadas:
-#   page_agents(), page_flows(), page_analytics(), page_agent_tasks(), page_create_task()
-# … Pega aquí tus versiones vigentes de esas funciones si las personalizaste.
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero en el formulario de abajo.")
+  else:
+    cols_per_row=2
+    for i in range(0,len(ss.agents),cols_per_row):
+      r=ss.agents[i:i+cols_per_row]
+      cols=st.columns(cols_per_row)
+      for j,ag in enumerate(r):
+        idx=i+j
+        with cols[j]:
+          img=ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+          st.markdown(f"""
+          <div style="background:#fff;border:1px solid #E3EDF6;border-radius:16px;padding:16px;text-align:center;">
+            <img src="{img}" style="width:120px;height:120px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD;">
+            <div style="height:8px"></div>
+            <div style="font-weight:800;color:{TITLE_DARK};font-size:18px">{ag.get('rol','—')}</div>
+            <div style="font-size:13px;opacity:.8;margin-top:6px">{ag.get('objetivo','—')}</div>
+          </div>""", unsafe_allow_html=True)
+
+          allowed_roles = ag.get("perms", ["Supervisor","Administrador"])
+          st.markdown('<div class="agent-wrap">', unsafe_allow_html=True)
+          c1,c2,c3,c4=st.columns([1,1,1,1])
+          with c1:
+            is_open=ss.agent_view_open.get(idx, False)
+            if st.button(("👁 Ocultar" if is_open else "👁 Ver"), key=f"ag_view_{idx}"):
+              ss.agent_view_open[idx]=not is_open; st.rerun()
+          with c2:
+            can_edit = can_edit_any or (ss.auth["role"] in allowed_roles)
+            if can_edit:
+              is_edit=ss.agent_edit_open.get(idx, False)
+              if st.button(("✏ Ocultar" if is_edit else "✏ Edit"), key=f"ag_edit_{idx}"):
+                ss.agent_edit_open[idx]=not is_edit; st.rerun()
+            else:
+              st.caption("Sin permiso")
+          with c3:
+            if can_edit and st.button("🧬 Clone", key=f"ag_clone_{idx}"):
+              clone=dict(ag); clone["rol"]=f"{ag.get('rol','Agente')} (copia)"
+              ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
+          with c4:
+            if can_edit and st.button("🗑 Del", key=f"ag_del_{idx}"):
+              ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
+          st.markdown('</div>', unsafe_allow_html=True)
+
+        if ss.agent_view_open.get(idx, False):
+          st.subheader("Detalle del agente")
+          st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+          c1,c2=st.columns([0.42,0.58])
+          with c1:
+            st.image(img, width=200)
+            st.caption("Modelo LLM (simulado)")
+            st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+          with c2:
+            st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+            st.text_input("Goal*", value=ag.get("objetivo",""), disabled=True)
+            st.text_area("Backstory*", value=ag.get("backstory",""), height=160, disabled=True)
+            st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+            st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+            st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+          st.markdown('</div>', unsafe_allow_html=True)
+
+        if ss.agent_edit_open.get(idx, False):
+          st.info(f"Editando: {ag.get('rol')}")
+          with st.form(f"agent_edit_{idx}"):
+            rol = st.text_input("Rol*", value=ag.get("rol",""))
+            objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+            backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+            guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+            herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+            llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+            img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+            perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+            if st.form_submit_button("Guardar cambios"):
+              ag.update({"rol":rol,"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,"llm_model":llm_model,"image":img_src,"perms":perms})
+              save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
+
+  st.markdown("---")
+  st.subheader("Crear / Editar agente")
+  with st.form("agent_form"):
+    rol_opts=["Headhunter","Coordinador RR.HH.","Admin RR.HH."]
+    rol = st.selectbox("Rol*", rol_opts, index=0)
+    objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
+    backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+    guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+    herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+    llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+    default_img = AGENT_DEFAULT_IMAGES.get(rol, "")
+    img_src     = st.text_input("URL de imagen (opcional)", value=default_img)
+    perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+    ok = st.form_submit_button("Guardar/Actualizar Agente")
+    if ok:
+      ss.agents.append({
+        "rol": rol, "objetivo": objetivo, "backstory": backstory,
+        "guardrails": guardrails, "herramientas": herramientas,
+        "llm_model": llm_model, "image": img_src, "perms": perms,
+        "ts": datetime.utcnow().isoformat()
+      })
+      save_agents(ss.agents)
+      st.success("Agente guardado.")
+      st.rerun()
+
+# ===================== FLUJOS (Workflows) =====================
+def page_flows():
+  st.header("Flujos")
+
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor","Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+
+  with left:
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+      st.info("No hay flujos aún. Crea uno a la derecha.")
+    else:
+      rows = []
+      for wf in ss.workflows:
+        ag_label = "—"
+        ai = wf.get("agent_idx",-1)
+        if 0 <= ai < len(ss.agents):
+          ag_label = ss.agents[ai].get("rol","Agente")
+        rows.append({
+          "ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
+          "Agente": ag_label, "Estado": wf.get("status","Borrador"),
+          "Programado": wf.get("schedule_at","—")
+        })
+      df = pd.DataFrame(rows)
+      st.dataframe(df, use_container_width=True, height=260)
+
+      if rows:
+        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
+                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        if wf:
+          c1,c2,c3 = st.columns(3)
+          with c1:
+            if st.button("🧬 Duplicar"):
+              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado."); st.rerun()
+          with c2:
+            if st.button("🗑 Eliminar"):
+              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
+              st.success("Flujo eliminado."); st.rerun()
+          with c3:
+            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
+              a1,a2 = st.columns(2)
+              with a1:
+                if st.button("✅ Aprobar"):
+                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.success("Aprobado."); st.rerun()
+              with a2:
+                if st.button("❌ Rechazar"):
+                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
+
+  with right:
+    st.subheader("Crear / Editar flujo")
+    with st.form("wf_form"):
+      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      name = st.text_input("Name*", value="Analizar CV")
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
+      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
+      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+
+      st.markdown("**Job Description (elige una opción)**")
+      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_from_file = ""
+      if jd_file is not None:
+        jd_from_file = extract_text_from_file(jd_file)
+        st.caption("Vista previa del JD extraído (solo texto):")
+        st.text_area("Preview", jd_from_file[:4000], height=160)
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      if ss.agents:
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_idx = int(agent_pick.split(" — ")[0])
+      else:
+        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+        agent_idx = -1
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+      col_a, col_b, col_c = st.columns(3)
+      save_draft     = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
+
+    if save_draft or send_approval or schedule:
+      jd_final = jd_from_file if jd_from_file else jd_text
+      if not jd_final.strip():
+        st.error("Debes proporcionar un JD (texto o archivo).")
+      elif agent_idx < 0:
+        st.error("Debes asignar un agente.")
+      else:
+        wf = {
+          "id": f"WF-{int(datetime.now().timestamp())}",
+          "name": name, "role": role,
+          "description": desc, "expected_output": expected,
+          "jd_text": jd_final[:200000],
+          "agent_idx": agent_idx,
+          "created_at": datetime.now().isoformat(),
+          "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""
+        }
+        if send_approval:
+          wf["status"] = "Pendiente de aprobación"
+          st.success("Flujo enviado a aprobación. Supervisor/Administrador debe aprobarlo.")
+        if schedule:
+          if puede_aprobar:
+            wf["status"] = "Programado"
+            wf["schedule_at"] = f"{run_date} {run_time.strftime('%H:%M')}"
+            st.success("Flujo programado.")
+          else:
+            wf["status"] = "Pendiente de aprobación"
+            wf["schedule_at"] = f"{run_date} {run_time.strftime('%H:%M')}"
+            st.info("Guardado y **pendiente de aprobación** por Supervisor/Administrador.")
+        if save_draft:
+          st.success("Borrador guardado.")
+
+        ss.workflows.insert(0, wf)
+        save_workflows(ss.workflows)
+        st.rerun()
+
+# ===================== ANALYTICS =====================
+def page_analytics():
+  st.header("Analytics")
+
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = None
+  if total_cvs:
+    jd = ss.get("last_jd_text","")
+    preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
+    must, nice = preset.get("must",[]), preset.get("nice",[])
+    fits=[]
+    for c in ss.candidates:
+      txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+      f,_=score_fit_by_skills(jd,must,nice,txt or "")
+      fits.append(f)
+    avg_fit = round(sum(fits)/len(fits),1)
+
+  c1,c2,c3 = st.columns(3)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en bandeja", total_cvs)
+  c3.metric("Fit promedio (skills)", avg_fit if avg_fit is not None else "—")
+
+  st.markdown("---")
+
+  if total_cvs:
+    bins = []
+    jd = ss.get("last_jd_text","")
+    preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
+    must, nice = preset.get("must",[]), preset.get("nice",[])
+    for c in ss.candidates:
+      txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+      f,_=score_fit_by_skills(jd,must,nice,txt or "")
+      label = "Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)")
+      bins.append(label)
+    df=pd.DataFrame({"Fit band":bins})
+    fig=px.histogram(df, x="Fit band", title="Distribución de Fit por skills")
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+    st.plotly_chart(fig, use_container_width=True)
+
+  dfp = ss.positions[["Puesto","Días Abierto"]].copy()
+  fig2 = px.bar(dfp, x="Puesto", y="Días Abierto", title="Días abiertos por puesto")
+  fig2.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_tickangle=-20)
+  st.plotly_chart(fig2, use_container_width=True)
+
+  if total_cvs:
+    skill_counts={}
+    for c in ss.candidates:
+      txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+      for s in infer_skills(txt):
+        skill_counts[s]=skill_counts.get(s,0)+1
+    if skill_counts:
+      dfskills=pd.DataFrame(sorted(skill_counts.items(), key=lambda x:x[1], reverse=True), columns=["Skill","Frecuencia"])
+      st.subheader("Skills detectadas en CVs (Top)")
+      st.dataframe(dfskills.head(20), use_container_width=True, height=300)
+    else:
+      st.info("No se detectaron skills en los CVs actuales.")
+
+# ===================== OTRAS =====================
+def page_agent_tasks():
+  st.header("Tareas de Agente")
+  st.write("Bandeja de tareas para asistentes (demo).")
+
+def page_create_task():
+  st.header("Crear tarea")
+  with st.form("t_form"):
+    titulo = st.text_input("Título")
+    desc = st.text_area("Descripción", height=150)
+    due = st.date_input("Fecha límite", value=date.today())
+    ok = st.form_submit_button("Guardar")
+    if ok:
+      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due)})
+      st.success("Tarea creada.")
 
 # =========================================================
 # ROUTER
@@ -579,22 +992,17 @@ ROUTES = {
   "offer": page_offer,
   "onboarding": page_onboarding,
   "hh_tasks": page_hh_tasks,
-  # Agrega aquí: "agents": page_agents, "flows": page_flows, "analytics": page_analytics, etc.
+  "agents": page_agents,
+  "flows": page_flows,
+  "agent_tasks": page_agent_tasks,
+  "analytics": page_analytics,
+  "create_task": page_create_task,
 }
 
 # =========================================================
 # APP
 # =========================================================
-if "agents" not in ROUTES:  # seguridad por si no pegaste las secciones
-  def _placeholder(): st.header("Módulo en construcción")
-  ROUTES.update({"agents": _placeholder, "flows": _placeholder, "analytics": _placeholder, "agent_tasks": _placeholder, "create_task": _placeholder})
-
-def render_sidebar_and_route():
+if require_auth():
   render_topbar()
   render_sidebar()
   ROUTES.get(ss.section, page_def_carga)()
-
-if ss.auth is None:
-  login_screen()
-else:
-  render_sidebar_and_route()
