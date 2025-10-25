@@ -163,6 +163,35 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* ==== Alinear títulos del contenido con la altura del logo del sidebar ==== */
+/* Ajusta este valor hasta que quede a la misma altura del logo */
+:root {
+  --content-top: 8px; /* prueba 0–14px según tu vista */
+}
+
+/* Sube/baja el contenido principal */
+.block-container{
+  padding-top: var(--content-top) !important;
+}
+
+/* Quita margen superior del primer título para que quede alineado */
+.block-container h1:first-child,
+.block-container h2:first-child,
+.block-container h3:first-child{
+  margin-top: 0 !important;
+  line-height: 1.15 !important;
+}
+
+/* Evita que Streamlit meta espacio extra en el primer bloque */
+.block-container [data-testid="stVerticalBlock"] > div:first-child{
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* Fuerza color y estilo del “Powered by Wayki Consulting” */
 [data-testid="stSidebar"] .sidebar-brand .brand-sub,
 [data-testid="stSidebar"] .sidebar-brand .brand-sub *{
