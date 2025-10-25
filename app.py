@@ -216,7 +216,7 @@ st.markdown("""
 /* 2) Títulos (h4) con margen mínimo */
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] .stMarkdown h4{
-  margin: 4px 8px 2px !important;      /* arriba | lados | abajo */
+  margin: 2px 8px 2px !important;      /* arriba | lados | abajo */
   line-height: 1.1 !important;
 }
 
@@ -228,7 +228,7 @@ st.markdown("""
 /* 4) Botones: sin separación vertical y padding compacto */
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton > button{
-  margin: 6px 8px 6px 0 !important;  /* 0 a la izquierda */
+  margin: 0px 8px 6px 0 !important;  /* 0 a la izquierda */
 padding-left: 8px !important;      /* opcional: acerca el texto al borde */
   line-height: 1.05 !important;
   gap: 6px !important;
