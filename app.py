@@ -203,7 +203,7 @@ st.markdown("""
 
 /* 1) Sube el contenido del panel derecho un poco (ajusta 0–12px) */
 :root{
-  --content-top: 6px;   /* prueba 4, 6, 8, … hasta que calce con tu logo */
+  --content-top: 6px;   /* prueba 8, 10, 12, … hasta que calce con tu logo */
 }
 .block-container{
   padding-top: var(--content-top) !important;
