@@ -199,6 +199,38 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* Permitir sticky en el contenedor principal de Streamlit */
+[data-testid="stAppViewContainer"] > .main{ 
+  overflow: visible !important; 
+}
+[data-testid="stAppViewContainer"] .block-container{ 
+  position: relative !important; 
+  overflow: visible !important; 
+}
+
+/* Títulos fijos (primer h1/h2 del panel derecho) */
+.block-container h1:first-of-type,
+.block-container h2:first-of-type{
+  position: sticky;
+  top: calc(var(--content-top) + 8px);  /* ajusta 4–12px si lo deseas */
+  z-index: 60;
+  background: var(--body);
+  margin-top: 0 !important;
+  padding: 6px 0 10px 0;
+  border-bottom: 1px solid #E3EDF6;     /* opcional */
+  box-shadow: 0 8px 10px -10px rgba(0,0,0,.06); /* opcional */
+}
+
+/* Un poco de aire luego del título para que no tape el primer bloque */
+.block-container h1:first-of-type + *,
+.block-container h2:first-of-type + *{
+  margin-top: 12px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* ===== TÍTULO STICKY EN EL PANEL DERECHO =====
    Usa la misma referencia de separación superior que ya definiste: --content-top
    Si ves que tapa algo, sube/baja el +8px.  */
