@@ -97,7 +97,9 @@ CSS = f"""
   --sb-card: {CARD_BG};
 }}
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
-.block-container {{ background: transparent !important; padding-top: 1.25rem !important; }}
+:root { --content-top: 4px; }  /* ajusta 0–12px a gusto */
+.block-container { background: transparent !important; padding-top: var(--content-top) !important; }
+
 
 /* Ocultar menú/toolbar superior Streamlit */
 #MainMenu {{visibility:hidden;}}
@@ -294,6 +296,28 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Elimina cualquier padding/margen superior del main y del primer bloque */
+[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
+[data-testid="stAppViewContainer"] > .main .block-container { padding-top: var(--content-top) !important; }
+
+/* Primer contenedor real dentro de .block-container sin margen/padding arriba */
+.block-container > div:first-child {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Primer título sin margen superior */
+.block-container h1:first-child,
+.block-container h2:first-child,
+.block-container h3:first-child {
+  margin-top: 0 !important;
+  line-height: 1.12 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # =========================================================
 # Persistencia (Agentes / Flujos / Roles)
