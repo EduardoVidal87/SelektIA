@@ -197,6 +197,50 @@ CSS += """
 
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* ===== Sidebar ultra-compacto: títulos, párrafos y botones pegados ===== */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+  gap: 2px !important;                 /* espacio entre bloques del sidebar */
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{
+  margin: 0 !important;                /* quita margen fantasma de cada widget */
+  padding: 0 !important;
+}
+
+/* Títulos (h4) con margen mínimo */
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] .stMarkdown h4{
+  margin: 2px 8px 2px !important;      /* arriba | lados | abajo */
+  line-height: 1 !important;
+}
+
+/* Párrafos (items de texto simples) más pegados */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{
+  margin: 2px 8px !important;
+}
+
+/* Botones: sin separación vertical y alineados a la izquierda */
+[data-testid="stSidebar"] .stButton{
+  margin: 0 !important;
+  padding: 0 !important;
+}
+[data-testid="stSidebar"] .stButton > button{
+  margin: 0 8px 6px 0 !important;      /* 0 a la izquierda */
+  padding-left: 8px !important;        /* acerca el texto al borde */
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  text-align: left !important;
+}
+
+/* Menos aire bajo el logo */
+.sidebar-brand{
+  margin-bottom: 10px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # =========================================================
 # Persistencia (Agentes / Flujos / Roles)
