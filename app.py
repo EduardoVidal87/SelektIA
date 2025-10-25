@@ -216,8 +216,8 @@ st.markdown("""
 /* 2) Títulos (h4) con margen mínimo */
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] .stMarkdown h4{
-  margin: 2px 6px 2px !important;      /* arriba | lados | abajo */
-  line-height: 1.1 !important;
+  margin: 2px 8px 2px !important;      /* arriba | lados | abajo */
+  line-height: 1 !important;
 }
 
 /* 3) Markdown normal (los textos como "Analytics", etc.) más pegados */
