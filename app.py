@@ -213,8 +213,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
   color: var(--green) !important;
   margin: 8px 8px 4px !important;   /* menos espacio alrededor del título */
 }
-
-
+st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
