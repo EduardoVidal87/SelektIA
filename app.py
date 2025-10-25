@@ -64,17 +64,20 @@ html, body, [data-testid="stAppViewContainer"] {{
   letter-spacing: .5px;
   margin: 8px 12px 6px !important;
 }}
+
 /* SelektIA + powered centered */
+/* CAMBIO 1: tamaño del "logo" (brand-title) más grande (28px -> 34px) */
+/* CAMBIO 2: "Powered by Wayki Consulting" en #00CD78 */
 .sidebar-brand {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
   padding: 10px 0 8px;
 }}
 .sidebar-brand .brand-title {{
-  color: var(--green); font-weight: 800; font-size: 28px; line-height: 1;
+  color: var(--green); font-weight: 800; font-size: 34px; line-height: 1;
 }}
 .sidebar-brand .brand-sub {{
-  margin-top: 2px; color: #7ae8c1; font-size: 11px; opacity: .9;
+  margin-top: 2px; color: #00CD78; font-size: 11px; opacity: .9;
 }}
 
 /* Botones del sidebar (texto SIEMPRE a la izquierda) */
