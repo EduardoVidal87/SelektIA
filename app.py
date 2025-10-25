@@ -183,21 +183,6 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   box-shadow:none !important;
 }}
 .topbar .stButton>button:hover{{ background:#e9f2ff !important; }}
-/* Botón Cerrar sesión – mismo look del chip Admin */
-button[title="Salir de la sesión actual"]{
-  background:#eef5ff !important;
-  border:1px solid #d7e7fb !important;
-  color:#123 !important;
-  border-radius:999px !important;
-  padding:6px 12px !important;
-  font-weight:700 !important;
-  box-shadow:none !important;
-}
-button[title="Salir de la sesión actual"]:hover{
-  background:#e9f2ff !important;
-}
-
-
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
