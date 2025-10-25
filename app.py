@@ -199,6 +199,38 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* ===== Alinear alturas logo (izq) y título (der) ===== */
+
+/* 1) Sube el contenido del panel derecho un poco (ajusta 0–12px) */
+:root{
+  --content-top: 6px;   /* prueba 4, 6, 8, … hasta que calce con tu logo */
+}
+.block-container{
+  padding-top: var(--content-top) !important;
+}
+
+/* 2) Sube el logo del sidebar (offset negativo). 
+      Ajusta -2, -4, -6 … hasta que coincida con el título. */
+.sidebar-brand{
+  position: relative;
+  top: -6px !important;     /* mueve hacia arriba; valores típicos: -4 a -12 */
+  margin-top: 0 !important; /* sin margen extra arriba */
+}
+
+/* (Opcional) elimina acolchado superior residual en el contenedor del sidebar */
+[data-testid="stSidebar"] > div:first-child{
+  padding-top: 0 !important;
+}
+
+/* Mantén compacto el espacio inmediatamente bajo el logo */
+.sidebar-brand + [data-testid="stVerticalBlock"]{
+  margin-top: 4px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* ===== Sidebar ultra-compacto: títulos, párrafos y botones pegados ===== */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
   gap: 2px !important;                 /* espacio entre bloques del sidebar */
