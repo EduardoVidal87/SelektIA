@@ -20,14 +20,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Paleta y rutas de assets
+# Paleta y rutas de assets (CAMBIO: tamaño de logo 220)
 PRIMARY_GREEN = "#00CD78"
 SIDEBAR_BG = "#0E192B"  # fondo panel izquierdo
-LOGO_PATH = "assets/selektia-logo.png"  # cambia si usas otro nombre
-LOGO_WIDTH = 185  # tamaño del logo (ajústalo a tu gusto)
+LOGO_PATH = "assets/selektia-logo.png"  # tu archivo de logo
+LOGO_WIDTH = 220  # <<— Aumentado. Ajusta si lo quieres aún más grande.
 
 # ======================================================================================
-# CSS — (dejamos tu estética base y añadimos branding + botones a la izquierda)
+# CSS — (mantenemos diseño; solo branding y botones a la izquierda)
 # ======================================================================================
 
 CSS = f"""
@@ -47,26 +47,25 @@ html, body, [data-testid="stAppViewContainer"] {{
   border-right: 1px solid #0E2033;
 }}
 
+/* Branding del sidebar (NO se recolorea el logo; solo el texto “Powered…”) */
 .sidebar-brand {{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   padding: 8px 10px 14px 10px;
 }}
-
 .sidebar-brand .sidebar-logo {{
   display:flex; align-items:center; justify-content:center; width:100%;
 }}
 .sidebar-brand .sidebar-logo img {{
   max-width: 100%;
-  width: {LOGO_WIDTH}px;
+  width: {LOGO_WIDTH}px;     /* <<— tamaño de logo */
   height: auto;
-  -webkit-filter: none; filter: none; /* sin tintado, respeta colores del archivo */
+  -webkit-filter: none; filter: none; /* respeta colores del archivo */
 }}
-
 .sidebar-brand .brand-sub {{
   margin-top: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--green); /* Powered con el mismo color del logo */
+  color: #00CD78;            /* <<— “Powered by Wayki Consulting” con color del logo */
   opacity: 1;
 }}
 
@@ -79,13 +78,14 @@ html, body, [data-testid="stAppViewContainer"] {{
   text-transform: uppercase;
 }}
 
+/* Botones del sidebar: texto a la izquierda (mantenemos) */
 .sidebar-btn > button {{
   width: 100% !important;
-  background: #0F2138 !important;  /* mismo tono del panel */
+  background: #0F2138 !important;  /* mismo tono del panel ya aprobado */
   border: 1px solid #0F2138 !important;
   color: #FFFFFF !important;
-  text-align: left !important;          /* texto a la izquierda */
-  justify-content: flex-start !important;/* alineación interior */
+  text-align: left !important;           /* IZQUIERDA */
+  justify-content: flex-start !important;/* IZQUIERDA */
   padding: 10px 14px !important;
   border-radius: 10px !important;
   margin: 6px 10px !important;
@@ -103,7 +103,7 @@ h1 strong, h2 strong, h3 strong {{
   color: var(--green);
 }}
 
-/* Botones de acción del cuerpo: a la izquierda */
+/* Botones del cuerpo: texto a la izquierda (como acordamos) */
 .stButton > button {{
   text-align: left !important;
   justify-content: flex-start !important;
@@ -120,7 +120,7 @@ if "route" not in st.session_state:
     st.session_state.route = "Definición & Carga"
 
 # ======================================================================================
-# UTILIDADES
+# UTILIDADES (branding y navegación)
 # ======================================================================================
 
 def nav_btn(label: str, route: str):
@@ -131,7 +131,7 @@ def nav_btn(label: str, route: str):
         st.experimental_rerun()
 
 def render_sidebar_logo():
-    """Logo centrado + powered con color del logo, respetando colores originales del archivo."""
+    """Logo centrado + powered en color del logo; NO altera colores del archivo."""
     try:
         b = open(LOGO_PATH, "rb").read()
         encoded = base64.b64encode(b).decode()
@@ -160,13 +160,13 @@ def render_sidebar_logo():
         )
 
 # ======================================================================================
-# SIDEBAR — NAVEGACIÓN
+# SIDEBAR — NAVEGACIÓN (sin cambios en boxes/estructura)
 # ======================================================================================
 
 with st.sidebar:
     render_sidebar_logo()
 
-    # Bloque compacto (menos separación vertical)
+    # Bloque compacto
     st.markdown('<div class="sidebar-section-title">Dashboard</div>', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="sidebar-btn">', unsafe_allow_html=True)
@@ -177,7 +177,7 @@ with st.sidebar:
     with st.container():
         st.markdown('<div class="sidebar-btn">', unsafe_allow_html=True)
         nav_btn("Flujos", "Flujos")
-        nav_btn("Agentes", "Agentes")             # aquí movimos la config de Asistente IA
+        nav_btn("Agentes", "Agentes")             # aquí está la configuración del asistente
         nav_btn("Tareas de Agente", "Tareas de Agente")
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -201,7 +201,7 @@ with st.sidebar:
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================================================
-# PÁGINAS (PLACEHOLDERS SEGUROS) — Sustituye por tus funciones completas si ya las tienes
+# PÁGINAS (igual que antes; placeholders donde aplicaba)
 # ======================================================================================
 
 def page_analytics():
@@ -241,7 +241,7 @@ def page_puestos():
 
 def page_eval_cvs():
     st.header("Evaluación de CVs")
-    st.info("(Placeholder) Conecta aquí tu evaluación. Si no te carga nada, revisa que existan CVs previamente subidos.")
+    st.info("(Placeholder) Conecta aquí tu evaluación.")
 
 def page_pipeline():
     st.header("Pipeline de Candidatos")
@@ -283,7 +283,6 @@ def page_oferta():
     salario = st.text_input("Salario neto (rango)", value="S/ 4,500 – 5,200")
     beneficios = st.text_input("Bonos/beneficios", value="Bono anual, EPS")
     inicio = st.date_input("Fecha de inicio", value=date.today())
-
     aprobadores = st.multiselect("Aprobadores", ["Gerencia","Legal","Finanzas"], default=["Gerencia","Legal","Finanzas"])
 
     cols = st.columns([1,1,1,2])
@@ -306,7 +305,6 @@ def page_oferta():
         st.session_state.offers[cand]["estado"] = "Aceptada"
         st.success("Oferta aceptada. Se disparará Onboarding automáticamente.")
 
-    # Estado seguro (evita KeyError)
     estado = st.session_state.offers.get(cand, {}).get("estado", "—")
     st.write(f"**Estado actual:** {estado}")
 
@@ -316,12 +314,11 @@ def page_onboarding():
 
 def page_flujos():
     st.header("Flujos")
-    st.info("(Placeholder) Aquí puedes definir o ver flujos de tu proceso.")
+    st.info("(Placeholder) Define o visualiza flujos del proceso.")
 
 def page_agentes():
     st.header("Agentes (Asistente IA)")
     st.caption("Configura tu asistente. Al guardar, se conserva en sesión.")
-    # Estado persistente del “perfil de asistente”
     as_state = st.session_state.setdefault("asistente_cfg", {
         "rol":"Headhunter",
         "objetivo":"Identificar a los mejores profesionales para el cargo definido en el JD",
