@@ -381,6 +381,7 @@ def render_topbar():
       ss.auth = None
       st.rerun()
 
+
   # Botón de logout real:
   col1, col2 = st.columns([0.85,0.15])
   with col2:
