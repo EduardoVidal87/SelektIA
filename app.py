@@ -199,6 +199,32 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* ===== TÍTULO STICKY EN EL PANEL DERECHO =====
+   Usa la misma referencia de separación superior que ya definiste: --content-top
+   Si ves que tapa algo, sube/baja el +8px.  */
+.block-container h1:first-of-type,
+.block-container h2:first-of-type{
+  position: sticky;
+  top: calc(var(--content-top) + 8px); /* ↑ afina 4–12px según tu logo/espaciado */
+  z-index: 20;
+  background: var(--body);             /* mantiene fondo sólido bajo el título */
+  display: block;
+  padding: 6px 0 10px 0;
+  margin-top: 0 !important;
+  border-bottom: 1px solid #E3EDF6;    /* (opcional) línea sutil bajo el título */
+  box-shadow: 0 8px 10px -10px rgba(0,0,0,.06); /* (opcional) sombra sutil */
+}
+
+/* Un poco de aire entre el título y el primer bloque de contenido */
+.block-container h1:first-of-type + *,
+.block-container h2:first-of-type + *{
+  margin-top: 12px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* ===== Alinear alturas logo (izq) y título (der) ===== */
 
 /* 1) Sube el contenido del panel derecho un poco (ajusta 0–12px) */
