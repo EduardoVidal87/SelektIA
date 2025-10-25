@@ -38,7 +38,7 @@ USERS = {
   "admin": {"password":"admin123","role":"Administrador","name":"Admin"},
 }
 
-AGENT_DEFAULT_IMAGES = {  # (se conservará para compatibilidad, pero ya no se usa)
+AGENT_DEFAULT_IMAGES = {
   "Headhunter":        "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto=format&fit=crop",
   "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto=format&fit=crop",
   "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto=format&fit=crop",
@@ -86,7 +86,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS (sidebar, login, estilos)
+# CSS (sidebar, login, estilos) — BLOQUE 1
 # =========================================================
 CSS = f"""
 :root {{
@@ -95,13 +95,10 @@ CSS = f"""
   --sb-tx: {SIDEBAR_TX};
   --body: {BODY_BG};
   --sb-card: {CARD_BG};
-  --content-top: 4px;   /* ← ajusta 0–12px según el alto de tu logo */
+  --content-top: 4px;   /* ← ajusta 0–12px para alinear h1 con el logo */
 }}
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
 .block-container {{ background: transparent !important; padding-top: var(--content-top) !important; }}
-"""
-
-
 
 /* Ocultar menú/toolbar superior Streamlit */
 #MainMenu {{visibility:hidden;}}
@@ -115,16 +112,12 @@ header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; 
 /* Títulos del sidebar al verde original */
 [data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{ color: var(--green) !important; }}
 
-/* Marca en sidebar */
-.sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:0; text-align:center; }}
-.sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:55px !important; line-height:1.05 !important; }}
-.sidebar-brand .brand-sub {{ margin-top:4px !important; color: var(--green) !important; font-size:12px !important; opacity:.95 !important; }}
-
-/* Botones del sidebar */
+/* Botones del sidebar — pegados a la izquierda y compactos */
+[data-testid="stSidebar"] .stButton{{ margin:0 !important; padding:0 !important; }}
 [data-testid="stSidebar"] .stButton>button {{
   width: 100% !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
   gap:8px !important; background: var(--sb-card) !important; border:1px solid var(--sb-bg) !important; color:#fff !important;
-  border-radius:12px !important; padding:9px 12px !important; margin:6px 8px !important; font-weight:600 !important;
+  border-radius:12px !important; padding:9px 12px !important; margin: 0 8px 6px 0 !important; font-weight:600 !important; padding-left:8px !important;
 }}
 
 /* Botones del body */
@@ -152,193 +145,58 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
 .badge {{ display:inline-flex;align-items:center;gap:6px;background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;padding:4px 10px;font-size:12px;color:#1B2A3C; }}
 
-/* Login */
-.login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
-.login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
-.login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
-.login-sub{{color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px}}
-.login-card [data-testid="stTextInput"] input {{
-  background:#10283f !important; color:#E7F0FA !important; border:1.5px solid #1d3a57 !important;
-  border-radius:24px !important; height:48px !important; padding:0 16px !important;
-}}
-.login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
+/* Agentes */
+.agent-wrap .stButton>button{{background:var(--body)!important;color:{TITLE_DARK}!important;border:1px solid #E3EDF6!important;border-radius:10px!important;font-weight:700!important;padding:6px 10px!important}}
+.agent-wrap .stButton>button:hover{{background:#fff!important}}
+.agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
+.agent-detail input:disabled, .agent-detail textarea:disabled{{background:#EEF5FF!important;color:{TITLE_DARK}!important;border:1.5px solid #D7E7FB!important;opacity:1!important}}
+
+/* Workflows */
+.step-num{{width:26px;height:26px;border-radius:999px;border:2px solid #DDE7F5;display:flex;align-items:center;justify-content:center;font-weight:800;color:#345;}}
+.step{{display:flex;gap:10px;align-items:center;margin:8px 0}}
+.status-chip{{display:inline-flex;gap:8px;align-items:center;border:1px solid #E3EDF6;background:#F6FAFF;border-radius:999px;padding:4px 10px;font-size:12px}}
 """
-st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
-st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-st.markdown("""
-<style>
-/* Evita padding extra que Streamlit mete en el main */
-[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
-[data-testid="stAppViewContainer"] > .main .block-container {
-  padding-top: var(--content-top) !important;
+
+# =========================================================
+# CSS (marca + alineación h1) — BLOQUE 2
+# =========================================================
+CSS += """
+/* Marca en sidebar */
+.sidebar-brand {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:0 0 2px;
+  margin-top:0;
+  text-align:center;
+}
+.sidebar-brand .brand-title{
+  color: var(--green) !important;
+  font-weight:800 !important;
+  font-size:55px !important;
+  line-height:1.05 !important;
+}
+/* "Powered by Wayki Consulting" — tamaño/color/negrita */
+.sidebar-brand .brand-sub{
+  color: var(--green) !important;
+  font-size:12px !important;
+  line-height:1.2 !important;
+  font-weight:700 !important;
+  opacity:.95 !important;
+  margin-top:4px !important;
 }
 
-/* Primer bloque y primer título sin margen/padding arriba */
-.block-container > div:first-child { margin-top: 0 !important; padding-top: 0 !important; }
-.block-container h1:first-child,
-.block-container h2:first-child,
-.block-container h3:first-child {
-  margin-top: 0 !important;
-  line-height: 1.12 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* ==== Alinear títulos del contenido con la altura del logo del sidebar ==== */
-/* Ajusta este valor hasta que quede a la misma altura del logo */
-:root {
-  --content-top: 8px; /* prueba 0–14px según tu vista */
-}
-
-/* Sube/baja el contenido principal */
-.block-container{
-  padding-top: var(--content-top) !important;
-}
-
-/* Quita margen superior del primer título para que quede alineado */
+/* Quita margen arriba del 1er título del panel derecho */
 .block-container h1:first-child,
 .block-container h2:first-child,
 .block-container h3:first-child{
   margin-top: 0 !important;
-  line-height: 1.15 !important;
 }
+"""
 
-/* Evita que Streamlit meta espacio extra en el primer bloque */
-.block-container [data-testid="stVerticalBlock"] > div:first-child{
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* Fuerza color y estilo del “Powered by Wayki Consulting” */
-[data-testid="stSidebar"] .sidebar-brand .brand-sub,
-[data-testid="stSidebar"] .sidebar-brand .brand-sub *{
-  color: var(--green) !important;   /* verde de la marca */
-  font-weight: 800 !important;      /* negrita */
-  opacity: 1 !important;
-}
-
-/* (opcional) por si el catch-all deja herencia rara en ese bloque */
-[data-testid="stSidebar"] .sidebar-brand{
-  color: inherit !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* ====== Powered by Wayki (color y estilo original) ====== */
-[data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  color: var(--green) !important;      /* verde original */
-  font-weight: 800 !important;         /* negrita */
-  font-size: 12px !important;
-  line-height: 1.15 !important;
-  margin-top: 4px !important;
-  opacity: 1 !important;               /* sin apagar el color */
-}
-
-/* ====== Espacio debajo del logo del sidebar ====== */
-[data-testid="stSidebar"] .sidebar-brand{
-  margin-top: 0 !important;
-  padding-bottom: 0 !important;
-  margin-bottom: 55px !important;      /* el aire que acordamos */
-}
-
-/* ====== Sidebar ultra-compacto (márgenes mínimos) ====== */
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
-  gap: 2px !important;
-}
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{
-  margin: 0 !important;
-  padding: 0 !important;
-}
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] .stMarkdown h4{
-  margin: 2px 8px 2px !important;
-  line-height: 1 !important;
-}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{
-  margin: 2px 8px !important;
-}
-
-/* ====== Botones pegados a la izquierda ====== */
-[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] .stButton > button{
-  margin: 0 8px 6px 0 !important;   /* 0 a la izquierda */
-  padding-left: 4px !important;     /* texto cerca del borde izq */
-  line-height: 1.05 !important;
-  gap: 6px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* Powered by Wayki Consulting (puedes subir el tamaño si lo deseas) */
-[data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 12px !important;
-  line-height: 1.2 !important;
-  margin-top: 4px !important;
-  opacity: .95 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Más espacio bajo el logo del sidebar
-st.markdown("""
-<style>
-[data-testid="stSidebar"] .sidebar-brand{
-  margin-top: 0 !important;
-  padding-bottom: 0 !important;
-  margin-bottom: 55px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Sidebar ultra-compacto
-st.markdown("""
-<style>
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap: 2px !important; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] .stMarkdown h4{ margin: 2px 8px 2px !important; line-height:1 !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin: 2px 8px !important; }
-[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] .stButton > button{
-  margin: 0px 8px 6px 0 !important;
-  padding-left: 8px !important;
-  line-height: 1.05 !important;
-  gap: 6px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-st.markdown("""
-<style>
-/* Elimina cualquier padding/margen superior del main y del primer bloque */
-[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
-[data-testid="stAppViewContainer"] > .main .block-container { padding-top: var(--content-top) !important; }
-
-/* Primer contenedor real dentro de .block-container sin margen/padding arriba */
-.block-container > div:first-child {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-
-/* Primer título sin margen superior */
-.block-container h1:first-child,
-.block-container h2:first-child,
-.block-container h3:first-child {
-  margin-top: 0 !important;
-  line-height: 1.12 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
+st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
+st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia (Agentes / Flujos / Roles)
@@ -356,14 +214,14 @@ def load_roles():
   if ROLES_FILE.exists():
     try:
       roles = json.loads(ROLES_FILE.read_text(encoding="utf-8"))
-      roles = sorted(list({*DEFAULT_ROLES, *(r.strip() for r in roles if r.strip())}))
+      roles = sorted(list({*(DEFAULT_ROLES), *(r.strip() for r in roles if r.strip())}))
       return roles
     except:
       pass
   return DEFAULT_ROLES.copy()
 
 def save_roles(roles: list):
-  """Guarda solo los no-default para no duplicar el archivo innecesariamente."""
+  """Guarda sólo los no-default para no duplicar el archivo innecesariamente."""
   roles_clean = sorted(list({r.strip() for r in roles if r.strip()}))
   custom_only = [r for r in roles_clean if r not in DEFAULT_ROLES]
   ROLES_FILE.write_text(json.dumps(custom_only, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -391,6 +249,7 @@ if "section" not in ss:  ss.section = "def_carga"
 if "tasks" not in ss:    ss.tasks = []
 if "candidates" not in ss: ss.candidates = []
 if "offers" not in ss:  ss.offers = {}
+if "roles" not in ss: ss.roles = load_roles()
 if "agents_loaded" not in ss:
   ss.agents = load_agents()
   ss.agents_loaded = True
@@ -399,7 +258,6 @@ if "workflows_loaded" not in ss:
   ss.workflows_loaded = True
 if "agent_view_open" not in ss: ss.agent_view_open = {}
 if "agent_edit_open" not in ss: ss.agent_edit_open = {}
-if "new_role_mode" not in ss: ss.new_role_mode = False
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -508,41 +366,15 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   base = max(0, min(100, base))
   return base, " — ".join(reasons)
 
-# Pequeño helper: muestra imagen segura (o avatar de respaldo)
-def safe_avatar(width=200, label="AI"):
-  st.markdown(
-    f"""<div style="width:{width}px;height:{width}px;border-radius:999px;
-    background:#e9f2ff;border:4px solid #F1F7FD;display:flex;align-items:center;
-    justify-content:center;font-weight:800;color:#345;">{label}</div>""",
-    unsafe_allow_html=True
-  )
-
-def safe_show_image(url_or_path: str|None, width=200, label="AI"):
-  try:
-    if url_or_path and (str(url_or_path).startswith("http") or Path(str(url_or_path)).exists()):
-      st.image(url_or_path, width=width)
-      return
-  except Exception:
-    pass
-  safe_avatar(width, label)
-
 # =========================================================
 # LOGIN
 # =========================================================
-def asset_logo_wayki():
-  local = Path("assets/logo-wayki.png")
-  if local.exists(): return str(local)
-  return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
-
 def login_screen():
-  st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
-  try:
-    st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
-    st.image(asset_logo_wayki(), width=120)
-    st.markdown("</div>", unsafe_allow_html=True)
-  except:
-    pass
-  st.markdown('<div class="login-sub">Acceso a SelektIA — Demo</div>', unsafe_allow_html=True)
+  st.markdown('<div style="display:flex;min-height:100vh;align-items:center;justify-content:center;background:#0E192B">', unsafe_allow_html=True)
+  st.markdown('<div class="login-card">', unsafe_allow_html=True)
+  st.markdown('<div class="login-logo-wrap" style="display:flex;align-items:center;justify-content:center;margin-bottom:14px">', unsafe_allow_html=True)
+  st.markdown("</div>", unsafe_allow_html=True)
+  st.markdown('<div class="login-sub" style="color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px">Acceso a SelektIA — Demo</div>', unsafe_allow_html=True)
   with st.form("login_form", clear_on_submit=False):
     u = st.text_input("Usuario")
     p = st.text_input("Contraseña", type="password")
@@ -563,7 +395,7 @@ def require_auth():
   return True
 
 # =========================================================
-# SIDEBAR (solo navegación)
+# SIDEBAR (navegación + logout)
 # =========================================================
 def render_sidebar():
   with st.sidebar:
@@ -571,21 +403,24 @@ def render_sidebar():
       """
       <div class="sidebar-brand">
         <div class="brand-title">SelektIA</div>
-        <div class="brand-sub"><b>Powered by Wayki Consulting</b></div>
+        <div class="brand-sub">Powered by Wayki Consulting</div>
       </div>
       """,
       unsafe_allow_html=True
     )
 
+    # DASHBOARD
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
       ss.section = "analytics"
 
+    # ASISTENTE IA
     st.markdown("#### ASISTENTE IA")
     for txt, sec in [("Flujos","flows"), ("Agentes","agents"), ("Tareas de Agente","agent_tasks")]:
       if st.button(txt, key=f"sb_{sec}"):
         ss.section = sec
 
+    # PROCESO DE SELECCIÓN
     st.markdown("#### PROCESO DE SELECCIÓN")
     for txt, sec in [
       ("Definición & Carga","def_carga"),
@@ -600,10 +435,12 @@ def render_sidebar():
       if st.button(txt, key=f"sb_{sec}"):
         ss.section = sec
 
+    # ACCIONES
     st.markdown("#### ACCIONES")
     if st.button("Crear tarea", key="sb_task"):
       ss.section = "create_task"
 
+    # Cerrar sesión (sin título “SESIÓN”)
     if st.button("Cerrar sesión", key="sb_logout"):
       ss.auth = None
       st.rerun()
@@ -879,151 +716,112 @@ def page_agents():
       for j,ag in enumerate(r):
         idx=i+j
         with cols[j]:
-          # Tarjeta
-          st.markdown(f"""<div style="background:#fff;border:1px solid #E3EDF6;
-            border-radius:16px;padding:16px;text-align:center;">""", unsafe_allow_html=True)
-
-          # Avatar seguro (si el registro antiguo trae image, lo intentamos; si no, usamos avatar)
-          with st.container():
-            # Intento de mostrar imagen si existe (compatibilidad)
-            img = ag.get("image")  # ya no usamos, pero por compatibilidad
-            safe_show_image(img, width=120, label="AG")
-
+          img=AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))  # sin campo URL (eliminado)
           st.markdown(f"""
+          <div style="background:#fff;border:1px solid #E3EDF6;border-radius:16px;padding:16px;text-align:center;">
+            <img src="{img}" style="width:120px;height:120px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD;">
             <div style="height:8px"></div>
             <div style="font-weight:800;color:{TITLE_DARK};font-size:18px">{ag.get('rol','—')}</div>
             <div style="font-size:13px;opacity:.8;margin-top:6px">{ag.get('objetivo','—')}</div>
           </div>""", unsafe_allow_html=True)
 
-          # Barra de acciones (Ver / Editar / Clonar / Eliminar)
+          allowed_roles = ag.get("perms", ["Supervisor","Administrador"])
           st.markdown('<div class="agent-wrap">', unsafe_allow_html=True)
           c1,c2,c3,c4=st.columns([1,1,1,1])
-
-          # Ver: etiqueta fija “Ver”, toggle de apertura/cierre
+          # Etiquetas fijas pero comportamiento toggle
           with c1:
-            is_open = ss.agent_view_open.get(idx, False)
+            is_open=ss.agent_view_open.get(idx, False)
             if st.button("Ver", key=f"ag_view_{idx}"):
-              ss.agent_view_open[idx] = not is_open
-              st.rerun()
-
-          # Editar: etiqueta fija “Editar”, toggle
+              ss.agent_view_open[idx]=not is_open; st.rerun()
           with c2:
-            can_edit = can_edit_any or (ss.auth["role"] in ag.get("perms", ["Supervisor","Administrador"]))
+            can_edit = can_edit_any or (ss.auth["role"] in allowed_roles)
             if can_edit:
-              is_edit = ss.agent_edit_open.get(idx, False)
+              is_edit=ss.agent_edit_open.get(idx, False)
               if st.button("Editar", key=f"ag_edit_{idx}"):
-                ss.agent_edit_open[idx] = not is_edit
-                st.rerun()
+                ss.agent_edit_open[idx]=not is_edit; st.rerun()
             else:
               st.caption("Sin permiso")
-
           with c3:
-            if can_edit_any and st.button("Clonar", key=f"ag_clone_{idx}"):
-              clone = dict(ag)
-              clone.pop("image", None)          # ya no usamos imagen
-              clone.pop("herramientas", None)   # ya no usamos herramientas
-              clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
-              ss.agents.append(clone); save_agents(ss.agents)
-              st.success("Agente clonado.")
-              st.rerun()
-
+            if (can_edit_any or (ss.auth["role"] in allowed_roles)) and st.button("Clonar", key=f"ag_clone_{idx}"):
+              clone=dict(ag); clone["rol"]=f"{ag.get('rol','Agente')} (copia)"
+              ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
           with c4:
-            if can_edit_any and st.button("Eliminar", key=f"ag_del_{idx}"):
-              ss.agents.pop(idx); save_agents(ss.agents)
-              st.success("Agente eliminado.")
-              st.rerun()
+            if (can_edit_any or (ss.auth["role"] in allowed_roles)) and st.button("Eliminar", key=f"ag_del_{idx}"):
+              ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
           st.markdown('</div>', unsafe_allow_html=True)
 
-        # Vista de detalle (solo lectura)
         if ss.agent_view_open.get(idx, False):
           st.subheader("Detalle del agente")
           st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
           c1,c2=st.columns([0.42,0.58])
           with c1:
-            safe_show_image(ag.get("image"), width=200, label="AG")
+            st.image(AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter")), width=200)
             st.caption("Modelo LLM (simulado)")
             st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
           with c2:
-            st.text_input("Rol*", value=ag.get("rol",""), disabled=True)
+            st.text_input("Role*", value=ag.get("rol",""), disabled=True)
             st.text_area("Objetivo*", value=ag.get("objetivo",""), height=120, disabled=True)
             st.text_area("Backstory*", value=ag.get("backstory",""), height=160, disabled=True)
-            st.text_area("Guardrails", value=ag.get("guardrails",""), height=100, disabled=True)
+            st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
             st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
           st.markdown('</div>', unsafe_allow_html=True)
 
-        # Editor (solo si tiene permiso y está abierto)
         if ss.agent_edit_open.get(idx, False):
           st.info(f"Editando: {ag.get('rol')}")
           with st.form(f"agent_edit_{idx}"):
-            rol = st.text_input("Rol*", value=ag.get("rol",""))
+            # Selector de rol con opción Nuevo…
+            opciones = ss.roles + ["Nuevo…"]
+            rol_sel = st.selectbox("Rol*", opciones, index=opciones.index(ag.get("rol", opciones[0])) if ag.get("rol") in opciones else len(opciones)-1)
+            rol_nuevo = ""
+            if rol_sel == "Nuevo…":
+              rol_nuevo = st.text_input("Nombre del nuevo rol*", value=ag.get("rol",""))
             objetivo  = st.text_area("Objetivo*", value=ag.get("objetivo",""), height=120)
             backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=160)
-            guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=100)
-            llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS,
-                                       index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))) if ag.get("llm_model") in LLM_MODELS else 0)
-            perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"],
-                                         default=ag.get("perms",["Supervisor","Administrador"]))
+            guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+            llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+            perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
             if st.form_submit_button("Guardar cambios"):
-              ag.update({
-                "rol":rol, "objetivo":objetivo, "backstory":backstory, "guardrails":guardrails,
-                "llm_model":llm_model, "perms":perms
-              })
-              # eliminar campos obsoletos si existieran
-              ag.pop("image", None)
-              ag.pop("herramientas", None)
+              rol_final = (rol_nuevo.strip() or "Agente") if rol_sel=="Nuevo…" else rol_sel
+              ag.update({"rol":rol_final,"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"llm_model":llm_model,"perms":perms})
+              # Actualiza catálogo de roles si corresponde
+              if rol_sel=="Nuevo…" and rol_nuevo.strip():
+                if rol_nuevo.strip() not in ss.roles:
+                  ss.roles.append(rol_nuevo.strip())
+                  save_roles(ss.roles)
               save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-  # ----------------------------------------------------------------
-  # Crear / Nuevo Agente (con “Nuevo” para crear rol editable)
-  # ----------------------------------------------------------------
   st.markdown("---")
   st.subheader("Crear / Editar agente")
+  with st.form("agent_form"):
+    # Selector de rol con opción Nuevo…
+    opciones = ss.roles + ["Nuevo…"]
+    rol_sel = st.selectbox("Rol*", opciones, index=0)
+    rol_nuevo = ""
+    if rol_sel == "Nuevo…":
+      rol_nuevo = st.text_input("Nombre del nuevo rol*")
 
-  left, right = st.columns([0.58, 0.42])
-  with left:
-    btn_label = "Cancelar" if ss.new_role_mode else "➕ Nuevo"
-    if st.button(btn_label):
-      ss.new_role_mode = not ss.new_role_mode
+    objetivo  = st.text_area("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD", height=120)
+    backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=160)
+    guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+    llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+    perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+    ok = st.form_submit_button("Guardar/Actualizar Agente")
+    if ok:
+      rol_final = (rol_nuevo.strip() or "Agente") if rol_sel=="Nuevo…" else rol_sel
+      # Crear registro
+      ss.agents.append({
+        "rol": rol_final, "objetivo": objetivo, "backstory": backstory,
+        "guardrails": guardrails, "llm_model": llm_model, "perms": perms,
+        "ts": datetime.utcnow().isoformat()
+      })
+      # Actualizar catálogo de roles si se creó uno nuevo
+      if rol_sel=="Nuevo…" and rol_nuevo.strip():
+        if rol_nuevo.strip() not in ss.roles:
+          ss.roles.append(rol_nuevo.strip())
+          save_roles(ss.roles)
+      save_agents(ss.agents)
+      st.success("Agente guardado.")
       st.rerun()
-
-  with right:
-    if not ss.new_role_mode:
-      roles_actuales = load_roles()
-      st.selectbox("Rol existente", roles_actuales, index=0, key="preview_role", disabled=True)
-      st.caption("Pulsa **➕ Nuevo** para crear un rol y un agente con campos editables.")
-    else:
-      with st.form("agent_form"):
-        # Rol editable (nuevo)
-        new_role = st.text_input("Rol* (nuevo)")
-        objetivo  = st.text_area("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD", height=120)
-        backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=160)
-        guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=100)
-        llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
-        perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
-
-        ok = st.form_submit_button("Guardar/Actualizar Agente")
-        if ok:
-          roles = load_roles()
-          rol_final = (new_role or "").strip()
-          if not rol_final:
-            st.error("Debes ingresar un **Rol**.")
-          else:
-            if rol_final not in roles:
-              roles.append(rol_final)
-              save_roles(roles)
-            ss.agents.append({
-              "rol": rol_final,
-              "objetivo": objetivo,
-              "backstory": backstory,
-              "guardrails": guardrails,
-              "llm_model": llm_model,
-              "perms": perms,
-              "ts": datetime.utcnow().isoformat()
-            })
-            save_agents(ss.agents)
-            ss.new_role_mode = False
-            st.success("Agente creado.")
-            st.rerun()
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
