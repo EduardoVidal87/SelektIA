@@ -213,7 +213,7 @@ st.markdown("""
       Ajusta -2, -4, -6 … hasta que coincida con el título. */
 .sidebar-brand{
   position: relative;
-  top: -12px !important;     /* mueve hacia arriba; valores típicos: -10 a -14 */
+  top: -14px !important;     /* mueve hacia arriba; valores típicos: -12 a -16 */
   margin-top: 0 !important; /* sin margen extra arriba */
 }
 
