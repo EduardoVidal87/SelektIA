@@ -163,6 +163,53 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* ====== Powered by Wayki (color y estilo original) ====== */
+[data-testid="stSidebar"] .sidebar-brand .brand-sub{
+  color: var(--green) !important;      /* verde original */
+  font-weight: 800 !important;         /* negrita */
+  font-size: 12px !important;
+  line-height: 1.15 !important;
+  margin-top: 4px !important;
+  opacity: 1 !important;               /* sin apagar el color */
+}
+
+/* ====== Espacio debajo del logo del sidebar ====== */
+[data-testid="stSidebar"] .sidebar-brand{
+  margin-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 55px !important;      /* el aire que acordamos */
+}
+
+/* ====== Sidebar ultra-compacto (márgenes mínimos) ====== */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+  gap: 2px !important;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{
+  margin: 0 !important;
+  padding: 0 !important;
+}
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] .stMarkdown h4{
+  margin: 2px 8px 2px !important;
+  line-height: 1 !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{
+  margin: 2px 8px !important;
+}
+
+/* ====== Botones pegados a la izquierda ====== */
+[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
+[data-testid="stSidebar"] .stButton > button{
+  margin: 0 8px 6px 0 !important;   /* 0 a la izquierda */
+  padding-left: 8px !important;     /* texto cerca del borde izq */
+  line-height: 1.05 !important;
+  gap: 6px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* Powered by Wayki Consulting (puedes subir el tamaño si lo deseas) */
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
   font-size: 12px !important;
