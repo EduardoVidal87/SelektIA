@@ -305,7 +305,7 @@ def sidebar():
     if st.sidebar.button("Analytics", key="SB_analytics"):
         go("analytics")
 
-    # ASISTENTE IA
+    # AGENTE IA
     st.sidebar.markdown("<div class='sb-section-title'>Asistente IA</div>", unsafe_allow_html=True)
     if st.sidebar.button("Flujos", key="SB_flujos"):
         go("flujos")
