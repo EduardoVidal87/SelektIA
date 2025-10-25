@@ -195,7 +195,7 @@ st.markdown("""
 
 /* Botón casi pegado: sin margen vertical y padding mínimo */
 [data-testid="stSidebar"] .stButton > button{
-  margin:0 8px !important;        /* <<< sin separación vertical */
+  margin:0 4px !important;        /* <<< sin separación vertical */
   padding:7px 10px !important;    /* un pelín más compacto */
   gap:6px !important;             /* menos espacio entre icono y texto */
   line-height:1.05 !important;    /* reduce altura visual */
