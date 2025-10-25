@@ -191,7 +191,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand .brand-title{
-  font-size: 70px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
+  font-size: 60px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
   line-height: 1.05 !important;
 }
 </style>
