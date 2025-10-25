@@ -187,22 +187,27 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-# Compactar separación de botones del sidebar
+# Compactar aún más los botones del sidebar
 st.markdown("""
 <style>
-/* Contenedor del botón sin margen extra */
-[data-testid="stSidebar"] .stButton{
-  margin:0 !important;
-}
-/* Botón más junto/compacto */
+/* Quita margen al contenedor de cada botón */
+[data-testid="stSidebar"] .stButton{ margin:0 !important; }
+
+/* Botón casi pegado: sin margen vertical y padding mínimo */
 [data-testid="stSidebar"] .stButton > button{
-  margin:2px 8px !important;    /* separación vertical reducida */
-  padding:8px 10px !important;  /* opcional: un poco menos de padding */
-  gap:8px !important;
+  margin:0 8px !important;        /* <<< sin separación vertical */
+  padding:7px 10px !important;    /* un pelín más compacto */
+  gap:6px !important;             /* menos espacio entre icono y texto */
+  line-height:1.05 !important;    /* reduce altura visual */
+}
+
+/* Títulos del sidebar también más compactos */
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] .stMarkdown h4{
+  margin:6px 8px 2px !important;  /* menos espacio antes y después */
 }
 </style>
 """, unsafe_allow_html=True)
-
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
