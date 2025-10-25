@@ -191,7 +191,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 16px !important;     /* ← súbelo: 14, 16, 18, etc. (default ~11.5px) */
+  font-size: 12px !important;     /* ← súbelo: 14, 16, 18, etc. (default ~11.5px) */
   line-height: 1.2 !important;
   opacity: .95 !important;        /* puedes subir a 1 si lo quieres 100% sólido */
   /* Opcional:
