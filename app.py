@@ -297,6 +297,7 @@ if "workflows_loaded" not in ss:
   ss.workflows_loaded = True
 if "agent_view_open" not in ss: ss.agent_view_open = {}
 if "agent_edit_open" not in ss: ss.agent_edit_open = {}
+if "new_role_mode" not in ss: ss.new_role_mode = False
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -834,58 +835,89 @@ def page_agents():
 # --- BLOQUE NUEVO CON ROL PERSONALIZADO ---
 st.markdown("---")
 st.subheader("Crear / Editar agente")
-with st.form("agent_form"):
-    # ---------- Rol con "➕ Nuevo…" + edición ----------
-    roles_actuales = load_roles()
-    NUEVO = "➕ Nuevo…"
-    rol_choice = st.selectbox("Rol*", roles_actuales + [NUEVO], index=0)
 
-    if rol_choice == NUEVO:
-        rol = st.text_input("Nuevo rol*", value="", placeholder="Escribe el nombre del rol")
-    else:
-        rol = st.text_input("Rol*", value=rol_choice)
-
-    # ---------- Resto de campos ----------
-    objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
-    backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
-    guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
-    herramientas = st.multiselect("Herramientas habilitadas",
-                                  ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
-                                  default=["Parser de PDF","Recomendador de skills"])
-    llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
-
-    default_img = AGENT_DEFAULT_IMAGES.get(rol, "")
-    img_src     = st.text_input("URL de imagen (opcional)", value=default_img)
-    perms       = st.multiselect("Permisos (quién puede editar)",
-                                 ["Colaborador","Supervisor","Administrador"],
-                                 default=["Supervisor","Administrador"])
-
-    ok = st.form_submit_button("Guardar/Actualizar Agente")
-
-    if ok:
-        rol_final = (rol or "").strip()
-        if not rol_final:
-            st.error("Por favor, ingresa un nombre para el rol.")
-        else:
-            # Si el rol no existe aún, lo persistimos
-            if rol_final not in roles_actuales:
-                roles_actuales.append(rol_final)
-                save_roles(roles_actuales)
-
-            ss.agents.append({
-                "rol": rol_final,
-                "objetivo": objetivo,
-                "backstory": backstory,
-                "guardrails": guardrails,
-                "herramientas": herramientas,
-                "llm_model": llm_model,
-                "image": img_src,
-                "perms": perms,
-                "ts": datetime.utcnow().isoformat()
-            })
-            save_agents(ss.agents)
-            st.success("Agente guardado.")
+# ======= Encabezado con botón “Nuevo / Cancelar” =======
+c_new, _ = st.columns([0.18, 0.82])
+with c_new:
+    if not ss.new_role_mode:
+        if st.button("➕ Nuevo", use_container_width=True):
+            ss.new_role_mode = True
             st.rerun()
+    else:
+        if st.button("Cancelar", use_container_width=True):
+            ss.new_role_mode = False
+            st.rerun()
+
+roles_actuales = load_roles()
+
+if not ss.new_role_mode:
+    # -------- MODO NORMAL (solo vista, no editable) --------
+    rol_sel = st.selectbox("Rol existente", roles_actuales, index=0)
+    st.caption("Para crear un rol nuevo o editar campos, pulsa **➕ Nuevo**.")
+
+    with st.form("agent_form_view_only"):
+        st.text_input("Rol*", value=rol_sel, disabled=True)
+        st.text_input("Objetivo*", value="", placeholder="(solo editable en 'Nuevo')", disabled=True)
+        st.text_area("Backstory*", value="", height=120, placeholder="(solo editable en 'Nuevo')", disabled=True)
+        st.text_area("Guardrails", value="", height=90, placeholder="(solo editable en 'Nuevo')", disabled=True)
+        st.multiselect("Herramientas habilitadas",
+                       ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+                       default=[], disabled=True)
+        st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0, disabled=True)
+        st.text_input("URL de imagen (opcional)", value="", disabled=True)
+        st.multiselect("Permisos (quién puede editar)",
+                       ["Colaborador","Supervisor","Administrador"],
+                       default=["Supervisor","Administrador"], disabled=True)
+        st.form_submit_button("Guardar/Actualizar Agente", disabled=True)
+
+else:
+    # -------- MODO NUEVO (creación, editable) --------
+    with st.form("agent_form_create"):
+        rol = st.text_input("Rol*", value="", placeholder="Escribe el nombre del nuevo rol")
+        objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+        herramientas = st.multiselect("Herramientas habilitadas",
+                                      ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+                                      default=["Parser de PDF","Recomendador de skills"])
+        llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+
+        # imagen por defecto si existe para el rol; si no, vacío
+        default_img = AGENT_DEFAULT_IMAGES.get(rol, "")
+        img_src     = st.text_input("URL de imagen (opcional)", value=default_img)
+        perms       = st.multiselect("Permisos (quién puede editar)",
+                                     ["Colaborador","Supervisor","Administrador"],
+                                     default=["Supervisor","Administrador"])
+
+        ok = st.form_submit_button("Guardar/Actualizar Agente")
+
+        if ok:
+            rol_final = (rol or "").strip()
+            if not rol_final:
+                st.error("Por favor, ingresa un nombre para el rol.")
+            else:
+                # Si el rol no existe, lo agregamos a roles.json
+                if rol_final not in roles_actuales:
+                    roles_actuales.append(rol_final)
+                    save_roles(roles_actuales)
+
+                # Creamos el agente con ese rol
+                ss.agents.append({
+                    "rol": rol_final,
+                    "objetivo": objetivo,
+                    "backstory": backstory,
+                    "guardrails": guardrails,
+                    "herramientas": herramientas,
+                    "llm_model": llm_model,
+                    "image": img_src,
+                    "perms": perms,
+                    "ts": datetime.utcnow().isoformat()
+                })
+                save_agents(ss.agents)
+                st.success("Agente guardado.")
+                ss.new_role_mode = False
+                st.rerun()
+
 
 
 
