@@ -218,7 +218,7 @@ st.markdown("""
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton > button{
   margin: 0 8px 6px 0 !important;   /* 0 a la izquierda */
-  padding-left: 8px !important;     /* texto cerca del borde izq */
+  padding-left: 4px !important;     /* texto cerca del borde izq */
   line-height: 1.05 !important;
   gap: 6px !important;
 }
