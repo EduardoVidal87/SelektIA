@@ -365,29 +365,26 @@ def login_screen():
   st.markdown("</div></div>", unsafe_allow_html=True)
 
 def render_topbar():
-  if ss.auth is None: return
-  # Solo el chip de usuario (sin botón HTML duplicado)
-  st.markdown(
-    f"""
-    <div class="topbar">
-      <div class="user-chip">👤 {ss.auth['name']}</div>
-    </div>
-    """, unsafe_allow_html=True
-  )
-  # ÚNICO botón real de logout
-  col1, col2 = st.columns([0.85, 0.15])
-  with col2:
-    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
-      ss.auth = None
-      st.rerun()
+    if ss.auth is None:
+        return
 
+    # Solo el chip de usuario (sin botón HTML duplicado)
+    st.markdown(
+        f"""
+        <div class="topbar">
+          <div class="user-chip">👤 {ss.auth['name']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-  # Botón de logout real:
-  col1, col2 = st.columns([0.85,0.15])
-  with col2:
-    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
-      ss.auth=None
-      st.rerun()
+    # ÚNICO botón real de logout
+    col1, col2 = st.columns([0.85, 0.15])
+    with col2:
+        if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
+            ss.auth = None
+            st.rerun()
+
 
 def require_auth():
   if ss.auth is None:
