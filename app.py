@@ -295,6 +295,15 @@ def _offers_to_df(offers_dict: dict) -> pd.DataFrame:
     })
   return pd.DataFrame(rows)
 
+# ===== Publicación simulada =====
+def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
+  """Devuelve (estado_publicacion, fecha_publicacion, publicados_en) según URLs."""
+  urls = [u.strip() for u in (urls_text or "").splitlines() if u.strip()] \
+         or [u.strip() for u in (urls_text or "").split(",") if u.strip()]
+  if urls:
+    return ("Publicado", date.today().isoformat(), ", ".join(urls))
+  return ("Listo para publicar", "", "")
+
 # =========================================================
 # SIDEBAR (branding + navegación)
 # =========================================================
@@ -395,12 +404,24 @@ def page_puestos():
       target_date = st.date_input("Fecha objetivo de contratación", value=date.today()+timedelta(days=30))
       expiry_date = st.date_input("Fecha de expiración de publicación", value=date.today()+timedelta(days=45))
       approvers = st.text_input("Aprobadores", value="Gerencia, Legal, Finanzas")
+
     jd = st.text_area("Descripción / Responsabilidades (JD)", height=150)
     must = st.text_area("Must-have (skills/tecnologías clave, coma separada)", height=90, value="")
     nice = st.text_area("Nice-to-have (deseables, coma separada)", height=90, value="")
     benefits = st.text_area("Beneficios / Bonos", height=90, value="")
     screening = st.text_area("Preguntas de screening (una por línea)", height=120, value="")
-    post_urls = st.text_area("URLs de publicación (bolsas internas/externas)", height=70, value="")
+    post_urls = st.text_area("URLs de publicación (una por línea o separadas por coma)", height=70, value="")
+
+    # === Aprobación de requisición ===
+    st.markdown("---")
+    st.subheader("Aprobación de requisición")
+    require_approval = st.toggle("Requiere aprobación antes de publicar", value=True)
+    approval_status = st.selectbox("Estado de aprobación", ["Pendiente","Aprobado","Rechazado"], index=0)
+    approved_by = st.text_input("Aprobado por (si aplica)", value="")
+    approval_date = st.date_input("Fecha de aprobación (si aplica)", value=date.today())
+    approval_notes = st.text_area("Notas de aprobación", height=70, value="")
+
+    # Guardar puesto
     save = st.button("Guardar puesto")
     if save:
       new_row = {
@@ -410,6 +431,7 @@ def page_puestos():
         "Entrevista Telefónica": 0, "Entrevista Presencial": 0,
         "Ubicación": location, "Hiring Manager": hiring_manager or recruiter,
         "Estado": "Abierto",
+
         # Metadatos extendidos del puesto
         "Departamento": department, "Tipo Empleo": emp_type, "Seniority": seniority,
         "Modalidad": work_model, "Vacantes": openings, "Recruiter": recruiter,
@@ -418,12 +440,39 @@ def page_puestos():
         "Experiencia Min": years_exp, "Prioridad": priority,
         "Fecha Objetivo": str(target_date), "Expira": str(expiry_date),
         "Aprobadores": approvers, "JD": jd, "MustHave": must, "NiceToHave": nice,
-        "Beneficios": benefits, "Screening Qs": screening, "Publicaciones": post_urls
+        "Beneficios": benefits, "Screening Qs": screening, "Publicaciones": post_urls,
+
+        # Aprobación
+        "Requiere Aprobación": require_approval,
+        "Estado Aprobación": approval_status,
+        "Aprobado Por": approved_by if approval_status == "Aprobado" else "",
+        "Fecha Aprobación": str(approval_date) if approval_status == "Aprobado" else "",
+        "Notas Aprobación": approval_notes,
+
+        # Publicación (se calcula abajo)
+        "Estado Publicación": "Borrador",
+        "Fecha Publicación": "",
+        "Publicado En": ""
       }
+
+      # Lógica de publicación automática
+      should_publish = (not require_approval) or (approval_status == "Aprobado")
+      if should_publish:
+        pub_status, pub_date, pub_sites = _simulate_publish(post_urls)
+        new_row["Estado Publicación"] = pub_status
+        new_row["Fecha Publicación"] = pub_date
+        new_row["Publicado En"] = pub_sites
+        if pub_status == "Publicado":
+          st.success(f"Puesto publicado automáticamente en: {pub_sites}")
+        else:
+          st.info("Aprobado, pero no hay URLs de publicación. Quedó como 'Listo para publicar'.")
+      else:
+        new_row["Estado Publicación"] = "Pendiente de aprobación"
+
       ss.positions = pd.concat([pd.DataFrame([new_row]), ss.positions], ignore_index=True)
       st.success("Puesto creado.")
 
-  # Lista de puestos (manteniendo tu tabla base)
+  # Lista de puestos (tabla base intacta)
   st.dataframe(
     ss.positions[
       ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen",
@@ -513,7 +562,7 @@ def page_pipeline():
     st.markdown("</div>", unsafe_allow_html=True)
     st.write("")
 
-    # Visor de CV integrado en Pipeline (nuevo)
+    # Visor de CV integrado en Pipeline
     st.subheader("CV")
     if row["_is_pdf"]:
       pdf_viewer_embed(row["_bytes"], height=420)
@@ -585,7 +634,7 @@ def page_offer():
 
   c1, c2, c3 = st.columns(3)
   if c1.button("Enviar"):
-    offer["estado"] = "Enviada"; ss.offers[cand] = offer; st.success("Oferta enviado.")
+    offer["estado"] = "Enviada"; ss.offers[cand] = offer; st.success("Oferta enviada.")
   if c2.button("Registrar contraoferta"):
     offer["estado"] = "Contraoferta"; ss.offers[cand] = offer; st.info("Contraoferta registrada.")
   if c3.button("Marcar aceptada"):
