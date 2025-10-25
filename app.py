@@ -228,8 +228,8 @@ st.markdown("""
 /* 4) Botones: sin separación vertical y padding compacto */
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton > button{
-  margin: 0 8px !important;            /* sin margen arriba/abajo */
-  padding: 6px 10px !important;
+  margin: 6px 8px 6px 0 !important;  /* 0 a la izquierda */
+padding-left: 8px !important;      /* opcional: acerca el texto al borde */
   line-height: 1.05 !important;
   gap: 6px !important;
 }
