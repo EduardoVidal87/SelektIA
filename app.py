@@ -148,11 +148,11 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
 .badge {{ display:inline-flex;align-items:center;gap:6px;background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;padding:4px 10px;font-size:12px;color:#1B2A3C; }}
 
-/* Agentes */
-.agent-wrap .stButton>button{{background:var(--body)!important;color:{TITLE_DARK}!important;border:1px solid #E3EDF6!important;border-radius:10px!important;font-weight:700!important;padding:6px 10px!important}}
-.agent-wrap .stButton>button:hover{{background:#fff!important}}
-.agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
-.agent-detail input:disabled, .agent-detail textarea:disabled{{background:#EEF5FF!important;color:{TITLE_DARK}!important;border:1.5px solid #D7E7FB!important;opacity:1!important}}
+/* Agentes (tarjeta compacta, 5 por fila) */
+.agent-card{{background:#fff;border:1px solid #E3EDF6;border-radius:14px;padding:10px;text-align:center;min-height:178px}}
+.agent-card img{{width:84px;height:84px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD}}
+.agent-title{{font-weight:800;color:{TITLE_DARK};font-size:15px;margin-top:6px}}
+.agent-sub{{font-size:12px;opacity:.8;margin-top:4px}}
 
 /* Workflows */
 .step-num{{width:26px;height:26px;border-radius:999px;border:2px solid #DDE7F5;display:flex;align-items:center;justify-content:center;font-weight:800;color:#345;}}
@@ -172,33 +172,43 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-
-# Ajustes puntuales de tipografía/espacios en marca y sidebar
 st.markdown("""
 <style>
-/* "Powered by Wayki Consulting" */
+/* Tamaño del "Powered by Wayki Consulting" */
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
   font-size: 12px !important;
   line-height: 1.2 !important;
   margin-top: 4px !important;
   opacity: .95 !important;
+  /* Opcional:
+  font-weight: 1000 !important;
+  letter-spacing: .2px !important;
+  */
 }
+</style>
+""", unsafe_allow_html=True)
 
-/* Más aire bajo el logo del sidebar */
+# Más espacio entre el logo del sidebar y el primer título
+st.markdown("""
+<style>
 [data-testid="stSidebar"] .sidebar-brand{
   margin-top: 0 !important;
   padding-bottom: 0 !important;
   margin-bottom: 55px !important;
 }
+</style>
+""", unsafe_allow_html=True)
 
-/* Sidebar ultra compacto */
+# Sidebar ultra-compacto (mínimo espacio vertical)
+st.markdown("""
+<style>
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap: 2px !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4{ margin:2px 8px 2px !important; line-height:1 !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin:2px 8px !important; }
+[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4{ margin: 2px 8px 2px !important; line-height: 1 !important; }
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin: 2px 8px !important; }
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton > button{
-  margin: 0 8px 6px 0 !important;   /* pegado a la izquierda */
+  margin: 0px 8px 6px 0 !important;
   padding-left: 8px !important;
   line-height: 1.05 !important;
   gap: 6px !important;
@@ -218,7 +228,7 @@ ROLES_FILE = DATA_DIR / "roles.json"
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
 def load_roles():
-  """Carga roles guardados (además de los default)."""
+  """Carga roles guardados + defaults (sin duplicados)."""
   if ROLES_FILE.exists():
     try:
       roles = json.loads(ROLES_FILE.read_text(encoding="utf-8"))
@@ -229,7 +239,7 @@ def load_roles():
   return DEFAULT_ROLES.copy()
 
 def save_roles(roles: list):
-  """Guarda sólo los no-default para no duplicar archivo."""
+  """Guarda sólo los no-default para no duplicar archivo innecesariamente."""
   roles_clean = sorted(list({r.strip() for r in roles if r.strip()}))
   custom_only = [r for r in roles_clean if r not in DEFAULT_ROLES]
   ROLES_FILE.write_text(json.dumps(custom_only, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -265,10 +275,6 @@ if "workflows_loaded" not in ss:
   ss.workflows_loaded = True
 if "agent_view_open" not in ss: ss.agent_view_open = {}
 if "agent_edit_open" not in ss: ss.agent_edit_open = {}
-
-# NUEVO: modo "➕ Nuevo" para crear rol/agent
-if "new_role_mode" not in ss: ss.new_role_mode = False
-
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -284,6 +290,8 @@ if "positions" not in ss:
        "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
        "Hiring Manager":"Rivers Brykson","Estado":"Abierto"}
   ])
+if "new_role_mode" not in ss: ss.new_role_mode = False
+if "roles" not in ss: ss.roles = load_roles()
 
 # =========================================================
 # UTILS
@@ -422,7 +430,7 @@ def render_sidebar():
       """
       <div class="sidebar-brand">
         <div class="brand-title">SelektIA</div>
-        <div class="brand-sub"><b>Powered by Wayki Consulting</b></div>
+        <div class="brand-sub">Powered by Wayki Consulting</div>
       </div>
       """,
       unsafe_allow_html=True
@@ -459,7 +467,7 @@ def render_sidebar():
     if st.button("Crear tarea", key="sb_task"):
       ss.section = "create_task"
 
-    # Cerrar sesión (sin título)
+    # Cerrar sesión (SIN título "SESIÓN")
     if st.button("Cerrar sesión", key="sb_logout"):
       ss.auth = None
       st.rerun()
@@ -723,145 +731,122 @@ def page_hh_tasks():
 def page_agents():
   st.header("Agentes")
 
-  # ------------------- CREAR / NUEVO AGENTE -------------------
+  # ---------- CREAR / NUEVO AGENTE (ARRIBA) ----------
   st.subheader("Crear / Editar agente")
 
-  # Picker simple de íconos (local a esta página)
-  ICONS = [
-    "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=256&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=256&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=256&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=256&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=256&auto=format&fit=crop",
-  ]
-  if "icon_pick" not in ss:
-    ss.icon_pick = ICONS[0]
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      st.rerun()
 
-  with st.form("agent_form_new"):
-    rol = st.text_input("Rol*", "Headhunter")
-    objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
-    backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
-    guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
-    herramientas = st.multiselect(
-      "Herramientas habilitadas",
-      ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
-      default=["Parser de PDF","Recomendador de skills"]
-    )
-    llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model    = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+        img_src      = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
 
-    st.markdown("**Iconos rápidos**")
-    ic_cols = st.columns(5, gap="small")
-    for i, url in enumerate(ICONS):
-      with ic_cols[i]:
-        st.image(url, width=56, caption=None, use_container_width=False)
-        if st.button("Usar", key=f"icon_use_{i}"):
-          ss.icon_pick = url
-    st.caption("Icono seleccionado:")
-    st.image(ss.icon_pick, width=64)
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          # Guarda agente
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          # Actualiza roles (persistencia)
+          roles_new = sorted(list({*ss.roles, rn}))
+          ss.roles = roles_new
+          save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
 
-    # Campo libre (si lo llenan, tiene prioridad)
-    img_src = st.text_input("URL de imagen (opcional)")
-
-    perms = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
-
-    ok = st.form_submit_button("Guardar/Actualizar Agente")
-    if ok:
-      rol_final = (rol or "").strip()
-      if not rol_final:
-        st.error("Debes ingresar un nombre de rol.")
-      else:
-        # Crear agente (sin campo de roles existentes; usa lo ingresado)
-        ss.agents.append({
-          "rol": rol_final,
-          "objetivo": objetivo,
-          "backstory": backstory,
-          "guardrails": guardrails,
-          "herramientas": herramientas,
-          "llm_model": llm_model,
-          "image": (img_src.strip() or ss.icon_pick or AGENT_DEFAULT_IMAGES.get(rol_final, "")),
-          "perms": perms,
-          "ts": datetime.utcnow().isoformat()
-        })
-        save_agents(ss.agents)
-        st.success("Agente guardado.")
-        st.rerun()
-
-  # ------------------- LISTA DE AGENTES (DEBAJO DEL FORM) -------------------
-  st.markdown("---")
+  # ---------- LISTA DE AGENTES (DEBAJO) ----------
   st.subheader("Tus agentes")
-
-  can_edit_any = (ss.auth["role"] == "Administrador")
+  can_edit_any = (ss.auth and ss.auth.get("role") == "Administrador")
 
   if not ss.agents:
-    st.info("Aún no hay agentes. Crea el primero en el formulario de arriba.")
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
     return
 
-  # 5 tarjetas por fila + avatares más pequeños
-  cols_per_row = 5
+  cols_per_row = 5  # ← 5 por fila
   for i in range(0, len(ss.agents), cols_per_row):
-    fila = ss.agents[i:i+cols_per_row]
-    cols = st.columns(cols_per_row, gap="small")
-    for j, ag in enumerate(fila):
+    row_agents = ss.agents[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
       idx = i + j
       with cols[j]:
         img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
-        st.markdown(f"""
-        <div style="background:#fff;border:1px solid #E3EDF6;border-radius:14px;padding:12px;text-align:center;">
-          <img src="{img}" style="width:84px;height:84px;border-radius:999px;object-fit:cover;border:3px solid #F1F7FD;">
-          <div style="height:6px"></div>
-          <div style="font-weight:800;color:{TITLE_DARK};font-size:15px;line-height:1.15">{ag.get('rol','—')}</div>
-          <div style="font-size:12px;opacity:.8;margin-top:4px;min-height:30px">{ag.get('objetivo','—')[:58]}</div>
-        </div>""", unsafe_allow_html=True)
 
-        allowed_roles = ag.get("perms", ["Supervisor","Administrador"])
-        st.markdown('<div class="agent-wrap">', unsafe_allow_html=True)
-        c1,c2,c3,c4 = st.columns([1,1,1,1])
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """,
+          unsafe_allow_html=True
+        )
 
-        with c1:
+        # Acciones
+        a1, a2, a3, a4 = st.columns(4)
+        with a1:
           is_open = ss.agent_view_open.get(idx, False)
-          if st.button(("👁 Ocultar" if is_open else "👁 Ver"), key=f"ag_view_{idx}"):
-            ss.agent_view_open[idx] = not is_open; st.rerun()
-
-        with c2:
-          can_edit = can_edit_any or (ss.auth["role"] in allowed_roles)
+          if st.button(("👁" if not is_open else "—"), key=f"ag_view_{idx}", help=("Ver" if not is_open else "Ocultar")):
+            ss.agent_view_open[idx] = not is_open
+            st.rerun()
+        with a2:
+          can_edit = can_edit_any or (ss.auth and ss.auth.get("role") in (ag.get("perms") or ["Supervisor","Administrador"]))
           if can_edit:
             is_edit = ss.agent_edit_open.get(idx, False)
-            if st.button(("✏ Ocultar" if is_edit else "✏ Edit"), key=f"ag_edit_{idx}"):
-              ss.agent_edit_open[idx] = not is_edit; st.rerun()
-          else:
-            st.caption("Sin permiso")
-
-        with c3:
-          if can_edit and st.button("🧬 Clone", key=f"ag_clone_{idx}"):
+            if st.button(("✏" if not is_edit else "—"), key=f"ag_edit_{idx}", help=("Editar (parcial)" if not is_edit else "Ocultar")):
+              ss.agent_edit_open[idx] = not is_edit
+              st.rerun()
+        with a3:
+          if st.button("🧬", key=f"ag_clone_{idx}", help="Clonar"):
             clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
             ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
-
-        with c4:
-          if can_edit and st.button("🗑 Del", key=f"ag_del_{idx}"):
+        with a4:
+          if st.button("🗑", key=f"ag_del_{idx}", help="Eliminar"):
             ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-      # Detalle
+      # Vista detalle
       if ss.agent_view_open.get(idx, False):
-        st.subheader("Detalle del agente")
         st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
         c1, c2 = st.columns([0.42, 0.58])
         with c1:
-          st.image(img, width=160)
+          st.image(img, width=180)
           st.caption("Modelo LLM (simulado)")
           st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
         with c2:
           st.text_input("Role*", value=ag.get("rol",""), disabled=True)
-          st.text_input("Goal*", value=ag.get("objetivo",""), disabled=True)
-          st.text_area("Backstory*", value=ag.get("backstory",""), height=160, disabled=True)
+          st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+          st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
           st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
           st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
           st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
         st.markdown('</div>', unsafe_allow_html=True)
 
-      # Edición rápida
+      # Edición parcial (opcional)
       if ss.agent_edit_open.get(idx, False):
-        st.info(f"Editando: {ag.get('rol')}")
+        st.info(f"Editando (parcial): {ag.get('rol')}")
         with st.form(f"agent_edit_{idx}"):
           objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
           backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
@@ -873,7 +858,6 @@ def page_agents():
           if st.form_submit_button("Guardar cambios"):
             ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,"llm_model":llm_model,"image":img_src,"perms":perms})
             save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
-
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
