@@ -440,11 +440,11 @@ def render_sidebar():
     if st.button("Crear tarea", key="sb_task"):
       ss.section = "create_task"
 
-    # --- NUEVO: Sección de sesión (logout) al final de la sidebar ---
-    st.markdown("#### SESIÓN")
-    if st.button("Cerrar sesión", key="sb_logout", help="Salir de la sesión actual"):
-      ss.auth = None
-      st.rerun()
+ # Logout al final de la sidebar (sin título)
+if st.button("Cerrar sesión", key="sb_logout"):
+    ss.auth = None
+    st.rerun()
+
 
 # =========================================================
 # PÁGINAS
