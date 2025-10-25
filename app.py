@@ -107,7 +107,8 @@ header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; 
 /* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] {{ background: var(--sb-bg) !important; color: var(--sb-tx) !important; }}
 [data-testid="stSidebar"] * {{ color: var(--sb-tx) !important; }}
-/* Títulos en verde original */
+
+/* Títulos del sidebar al verde original */
 [data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{ color: var(--green) !important; }}
 
 .sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:-10px; position:relative; top:-2px; text-align:center; }}
@@ -157,7 +158,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .step{{display:flex;gap:10px;align-items:center;margin:8px 0}}
 .status-chip{{display:inline-flex;gap:8px;align-items:center;border:1px solid #E3EDF6;background:#F6FAFF;border-radius:999px;padding:4px 10px;font-size:12px}}
 
-/* ---------- LOGIN (centrado con 2 boxes) ---------- */
+/* ---------- LOGIN (centrado con SOLO 2 boxes) ---------- */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
 .login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
 .login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
@@ -172,8 +173,8 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .topbar{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px}}
 .user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:6px 12px;font-weight:700;color:#123;}}
 
-/* Botón logout con look de chip */
-.topbar .stButton>button{{
+/* Botón "Cerrar sesión" con el MISMO look del chip Admin */
+button[title="Salir de la sesión actual"]{{
   background:#eef5ff !important;
   border:1px solid #d7e7fb !important;
   color:#123 !important;
@@ -182,7 +183,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   font-weight:700 !important;
   box-shadow:none !important;
 }}
-.topbar .stButton>button:hover{{ background:#e9f2ff !important; }}
+button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -365,7 +366,7 @@ def login_screen():
 
 def render_topbar():
   if ss.auth is None: return
-  # Chip + botón con estilo de chip, alineados a la derecha
+  # Chip + botón (el botón hereda estilos por el atributo title = help)
   st.markdown("<div class='topbar'>", unsafe_allow_html=True)
   col_sp, col_chip, col_btn = st.columns([0.82, 0.10, 0.08])
   with col_chip:
@@ -395,7 +396,7 @@ def render_sidebar():
       </div>
       """, unsafe_allow_html=True
     )
-    # (Se eliminó el "Rol: ...")
+    # (No mostramos "Rol: ...", tal como pediste)
 
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
