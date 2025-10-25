@@ -262,6 +262,24 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   base = max(0, min(100, base))
   return base, " — ".join(reasons)
 
+def _offers_to_df(offers_dict: dict) -> pd.DataFrame:
+  """Convierte ss.offers en DataFrame amigable para Analytics."""
+  if not offers_dict:
+    return pd.DataFrame(columns=["Candidato","Puesto","Ubicación","Modalidad","Salario","Estado","Inicio","Caduca"])
+  rows = []
+  for cand, o in offers_dict.items():
+    rows.append({
+      "Candidato": cand,
+      "Puesto": o.get("puesto",""),
+      "Ubicación": o.get("ubicacion",""),
+      "Modalidad": o.get("modalidad",""),
+      "Salario": o.get("salario",""),
+      "Estado": o.get("estado","Borrador"),
+      "Inicio": o.get("fecha_inicio",""),
+      "Caduca": o.get("caducidad",""),
+    })
+  return pd.DataFrame(rows)
+
 # =========================================================
 # SIDEBAR (branding + navegación)
 # =========================================================
@@ -561,7 +579,104 @@ def page_agent_tasks():
 
 def page_analytics():
   st.header("Analytics")
-  st.write("Panel de métricas (demo).")
+  # ===================== KPIs (de todas las otras pestañas) =====================
+  total_cands = len(ss.candidates)
+  avg_score = round(pd.Series([c["Score"] for c in ss.candidates]).mean(), 1) if ss.candidates else 0
+  high_match = sum(1 for c in ss.candidates if c["Score"] >= 60)
+  open_positions = int(ss.positions[ss.positions["Estado"]=="Abierto"].shape[0]) if not ss.positions.empty else 0
+  avg_days_open = round(ss.positions["Días Abierto"].mean(), 1) if not ss.positions.empty else 0
+
+  c1, c2, c3, c4, c5 = st.columns(5)
+  with c1:
+    st.markdown(f'<div class="k-card"><div class="badge">📄</div><h4>Total CVs</h4><h2>{total_cands}</h2></div>', unsafe_allow_html=True)
+  with c2:
+    st.markdown(f'<div class="k-card"><div class="badge">🏷️</div><h4>Score promedio</h4><h2>{avg_score}</h2></div>', unsafe_allow_html=True)
+  with c3:
+    st.markdown(f'<div class="k-card"><div class="badge">✅</div><h4>Matches ≥60%</h4><h2>{high_match}</h2></div>', unsafe_allow_html=True)
+  with c4:
+    st.markdown(f'<div class="k-card"><div class="badge">🧩</div><h4>Puestos abiertos</h4><h2>{open_positions}</h2></div>', unsafe_allow_html=True)
+  with c5:
+    st.markdown(f'<div class="k-card"><div class="badge">⏱️</div><h4>Días abiertos (prom.)</h4><h2>{avg_days_open}</h2></div>', unsafe_allow_html=True)
+
+  st.write("")
+
+  # ===================== Gráficos =====================
+  left, right = st.columns(2)
+  with left:
+    st.subheader("Distribución de puntajes")
+    if ss.candidates:
+      df_scores = pd.DataFrame([{"Candidato": c["Name"], "Score": c["Score"]} for c in ss.candidates])
+      fig_hist = px.histogram(df_scores, x="Score", nbins=10, title="Histograma de Score")
+      fig_hist.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                             font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Cantidad")
+      st.plotly_chart(fig_hist, use_container_width=True)
+    else:
+      st.info("Aún no hay CVs cargados.")
+
+  with right:
+    st.subheader("Top Puestos por Leads")
+    if not ss.positions.empty:
+      df_pos = ss.positions.sort_values("Leads", ascending=False).head(5)
+      fig_pos = px.bar(df_pos, x="Puesto", y="Leads", title="Puestos con más Leads")
+      fig_pos.update_traces(hovertemplate="%{x}<br>Leads: %{y}")
+      fig_pos.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                            font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Leads")
+      st.plotly_chart(fig_pos, use_container_width=True)
+    else:
+      st.info("Sin datos de puestos.")
+
+  st.write("")
+
+  # ===================== Ofertas =====================
+  st.subheader("Ofertas (estado actual)")
+  df_off = _offers_to_df(ss.offers)
+  if not df_off.empty:
+    st.dataframe(df_off, use_container_width=True, height=220)
+    # Conteo por estado
+    counts = df_off["Estado"].value_counts().reset_index()
+    counts.columns = ["Estado", "Cantidad"]
+    fig_off = px.bar(counts, x="Estado", y="Cantidad", title="Ofertas por estado")
+    fig_off.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                          font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig_off, use_container_width=True)
+  else:
+    st.info("No hay ofertas registradas aún.")
+
+  # ===================== Tareas & Agentes =====================
+  cta1, cta2 = st.columns(2)
+  with cta1:
+    st.subheader("Tareas próximas")
+    if ss.tasks:
+      df_tasks = pd.DataFrame(ss.tasks)
+      # orden por fecha
+      try:
+        df_tasks["due"] = pd.to_datetime(df_tasks["due"])
+        df_tasks = df_tasks.sort_values("due")
+      except Exception:
+        pass
+      st.dataframe(df_tasks, use_container_width=True, height=200)
+    else:
+      st.caption("No hay tareas.")
+
+  with cta2:
+    st.subheader("Agentes configurados")
+    if ss.agents:
+      st.dataframe(pd.DataFrame(ss.agents)[["rol","objetivo","ts"]], use_container_width=True, height=200)
+    else:
+      st.caption("Aún no has creado agentes.")
+
+  st.write("")
+  # Enlaces rápidos (no alteran patrón visual)
+  b1, b2, b3 = st.columns(3)
+  with b1:
+    if st.button("Ir a Carga de CVs"):
+      ss.section = "def_carga"; st.rerun()
+  with b2:
+    if st.button("Ir a Pipeline"):
+      ss.section = "pipeline"; st.rerun()
+  with b3:
+    if st.button("Ir a Ofertas"):
+      ss.section = "offer"; st.rerun()
 
 def page_create_task():
   st.header("Crear tarea")
