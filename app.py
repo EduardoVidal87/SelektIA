@@ -534,8 +534,10 @@ def page_agents():
   with left:
     if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
       ss.new_role_mode = not ss.new_role_mode
+      # al entrar en “Nuevo” cerramos paneles de ver/editar
       if ss.new_role_mode:
-        ss.agent_view_idx = None; ss.agent_edit_idx = None
+        ss.agent_view_idx = None
+        ss.agent_edit_idx = None
       st.rerun()
 
   if ss.new_role_mode:
@@ -548,24 +550,43 @@ def page_agents():
         backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
         guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
       with c2:
-        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        herramientas = st.multiselect(
+          "Herramientas habilitadas",
+          ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+          default=["Parser de PDF","Recomendador de skills"]
+        )
         llm_model    = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
         img_src      = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
-        perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+        perms        = st.multiselect(
+          "Permisos (quién puede editar)",
+          ["Colaborador","Supervisor","Administrador"],
+          default=["Supervisor","Administrador"]
+        )
+
       saved = st.form_submit_button("Guardar/Actualizar Agente")
       if saved:
         rn = (role_name or "").strip()
         if not rn:
           st.error("El campo Rol* es obligatorio.")
         else:
+          # se añade al final para mantener el orden; los nuevos quedan debajo
           ss.agents.append({
-            "rol": rn, "objetivo": objetivo, "backstory": backstory,
-            "guardrails": guardrails, "herramientas": herramientas,
-            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "rol": rn,
+            "objetivo": objetivo,
+            "backstory": backstory,
+            "guardrails": guardrails,
+            "herramientas": herramientas,
+            "llm_model": llm_model,
+            "image": img_src,
+            "perms": perms,
             "ts": datetime.utcnow().isoformat()
           })
           save_agents(ss.agents)
-          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          # guardamos el rol si es nuevo
+          if rn not in ss.roles:
+            ss.roles = sorted(list({*ss.roles, rn}))
+            save_roles(ss.roles)
+
           st.success("Agente creado.")
           ss.new_role_mode = False
           st.rerun()
@@ -576,12 +597,12 @@ def page_agents():
     st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
     return
 
-  cols_per_row = 5
-  for i in range(0, len(ss.agents), cols_per_row):
-    row_agents = ss.agents[i:i+cols_per_row]
-    cols = st.columns(cols_per_row)
+  CARDS_PER_ROW = 5
+  for start in range(0, len(ss.agents), CARDS_PER_ROW):
+    row_agents = ss.agents[start:start+CARDS_PER_ROW]
+    cols = st.columns(CARDS_PER_ROW)
     for j, ag in enumerate(row_agents):
-      idx = i + j
+      idx = start + j
       with cols[j]:
         img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
         st.markdown(
@@ -591,31 +612,45 @@ def page_agents():
             <div class="agent-title">{ag.get('rol','—')}</div>
             <div class="agent-sub">{ag.get('objetivo','—')}</div>
           </div>
-          """, unsafe_allow_html=True
+          """,
+          unsafe_allow_html=True
         )
-        # Toolbar centrada y mimética (dentro del card)
+
+        # Toolbar centrada y mimética dentro del card
         st.markdown('<div class="toolbar">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
+        b1, b2, b3, b4 = st.columns(4)
+
+        with b1:
           if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
             ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
             ss.agent_edit_idx = None
             st.rerun()
-        with c2:
+
+        with b2:
           if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
             ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
             ss.agent_view_idx = None
             st.rerun()
-        with c3:
+
+        with b3:
           if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
-            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
-            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
-        with c4:
+            clone = dict(ag)
+            clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone)
+            save_agents(ss.agents)
+            st.success("Agente clonado.")
+            st.rerun()
+
+        with b4:
           if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
-            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
+            ss.agents.pop(idx)
+            save_agents(ss.agents)
+            st.success("Agente eliminado.")
+            st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
 
-  # ---------- Secciones debajo (no rompen la grilla) ----------
+  # ---------- Paneles de detalle/edición DEBAJO de toda la grilla ----------
   if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
     ag = ss.agents[ss.agent_view_idx]
     img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
@@ -631,8 +666,10 @@ def page_agents():
       st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
       st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
       st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
-      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
-      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+      st.caption("Herramientas habilitadas")
+      st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos")
+      st.write(", ".join(ag.get("perms",[])) or "—")
     st.markdown('</div>', unsafe_allow_html=True)
 
   if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
@@ -642,14 +679,35 @@ def page_agents():
       objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
       backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
       guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
-      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
-      llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      herramientas = st.multiselect(
+        "Herramientas habilitadas",
+        ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+        default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"])
+      )
+      llm_model   = st.selectbox(
+        "Modelo LLM (simulado)",
+        LLM_MODELS,
+        index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini")))
+      )
       img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
-      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      perms       = st.multiselect(
+        "Permisos (quién puede editar)",
+        ["Colaborador","Supervisor","Administrador"],
+        default=ag.get("perms",["Supervisor","Administrador"])
+      )
       if st.form_submit_button("Guardar cambios"):
-        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
-                   "llm_model":llm_model,"image":img_src,"perms":perms})
-        save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
+        ag.update({
+          "objetivo":objetivo,
+          "backstory":backstory,
+          "guardrails":guardrails,
+          "herramientas":herramientas,
+          "llm_model":llm_model,
+          "image":img_src,
+          "perms":perms
+        })
+        save_agents(ss.agents)
+        st.success("Agente actualizado.")
+        st.rerun()
 
 # ===================== (Resto de páginas como en tu base) =====================
 def page_flows():
