@@ -543,64 +543,90 @@ def page_agents():
   if ss.new_role_mode:
     st.info("Completa el formulario para crear un nuevo rol/agente.")
     with st.form("agent_new_form"):
-      c1, c2 = st.columns(2)
-      with c1:
-    # Fallback robusto por si la URL está vacía o es inválida
-    safe_img = img if (isinstance(img, str) and img.strip()) \
-        else AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"))
+        c1, c2 = st.columns(2)
 
-    # Evitamos st.image() para no disparar validaciones GIF/PIL
-    st.markdown(
-        f"""
-        <img src="{safe_img}"
-             style="width:180px;height:180px;border-radius:999px;
-                    object-fit:cover;border:4px solid #F1F7FD;">
-        """,
-        unsafe_allow_html=True
-    )
-    st.caption("Modelo LLM (simulado)")
+        with c1:
+            # URL de imagen + PREVIEW (sin st.image para evitar validaciones GIF/PIL)
+            img_src = st.text_input(
+                "URL de imagen (opcional)",
+                value=AGENT_DEFAULT_IMAGES.get("Headhunter", "")
+            )
 
-      with c2:
-        herramientas = st.multiselect(
-          "Herramientas habilitadas",
-          ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
-          default=["Parser de PDF","Recomendador de skills"]
-        )
-        llm_model    = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
-        img_src      = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
-        perms        = st.multiselect(
-          "Permisos (quién puede editar)",
-          ["Colaborador","Supervisor","Administrador"],
-          default=["Supervisor","Administrador"]
-        )
+            # Ternario correcto y en UNA sola expresión
+            safe_img = (
+                img_src.strip()
+                if (isinstance(img_src, str) and img_src.strip())
+                else AGENT_DEFAULT_IMAGES.get("Headhunter", "")
+            )
 
-      saved = st.form_submit_button("Guardar/Actualizar Agente")
-      if saved:
-        rn = (role_name or "").strip()
-        if not rn:
-          st.error("El campo Rol* es obligatorio.")
-        else:
-          # se añade al final para mantener el orden; los nuevos quedan debajo
-          ss.agents.append({
-            "rol": rn,
-            "objetivo": objetivo,
-            "backstory": backstory,
-            "guardrails": guardrails,
-            "herramientas": herramientas,
-            "llm_model": llm_model,
-            "image": img_src,
-            "perms": perms,
-            "ts": datetime.utcnow().isoformat()
-          })
-          save_agents(ss.agents)
-          # guardamos el rol si es nuevo
-          if rn not in ss.roles:
-            ss.roles = sorted(list({*ss.roles, rn}))
-            save_roles(ss.roles)
+            st.markdown(
+                f"""
+                <div style="text-align:center;margin:6px 0 12px">
+                  <img src="{safe_img}"
+                       style="width:180px;height:180px;border-radius:999px;
+                              object-fit:cover;border:4px solid #F1F7FD;">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-          st.success("Agente creado.")
-          ss.new_role_mode = False
-          st.rerun()
+            # Campos editables
+            role_name  = st.text_input("Rol*", value="")
+            objetivo   = st.text_input(
+                "Objetivo*",
+                value="Identificar a los mejores profesionales para el cargo definido en el JD"
+            )
+            backstory  = st.text_area(
+                "Backstory*",
+                value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.",
+                height=120
+            )
+            guardrails = st.text_area(
+                "Guardrails",
+                value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.",
+                height=90
+            )
+
+        with c2:
+            herramientas = st.multiselect(
+                "Herramientas habilitadas",
+                ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+                default=["Parser de PDF","Recomendador de skills"]
+            )
+            llm_model    = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+            perms        = st.multiselect(
+                "Permisos (quién puede editar)",
+                ["Colaborador","Supervisor","Administrador"],
+                default=["Supervisor","Administrador"]
+            )
+
+        saved = st.form_submit_button("Guardar/Actualizar Agente")
+        if saved:
+            rn = (role_name or "").strip()
+            if not rn:
+                st.error("El campo Rol* es obligatorio.")
+            else:
+                ss.agents.append({
+                    "rol": rn,
+                    "objetivo": objetivo,
+                    "backstory": backstory,
+                    "guardrails": guardrails,
+                    "herramientas": herramientas,
+                    "llm_model": llm_model,
+                    "image": img_src,               # usamos la URL ingresada
+                    "perms": perms,
+                    "ts": datetime.utcnow().isoformat()
+                })
+                save_agents(ss.agents)
+
+                # Persistimos el rol si es nuevo
+                roles_new = sorted(list({*ss.roles, rn}))
+                ss.roles = roles_new
+                save_roles(roles_new)
+
+                st.success("Agente creado.")
+                ss.new_role_mode = False
+                st.rerun()
 
   # ---------- GRID de agentes (5 por fila) ----------
   st.subheader("Tus agentes")
