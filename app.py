@@ -95,10 +95,12 @@ CSS = f"""
   --sb-tx: {SIDEBAR_TX};
   --body: {BODY_BG};
   --sb-card: {CARD_BG};
+  --content-top: 4px;   /* ← ajusta 0–12px según el alto de tu logo */
 }}
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
-:root { --content-top: 4px; }  /* ajusta 0–12px a gusto */
-.block-container { background: transparent !important; padding-top: var(--content-top) !important; }
+.block-container {{ background: transparent !important; padding-top: var(--content-top) !important; }}
+"""
+
 
 
 /* Ocultar menú/toolbar superior Streamlit */
@@ -163,6 +165,25 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Evita padding extra que Streamlit mete en el main */
+[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
+[data-testid="stAppViewContainer"] > .main .block-container {
+  padding-top: var(--content-top) !important;
+}
+
+/* Primer bloque y primer título sin margen/padding arriba */
+.block-container > div:first-child { margin-top: 0 !important; padding-top: 0 !important; }
+.block-container h1:first-child,
+.block-container h2:first-child,
+.block-container h3:first-child {
+  margin-top: 0 !important;
+  line-height: 1.12 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 /* ==== Alinear títulos del contenido con la altura del logo del sidebar ==== */
