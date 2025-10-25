@@ -693,29 +693,51 @@ def page_agents():
     img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
     st.markdown("### Detalle del agente")
     with c1:
-    # Fallback robusto por si la URL está vacía o inválida
-    if isinstance(img, str) and img.strip():
-        safe_img = img
-    else:
-        safe_img = AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"))
+    # Imagen segura (string no vacío) o fallback por rol
+    safe_img = (
+        (img.strip() if isinstance(img, str) and (img or "").strip() else None)
+        or AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"])
+    )
 
-    # Usamos <img> en HTML para evitar validaciones de PIL/GIF de st.image()
+    # <img> en HTML (evita validaciones de PIL/GIF de st.image)
     st.markdown(
         f"""
-        <img src="{safe_img}"
-             style="width:180px;height:180px;border-radius:999px;
-                    object-fit:cover;border:4px solid #F1F7FD;">
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+               style="width:180px;height:180px;border-radius:999px;
+                      object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
         """,
         unsafe_allow_html=True
     )
-    st.caption("Modelo LLM (simulado)")
 
+
+   
     st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
-      st.image(img, width=180)
-      st.caption("Modelo LLM (simulado)")
-      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    # Calcula imagen segura (string no vacío) o usa fallback por rol
+    raw_img = ag.get("image") or ""
+    safe_img = (
+        raw_img.strip() if isinstance(raw_img, str) and raw_img.strip() else
+        AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"])
+    )
+
+    # Usa <img> en HTML (evita validaciones de PIL/GIF de st.image)
+    st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+               style="width:180px;height:180px;border-radius:999px;
+                      object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.caption("Modelo LLM (simulado)")
+    st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+
     with c2:
       st.text_input("Role*", value=ag.get("rol",""), disabled=True)
       st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
