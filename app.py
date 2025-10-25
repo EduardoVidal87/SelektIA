@@ -25,7 +25,7 @@ BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD    = "#33FFAC"
 
 # =========================================================
-# CSS — (CAMBIO PRINCIPAL: botones del cuerpo a la IZQUIERDA)
+# CSS — (botones del cuerpo a la IZQUIERDA + fix del logo)
 # =========================================================
 CSS = f"""
 :root {{
@@ -50,10 +50,12 @@ html, body, [data-testid="stAppViewContainer"] {{
   background: var(--sb-bg) !important;
   color: var(--sb-tx) !important;
 }}
+/* Color de texto del sidebar por defecto */
 [data-testid="stSidebar"] * {{
   color: var(--sb-tx) !important;
 }}
-/* Títulos de sección sidebar */
+
+/* Títulos de sección del sidebar */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
@@ -65,22 +67,28 @@ html, body, [data-testid="stAppViewContainer"] {{
   margin: 8px 12px 6px !important;
 }}
 
-/* SelektIA + powered centered */
-/* CAMBIO 1: tamaño del "logo" (brand-title) más grande (28px -> 34px) */
-/* CAMBIO 2: "Powered by Wayki Consulting" en #00CD78 */
+/* Branding (logo de texto centrado) */
 .sidebar-brand {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
   padding: 10px 0 8px;
+  text-align:center;
 }}
-.sidebar-brand .brand-title {{
-  color: var(--green); font-weight: 800; font-size: 34px; line-height: 1;
+/* ===== FIX: forzar tamaño y color del "logo" y del "Powered by" ===== */
+[data-testid="stSidebar"] .sidebar-brand .brand-title {{
+  color: var(--green) !important;
+  font-weight: 800 !important;
+  font-size: 34px !important;   /* más grande */
+  line-height: 1 !important;
 }}
-.sidebar-brand .brand-sub {{
-  margin-top: 2px; color: #00CD78; font-size: 11px; opacity: .9;
+[data-testid="stSidebar"] .sidebar-brand .brand-sub {{
+  margin-top: 2px !important;
+  color: {PRIMARY} !important;  /* Powered by en #00CD78 */
+  font-size: 11px !important;
+  opacity: .95 !important;
 }}
 
-/* Botones del sidebar (texto SIEMPRE a la izquierda) */
+/* Botones del sidebar (texto a la izquierda) */
 [data-testid="stSidebar"] .stButton > button {{
   width: 100% !important;
   display: flex !important;
@@ -101,12 +109,11 @@ html, body, [data-testid="stAppViewContainer"] {{
   text-align: left !important;
 }}
 
-/* ====== CAMBIO SOLICITADO ======
-   Botones del CUERPO: alineación izquierda siempre */
+/* Botones del CUERPO: alineación izquierda */
 .block-container .stButton > button {{
   width: auto !important;
   display: flex !important;
-  justify-content: flex-start !important;  /* IZQUIERDA */
+  justify-content: flex-start !important;
   align-items: center !important;
   text-align: left !important;
 
@@ -121,7 +128,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   filter: brightness(.96);
 }}
 
-/* Títulos de páginas cuerpo */
+/* Títulos de páginas del cuerpo */
 h1, h2, h3 {{
   color: {TITLE_DARK};
 }}
@@ -161,6 +168,7 @@ h1 strong, h2 strong, h3 strong {{
   padding:4px 10px;font-size:12px;color:#1B2A3C;
 }}
 """
+
 # =========================================================
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -174,11 +182,11 @@ if "section" not in ss:
 if "tasks" not in ss:
   ss.tasks = []
 if "candidates" not in ss:
-  ss.candidates = []         # [{Name, Score, Reasons, _bytes, _is_pdf, meta: dict}]
+  ss.candidates = []
 if "offers" not in ss:
-  ss.offers = {}             # {candidate_name: {...}}
+  ss.offers = {}
 if "agents" not in ss:
-  ss.agents = []             # [{rol, objetivo, backstory, guardrails, herramientas}]
+  ss.agents = []
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -297,11 +305,10 @@ with st.sidebar:
     ss.section = "create_task"
 
 # =========================================================
-# ROUTER
+# ROUTER (páginas)
 # =========================================================
 def page_def_carga():
   st.header("Definición & Carga")
-  # Inputs JD
   puesto = st.selectbox(
       "Puesto",
       ["Enfermera/o Asistencial", "Tecnólogo/a Médico", "Recepcionista de Admisión",
@@ -321,7 +328,6 @@ def page_def_carga():
       f.seek(0)
       text = extract_text_from_file(f)
       score, reasons = simple_score(text, jd_text, kw_text)
-      # Meta simple (demo): años exp por heurística
       years = 0
       for token in ["years", "años", "experiencia"]:
         if token in text.lower():
@@ -387,7 +393,6 @@ def page_pipeline():
   c1, c2 = st.columns([1.2, 1])
   with c1:
     st.markdown("**Candidatos (haz clic para ver detalles)**")
-    # Tabla izquierda tipo lista simple
     for i, row in df.iterrows():
       label = f"{row['Name']} — {row['Score']}%"
       if st.button(label, key=f"pi_{i}"):
@@ -401,7 +406,6 @@ def page_pipeline():
     sel = ss["selected_cand"]
     row = df[df["Name"]==sel].iloc[0]
     st.markdown(f"**{sel}**")
-    # Skills & meta
     st.markdown('<div class="k-card">', unsafe_allow_html=True)
     st.markdown("**Match estimado**  \n" + ("✅ Alto" if row["Score"]>=60 else "🟡 Medio"))
     st.markdown("**Validated Skills**  \n- HIS")
@@ -411,7 +415,6 @@ def page_pipeline():
     st.markdown(f"**Años de experiencia:** {row['meta'].get('anios_exp',0)}")
     st.markdown(f"**Última actualización CV:** {row['meta'].get('ultima_actualizacion','—')}")
     st.markdown("</div>", unsafe_allow_html=True)
-    # Acciones
     st.write("")
     cbtn1, cbtn2 = st.columns(2)
     with cbtn1:
@@ -425,7 +428,6 @@ def page_pipeline():
 def page_interview():
   st.header("Entrevista (Gerencia)")
   st.write("Use la rúbrica para calificar y decidir movimiento del candidato.")
-  # formulario rápido
   with st.form("iv_form"):
     cand = st.text_input("Candidato/a", ss.get("selected_cand", ""))
     tecnica = st.slider("Técnico (0-10)", 0, 10, 7)
@@ -435,7 +437,6 @@ def page_interview():
     submitted = st.form_submit_button("Guardar evaluación")
     if submitted:
       st.success("Evaluación guardada.")
-
   c1, c2 = st.columns(2)
   with c1:
     if st.button("Mover a Oferta"):
@@ -495,7 +496,6 @@ def page_offer():
   if c3.button("Marcar aceptada"):
     offer["estado"] = "Aceptada"; ss.offers[cand] = offer
     st.success("¡Felicitaciones! Propuesta aceptada. Se generan tareas de Onboarding automáticamente.")
-
   st.write(f"**Estado actual:** {ss.offers[cand]['estado']}")
 
 def page_onboarding():
@@ -514,14 +514,13 @@ def page_hh_tasks():
   cand = st.text_input("Candidata/o", ss.get("selected_cand",""))
   col1, col2, col3 = st.columns(3)
   with col1:
-    ch1 = st.checkbox("✅ Contacto hecho")
+    st.checkbox("✅ Contacto hecho")
   with col2:
-    ch2 = st.checkbox("✅ Entrevista agendada")
+    st.checkbox("✅ Entrevista agendada")
   with col3:
-    ch3 = st.checkbox("✅ Feedback recibido")
-  notas = st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
-  adj = st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
-
+    st.checkbox("✅ Feedback recibido")
+  st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
+  st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
   c1, c2 = st.columns(2)
   if c1.button("Guardar"):
     st.success("Checklist y notas guardadas.")
@@ -530,7 +529,6 @@ def page_hh_tasks():
 
 def page_agents():
   st.header("Agentes")
-  # Form de configuración de asistente IA (se guarda en ss.agents)
   with st.form("agent_form"):
     rol = st.selectbox("Rol*", ["Headhunter","Coordinador RR.HH.","Admin RR.HH."], index=0)
     objetivo = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
@@ -544,7 +542,6 @@ def page_agents():
         "guardrails": guardrails, "herramientas": herramientas, "ts": datetime.utcnow().isoformat()
       })
       st.success("Asistente guardado. Esta configuración guiará la evaluación de CVs.")
-
   if ss.agents:
     st.subheader("Asistentes configurados")
     st.dataframe(pd.DataFrame(ss.agents), use_container_width=True, height=240)
