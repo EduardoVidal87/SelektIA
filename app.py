@@ -181,7 +181,7 @@ st.markdown("""
   margin-top: 4px !important;
   opacity: .95 !important;
   /* Opcional:
-  font-weight: 700 !important;     /* más grueso */
+  font-weight: 850 !important;     /* más grueso */
   letter-spacing: .2px !important; /* más espaciado */
   */
 }
