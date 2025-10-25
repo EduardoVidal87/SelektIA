@@ -6,6 +6,7 @@ import base64
 import re
 from pathlib import Path
 from datetime import datetime, date, timedelta
+import random
 
 import streamlit as st
 import pandas as pd
@@ -37,6 +38,13 @@ CURRENCIES = ["USD", "PEN", "EUR", "CLP", "MXN", "COP", "ARS"]
 # Portales simulados (integración demo)
 JOB_BOARDS = ["laborum.pe", "Computrabajo", "Bumeran", "Indeed", "LinkedIn Jobs"]
 
+# Instrucción tipo “asistente” para la Ficha de Evaluación
+EVAL_INSTRUCTION = (
+  "Debes analizar los CVs de postulantes y calificarlos de 0% a 100% según el nivel de coincidencia con el JD. "
+  "Incluye un análisis breve que explique por qué califica o no el postulante, destacando habilidades must-have, "
+  "nice-to-have, brechas y hallazgos relevantes."
+)
+
 # =========================================================
 # CSS — (botones a la IZQUIERDA + branding alineado)
 # =========================================================
@@ -67,7 +75,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   color: var(--sb-tx) !important;
 }}
 
-/* Branding (logo centrado, alineado con título del cuerpo) */
+/* Branding */
 .sidebar-brand {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
@@ -261,7 +269,6 @@ def _normalize(t: str) -> str:
   return re.sub(r"\s+", " ", (t or "")).strip().lower()
 
 def infer_skills(text: str) -> set:
-  """Devuelve skills 'canónicas' detectadas en el texto (demo por sinónimos)."""
   t = _normalize(text)
   found = set()
   for canonical, syns in SKILL_SYNONYMS.items():
@@ -272,15 +279,8 @@ def infer_skills(text: str) -> set:
   return found
 
 def score_fit_by_skills(jd_text: str, must_list: list[str], nice_list: list[str], cv_text: str):
-  """
-  Scoring por skills:
-    - must coverage (65%)
-    - nice coverage (20%)
-    - extras relevantes (15%) = skills del CV que también aparecen en taxonomía + JD (no marcadas como must/nice)
-  Devuelve: score (0-100), dict con matched/gaps/extras
-  """
   jd_skills = infer_skills(jd_text)
-  must = set([m.strip() for m in must_list if m.strip()]) or jd_skills  # si no definiste must, usamos lo que salga del JD
+  must = set([m.strip() for m in must_list if m.strip()]) or jd_skills
   nice = set([n.strip() for n in nice_list if n.strip()]) - must
 
   cv_sk = infer_skills(cv_text)
@@ -289,13 +289,11 @@ def score_fit_by_skills(jd_text: str, must_list: list[str], nice_list: list[str]
   matched_nice = sorted(list(nice & cv_sk))
   gaps_must = sorted(list(must - cv_sk))
   gaps_nice = sorted(list(nice - cv_sk))
-
-  # extras: skills del CV que también están en taxonomía/tema del JD pero no eran must/nice
   extras = sorted(list((cv_sk & (jd_skills | must | nice)) - set(matched_must) - set(matched_nice)))
 
   cov_must = len(matched_must)/len(must) if must else 0
   cov_nice = len(matched_nice)/len(nice) if nice else 0
-  extra_factor = min(len(extras), 5)/5  # cap a 5 extras
+  extra_factor = min(len(extras), 5)/5
 
   score = 100 * (0.65*cov_must + 0.20*cov_nice + 0.15*extra_factor)
   score = int(round(score))
@@ -307,8 +305,19 @@ def score_fit_by_skills(jd_text: str, must_list: list[str], nice_list: list[str]
   }
   return score, explain
 
+def build_analysis_text(name: str, explain: dict) -> str:
+  ok_m = ", ".join(explain["matched_must"]) if explain["matched_must"] else "sin must-have claros"
+  ok_n = ", ".join(explain["matched_nice"]) if explain["matched_nice"] else "—"
+  gaps = ", ".join(explain["gaps_must"][:3]) if explain["gaps_must"] else "sin brechas críticas"
+  extras = ", ".join(explain["extras"][:3]) if explain["extras"] else "—"
+  return (
+    f"{name} evidencia buen encaje en must-have ({ok_m}). "
+    f"En nice-to-have destaca: {ok_n}. "
+    f"Brechas principales: {gaps}. "
+    f"Extras relevantes detectados: {extras}."
+  )
+
 def pdf_viewer_embed(file_bytes: bytes, height=520):
-  """Visor PDF embebido robusto (sin depender de PDF.js externo)."""
   try:
     b64 = base64.b64encode(file_bytes).decode("utf-8")
     html = f'''
@@ -366,7 +375,6 @@ def extract_meta(cv_text: str) -> dict:
   }
 
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
-  # conservamos tu score simple por compatibilidad (no se usa en ranking nuevo)
   base = 0; reasons = []
   text_low = cv_text.lower(); jd_low = jd.lower()
   hits = 0; kws = [k.strip().lower() for k in keywords.split(",") if k.strip()]
@@ -400,7 +408,6 @@ def _offers_to_df(offers_dict: dict) -> pd.DataFrame:
     })
   return pd.DataFrame(rows)
 
-# ===== Publicación simulada =====
 def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
   urls = [u.strip() for u in (urls_text or "").splitlines() if u.strip()] \
          or [u.strip() for u in (urls_text or "").split(",") if u.strip()]
@@ -408,7 +415,6 @@ def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
     return ("Publicado", date.today().isoformat(), ", ".join(urls))
   return ("Listo para publicar", "", "")
 
-# ===== Helpers puestos (UI y lógica) =====
 def _skills_from_csv(text: str) -> list[str]:
   return [s.strip() for s in (text or "").split(",") if s.strip()]
 
@@ -459,6 +465,44 @@ def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str
     "meta": meta
   }
 
+# ====== Generación de 20 CVs de muestra (demo) ======
+FIRST_NAMES = ["Ana","Bruno","Carla","Daniel","Elena","Fernando","Gabriela","Hugo","Irene","Javier","Karina","Luis","María","Nicolás","Olga","Pablo","Rocío","Sofía","Tomás","Valeria"]
+LAST_NAMES  = ["Rojas","García","Quispe","Torres","Muñoz","Pérez","Salas","Vargas","Huamán","Ramírez","Castro","Mendoza","Flores","López","Fernández","Cortez","Ramos","Díaz","Campos","Navarro"]
+
+def _synth_cv_text(role: str, pool_skills: list[str], city: str, years: int) -> str:
+  picked = random.sample(pool_skills, k=min(len(pool_skills), random.randint(4,7)))
+  txt = (
+    f"Resumen profesional — {role} en {city}. "
+    f"Experiencia: {years} años. Manejo de {', '.join(picked)}. "
+    f"Universidad Nacional Mayor de San Marcos. Participación en proyectos de mejora continua y protocolos. "
+    f"Certificaciones: BLS, ACLS. Responsabilidades: soporte, documentación y educación al paciente."
+  )
+  return txt
+
+def generate_20_sample_cvs(jd_text: str) -> list[dict]:
+  jd_sk = list(infer_skills(jd_text) or {"HIS","Protocolos","Educación al paciente","Seguridad del paciente","IAAS"})
+  cities = ["Lima, Perú","Santiago, Chile","Bogotá, Colombia","Quito, Ecuador","Ciudad de México, MX"]
+  role = "Profesional de Salud"
+  out = []
+  for i in range(20):
+    name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
+    years = random.choice([1,2,3,4,5,6,7,8,10,12])
+    city = random.choice(cities)
+    text = _synth_cv_text(role, jd_sk + ["SAP IS-H","Excel","Power BI","SQL"], city, years)
+    meta = extract_meta(text)
+    meta["anios_exp"] = years
+    file_name = f"CV_Muestra_{i+1:02d}_{name.replace(' ','_')}.txt"
+    out.append({
+      "Name": file_name,
+      "Score": 0,  # se calcula el Fit real en evaluación/pipeline
+      "Reasons": "",
+      "_bytes": text.encode("utf-8"),
+      "_is_pdf": False,
+      "_text": text,
+      "meta": meta
+    })
+  return out
+
 # =========================================================
 # SIDEBAR (branding + navegación)
 # =========================================================
@@ -477,9 +521,9 @@ with st.sidebar:
     ss.section = "analytics"
 
   st.markdown("#### ASISTENTE IA")
-  cols = [("Flujos","flows"),("Agentes","agents"),("Tareas de Agente","agent_tasks")]
-  for txt, sec in cols:
-    if st.button(txt, key=f"sb_{sec}"): ss.section = sec
+  for txt, sec in [("Flujos","flows"),("Agentes","agents"),("Tareas de Agente","agent_tasks")]:
+    if st.button(txt, key=f"sb_{sec}"):
+      ss.section = sec
 
   st.markdown("#### PROCESO DE SELECCIÓN")
   pages = [
@@ -493,7 +537,8 @@ with st.sidebar:
     ("Onboarding","onboarding"),
   ]
   for txt, sec in pages:
-    if st.button(txt, key=f"sb_{sec}"): ss.section = sec
+    if st.button(txt, key=f"sb_{sec}"):
+      ss.section = sec
 
   st.markdown("#### ACCIONES")
   if st.button("Crear tarea", key="sb_task"):
@@ -514,12 +559,9 @@ def page_def_carga():
                          placeholder="Objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.")
   kw_text = st.text_area("Palabras clave (coma separada)", height=100,
                          value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos")
-
-  # Guardamos referencia para la pestaña de evaluación
   ss["last_jd_text"] = jd_text
   ss["last_kw_text"] = kw_text
 
-  # ---- Carga manual de CVs ----
   files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf","txt"], accept_multiple_files=True)
   if files:
     if st.button("Procesar CVs cargados"):
@@ -536,7 +578,6 @@ def page_def_carga():
         })
       st.success("CVs cargados y analizados.")
 
-  # ---- Integración con portales (demo) ----
   with st.expander("🔌 Importar desde portales (demo)"):
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
@@ -548,7 +589,6 @@ def page_def_carga():
     with col3:
       posted_since = st.date_input("Publicado desde", value=date.today() - timedelta(days=15))
     st.caption("Nota: Integración simulada para demo (sin scraping real).")
-
     if st.button("Traer CVs (demo)"):
       imported = []
       for board in sources:
@@ -557,13 +597,16 @@ def page_def_carga():
       ss.candidates = (ss.candidates or []) + imported
       st.success(f"Importados {len(imported)} CVs simulados desde: {', '.join(sources)}.")
 
+  with st.expander("🧪 Generar 20 CVs de muestra (demo)"):
+    st.caption("Crea 20 CVs sintéticos para probar toda la app, con textos y habilidades variadas.")
+    if st.button("Generar CVs de muestra"):
+      ss.candidates = generate_20_sample_cvs(ss.get("last_jd_text",""))
+      st.success("Se generaron 20 CVs de muestra.")
+
 def page_puestos():
   st.header("Puestos")
-
-  # ==== Layout 3 columnas: lista / detalle / insights ====
   left, center, right = st.columns([0.95, 1.2, 0.9])
 
-  # ---------- LEFT: Lista de puestos con badge de match ----------
   with left:
     st.markdown("**Puestos abiertos**")
     if ss.positions.empty:
@@ -572,9 +615,7 @@ def page_puestos():
     else:
       df_list = ss.positions.copy()
       df_list = df_list.sort_values(["Estado", "Días Abierto", "Leads"], ascending=[True, True, False]).reset_index(drop=True)
-
-      options = []
-      labels_for_radio = []
+      options = []; labels_for_radio = []
       for _, row in df_list.iterrows():
         label, css = _match_level(row)
         st.markdown(
@@ -600,14 +641,12 @@ def page_puestos():
         )
         options.append(row["ID"])
         labels_for_radio.append(f"{row['Puesto']} — {row.get('Ubicación','')} · {label}")
-
       preselect = ss.get("selected_position_id", options[0] if options else None)
       selected_id = st.radio("Selecciona un puesto", options=options,
                              index=options.index(preselect) if preselect in options else 0,
                              format_func=lambda x: labels_for_radio[options.index(x)])
       ss["selected_position_id"] = selected_id
 
-  # Localizar fila seleccionada
   selected_row = None
   if not ss.positions.empty and ss.get("selected_position_id"):
     try:
@@ -615,7 +654,6 @@ def page_puestos():
     except Exception:
       selected_row = ss.positions.iloc[0].to_dict()
 
-  # ---------- CENTER: Detalle del puesto + JD + acciones ----------
   with center:
     if not selected_row:
       st.caption("Selecciona un puesto para ver el detalle.")
@@ -624,7 +662,6 @@ def page_puestos():
       ubic = selected_row.get("Ubicación", "—")
       st.markdown(f"<h2 style='margin:0;color:{TITLE_DARK}'>{title}</h2>", unsafe_allow_html=True)
       st.caption(ubic)
-
       cta, cta2 = st.columns([1,1])
       with cta:
         if st.button("Publicar ahora", key="pub_now"):
@@ -638,14 +675,12 @@ def page_puestos():
           else:
             st.info("Este puesto aún no está aprobado.")
       with cta2:
-        st.button("Agregar al Job Cart", key="add_cart")  # demo
-
+        st.button("Agregar al Job Cart", key="add_cart")
       st.markdown("---")
       st.subheader("Job Description")
       jd = (selected_row.get("JD", "") or "").strip() or "—"
       st.write(jd)
 
-  # ---------- RIGHT: Tarjeta de “Strong/Good/Ok Match” + skills ----------
   with right:
     if selected_row:
       label, css = _match_level(selected_row)
@@ -654,16 +689,13 @@ def page_puestos():
         f'<div class="match-chip" style="margin-bottom:8px;"><span class="match-dot {css}"></span>{label}</div>',
         unsafe_allow_html=True
       )
-
       exp_min = selected_row.get("Experiencia Min", 0) or 0
       if isinstance(exp_min, float): exp_min = int(exp_min)
       exp_txt = f"≥ {exp_min} años de experiencia" if exp_min else "Experiencia deseada: no especificada"
       st.markdown(f"- {exp_txt}")
-
       st.markdown("**Matching Skills**")
       must = _skills_from_csv(selected_row.get("MustHave",""))
       nice = _skills_from_csv(selected_row.get("NiceToHave",""))
-
       if not must and not nice:
         st.caption("Aún no has definido skills para este puesto.")
       else:
@@ -674,10 +706,8 @@ def page_puestos():
           st.caption("Deseables")
           row2 = "".join([f'<span class="skill-pill">{s}</span>' for s in nice[:12]])
           st.markdown(row2, unsafe_allow_html=True)
-
       st.markdown("</div>", unsafe_allow_html=True)
 
-  # ---------- Vista clásica (tabla) ----------
   st.markdown("")
   with st.expander("📋 Ver tabla completa (vista clásica)"):
     st.dataframe(
@@ -689,7 +719,6 @@ def page_puestos():
       use_container_width=True, height=320
     )
 
-  # ---------- Crear nuevo puesto ----------
   with st.expander("➕ Crear nuevo puesto"):
     c1, c2 = st.columns(2)
     with c1:
@@ -731,7 +760,6 @@ def page_puestos():
     approved_by = st.text_input("Aprobado por (si aplica)", value="")
     approval_date = st.date_input("Fecha de aprobación (si aplica)", value=date.today())
     approval_notes = st.text_area("Notas de aprobación", height=70, value="")
-
     save = st.button("Guardar puesto")
     if save:
       new_row = {
@@ -741,7 +769,6 @@ def page_puestos():
         "Entrevista Telefónica": 0, "Entrevista Presencial": 0,
         "Ubicación": location, "Hiring Manager": hiring_manager or recruiter,
         "Estado": "Abierto",
-        # Metadatos extendidos del puesto
         "Departamento": department, "Tipo Empleo": emp_type, "Seniority": seniority,
         "Modalidad": work_model, "Vacantes": openings, "Recruiter": recruiter,
         "Razón": reason, "Moneda": currency, "Salario Min": sal_min, "Salario Max": sal_max,
@@ -750,16 +777,12 @@ def page_puestos():
         "Fecha Objetivo": str(target_date), "Expira": str(expiry_date),
         "Aprobadores": approvers, "JD": jd, "MustHave": must, "NiceToHave": nice,
         "Beneficios": benefits, "Screening Qs": screening, "Publicaciones": post_urls,
-        # Aprobación
         "Requiere Aprobación": require_approval,
         "Estado Aprobación": approval_status,
         "Aprobado Por": approved_by if approval_status == "Aprobado" else "",
         "Fecha Aprobación": str(approval_date) if approval_status == "Aprobado" else "",
         "Notas Aprobación": approval_notes,
-        # Publicación
-        "Estado Publicación": "Borrador",
-        "Fecha Publicación": "",
-        "Publicado En": ""
+        "Estado Publicación": "Borrador", "Fecha Publicación": "", "Publicado En": ""
       }
       should_publish = (not require_approval) or (approval_status == "Aprobado")
       if should_publish:
@@ -773,411 +796,30 @@ def page_puestos():
           st.info("Aprobado, pero no hay URLs de publicación. Quedó como 'Listo para publicar'.")
       else:
         new_row["Estado Publicación"] = "Pendiente de aprobación"
-
       ss.positions = pd.concat([pd.DataFrame([new_row]), ss.positions], ignore_index=True)
       st.success("Puesto creado.")
 
 def page_eval():
   st.header("Resultados de evaluación")
-
   if not ss.candidates:
     st.info("Carga CVs en **Definición & Carga**.")
     return
 
   jd_text = ss.get("last_jd_text", "") or ""
-  # Permite sobreescribir JD aquí si quieres afinar el match sin ir atrás
-  jd_text = st.text_area("JD para matching por skills (opcional, usa el último ingresado por defecto)", jd_text, height=140)
+  jd_text = st.text_area("JD para matching por skills (opcional)", jd_text, height=140)
 
-  must_default = ""
-  nice_default = ""
-  # Si el usuario viene desde “Puestos” con Must/Nice definidos, podría pegarlos aquí.
   with st.expander("Configurar skills objetivo (opcional)"):
     c1, c2 = st.columns(2)
-    with c1:
-      must_default = st.text_area("Must-have (coma separada)", value="")
-    with c2:
-      nice_default = st.text_area("Nice-to-have (coma separada)", value="")
+    with c1: must_default = st.text_area("Must-have (coma separada)", value="")
+    with c2: nice_default = st.text_area("Nice-to-have (coma separada)", value="")
+  must_list = [s.strip() for s in (must_default or "").split(",") if s.strip()]
+  nice_list = [s.strip() for s in (nice_default or "").split(",") if s.strip()]
 
-  must_list = [s.strip() for s in must_default.split(",") if s.strip()]
-  nice_list = [s.strip() for s in nice_default.split(",") if s.strip()]
-
-  # ===== Calcular Fit por skills =====
   enriched = []
   for cand in ss.candidates:
-    cv_text = cand.get("_text")
-    if not cv_text:
-      # recuperar texto desde bytes si es TXT; si es PDF lo dejamos vacío (se evaluó antes)
-      if not cand.get("_is_pdf") and cand.get("_bytes"):
-        try:
-          cv_text = cand["_bytes"].decode("utf-8", "ignore")
-        except Exception:
-          cv_text = ""
-    score, explain = score_fit_by_skills(jd_text, must_list, nice_list, cv_text or "")
+    cv_text = cand.get("_text") or (cand.get("_bytes") or b"").decode("utf-8","ignore")
+    fit, explain = score_fit_by_skills(jd_text, must_list, nice_list, cv_text or "")
     enriched.append({
-      "Name": cand["Name"],
-      "Fit": score,
-      "Must (ok/total)": f"{len(explain['matched_must'])}/{explain['must_total']}",
-      "Nice (ok/total)": f"{len(explain['matched_nice'])}/{explain['nice_total']}",
-      "Extras": ", ".join(explain["extras"])[:60],
-      "_exp": explain,
-      "_is_pdf": cand["_is_pdf"],
-      "_bytes": cand["_bytes"],
-      "_text": cv_text or "",
-      "meta": cand.get("meta", {})
-    })
+      "Name": cand["Name"], "Fit": fit,
+      "Must (ok/total)": f"{len(explain['matched_must'])}/{explai
 
-  df = pd.DataFrame(enriched).sort_values("Fit", ascending=False).reset_index(drop=True)
-
-  st.subheader("Ranking por Fit de Skills")
-  st.dataframe(df[["Name","Fit","Must (ok/total)","Nice (ok/total)","Extras"]],
-               use_container_width=True, height=250)
-
-  # ===== Detalle =====
-  st.subheader("Detalle y explicación")
-  selected = st.selectbox("Elige un candidato", df["Name"].tolist())
-  row = df[df["Name"] == selected].iloc[0]
-  exp = row["_exp"]
-
-  c1, c2 = st.columns([1.1, 0.9])
-
-  with c1:
-    # Fit bar
-    fig = px.bar(pd.DataFrame([{"Candidato": row["Name"], "Fit": row["Fit"]}]), x="Candidato", y="Fit",
-                 title="Fit por skills")
-    fig.update_traces(marker_color=BAR_GOOD if row["Fit"] >= 60 else BAR_DEFAULT, hovertemplate="%{x}<br>Fit: %{y}%")
-    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                      font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Fit")
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("**Explicación**")
-    st.markdown(f"- **Must-have (ok/total):** {len(exp['matched_must'])}/{exp['must_total']}")
-    if exp["matched_must"]:
-      st.markdown("  - ✓ " + ", ".join(exp["matched_must"]))
-    if exp["gaps_must"]:
-      st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_must"]))
-
-    st.markdown(f"- **Nice-to-have (ok/total):** {len(exp['matched_nice'])}/{exp['nice_total']}")
-    if exp["matched_nice"]:
-      st.markdown("  - ✓ " + ", ".join(exp["matched_nice"]))
-    if exp["gaps_nice"]:
-      st.markdown("  - ✗ Faltantes: " + ", ".join(exp["gaps_nice"]))
-
-    if exp["extras"]:
-      st.markdown("- **Extras relevantes:** " + ", ".join(exp["extras"]))
-
-  with c2:
-    st.markdown("**CV (visor)**")
-    if row["_is_pdf"]:
-      pdf_viewer_embed(row["_bytes"], height=420)
-    else:
-      st.text_area("Contenido (TXT)", row["_text"], height=260)
-
-  st.markdown("---")
-  # Pills rápidas
-  def _pills(lst, checked=False):
-    if not lst: return ""
-    cls = "skill-pill checked" if checked else "skill-pill"
-    return "".join([f'<span class="{cls}">{"✓ " if checked else ""}{s}</span>' for s in lst])
-
-  st.markdown("**Pills de coincidencia (must / nice / extras):**", unsafe_allow_html=True)
-  st.markdown(_pills(exp["matched_must"], checked=True), unsafe_allow_html=True)
-  st.markdown(_pills(exp["matched_nice"], checked=True), unsafe_allow_html=True)
-  if exp["extras"]:
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    st.caption("Extras")
-    st.markdown(_pills(exp["extras"], checked=False), unsafe_allow_html=True)
-
-def page_pipeline():
-  st.header("Pipeline de Candidatos")
-  if not ss.candidates:
-    st.info("Primero carga CVs en **Definición & Carga**.")
-    return
-
-  df = pd.DataFrame(ss.candidates).sort_values("Score", ascending=False).reset_index(drop=True)
-
-  c1, c2 = st.columns([1.2, 1])
-  with c1:
-    st.markdown("**Candidatos**")
-    table_rows = []
-    for c in ss.candidates:
-      m = c.get("meta", {})
-      table_rows.append({
-        "Candidato": c["Name"],
-        "Score": c["Score"],
-        "Años Exp.": m.get("anios_exp", 0),
-        "Universidad": m.get("universidad", "—"),
-        "Actualizado": m.get("ultima_actualizacion", "—"),
-      })
-    df_table = pd.DataFrame(table_rows).sort_values(["Score","Años Exp."], ascending=[False, False])
-    st.dataframe(df_table, use_container_width=True, height=300)
-
-    names = df_table["Candidato"].tolist()
-    preselect = ss.get("selected_cand", names[0] if names else "")
-    sel_name = st.radio("Selecciona un candidato", names, index=names.index(preselect) if preselect in names else 0)
-    ss["selected_cand"] = sel_name
-
-  with c2:
-    st.markdown("**Detalle del candidato**")
-    if "selected_cand" not in ss:
-      st.caption("Selecciona un candidato de la lista."); return
-
-    row = next((c for c in ss.candidates if c["Name"] == ss["selected_cand"]), None)
-    if not row:
-      st.caption("Candidato no encontrado."); return
-
-    m = row.get("meta", {})
-    st.markdown(f"**{row['Name']}**")
-    st.markdown('<div class="k-card">', unsafe_allow_html=True)
-    match_txt = "✅ Alto" if row["Score"] >= 60 else "🟡 Medio"
-    st.markdown(f"**Match estimado:** {match_txt}")
-    st.markdown(f"**Score (keywords):** {row['Score']}%")
-    st.markdown("---")
-    st.markdown("**Universidad**  \n" + m.get("universidad", "—"))
-    st.markdown(f"**Años de experiencia**  \n{m.get('anios_exp', 0)}")
-    st.markdown("**Ubicación**  \n" + m.get("ubicacion", "—"))
-    st.markdown("**Título**  \n" + m.get("titulo", "—"))
-    st.markdown("**Última actualización CV**  \n" + m.get("ultima_actualizacion", "—"))
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.write("")
-
-    st.subheader("CV")
-    if row["_is_pdf"]:
-      pdf_viewer_embed(row["_bytes"], height=420)
-    else:
-      st.text_area("Contenido (TXT)", row.get("_text",""), height=260)
-
-    cbtn1, cbtn2 = st.columns(2)
-    with cbtn1:
-      if st.button("Añadir nota 'Buen encaje'"):
-        st.success("Nota agregada.")
-    with cbtn2:
-      if st.button("Mover a ‘Entrevista (Gerencia)’"):
-        ss.section = "interview"; st.rerun()
-
-    if row["_is_pdf"]:
-      st.download_button("Descargar CV (PDF)", data=row["_bytes"], file_name=row["Name"], mime="application/pdf")
-    else:
-      st.download_button("Descargar CV (TXT)", data=row.get("_text","").encode("utf-8"), file_name=row["Name"], mime="text/plain")
-
-def page_interview():
-  st.header("Entrevista (Gerencia)")
-  st.write("Use la rúbrica para calificar y decidir movimiento del candidato.")
-  with st.form("iv_form"):
-    cand = st.text_input("Candidato/a", ss.get("selected_cand", ""))
-    tecnica = st.slider("Técnico (0-10)", 0, 10, 7)
-    cultura = st.slider("Cultura (0-10)", 0, 10, 7)
-    comp = st.slider("Compensación (0-10)", 0, 10, 6)
-    notas = st.text_area("Notas")
-    submitted = st.form_submit_button("Guardar evaluación")
-    if submitted: st.success("Evaluación guardada.")
-  c1, c2 = st.columns(2)
-  with c1:
-    if st.button("Mover a Oferta"): ss.section = "offer"; st.rerun()
-  with c2:
-    if st.button("Descartar con feedback"): st.warning("Marcado como descartado.")
-
-def _ensure_offer_record(cand_name: str):
-  if cand_name not in ss.offers:
-    ss.offers[cand_name] = {
-      "puesto": "", "ubicacion": "", "modalidad": "Presencial",
-      "salario": "", "beneficios": "",
-      "fecha_inicio": date.today() + timedelta(days=14),
-      "caducidad": date.today() + timedelta(days=7),
-      "aprobadores": "Gerencia, Legal, Finanzas", "estado": "Borrador"
-    }
-
-def page_offer():
-  st.header("Oferta")
-  if "selected_cand" not in ss:
-    st.info("Selecciona un candidato en Pipeline o Entrevista."); return
-  cand = ss["selected_cand"]; _ensure_offer_record(cand); offer = ss.offers[cand]
-
-  with st.form("offer_form"):
-    c1, c2 = st.columns(2)
-    with c1:
-      offer["puesto"] = st.text_input("Puesto", offer["puesto"])
-      offer["ubicacion"] = st.text_input("Ubicación", offer["ubicacion"])
-      offer["modalidad"] = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"],
-                                        index=["Presencial","Híbrido","Remoto"].index(offer["modalidad"]))
-      offer["salario"] = st.text_input("Salario (rango y neto)", offer["salario"])
-    with c2:
-      offer["beneficios"] = st.text_area("Bonos/beneficios", offer["beneficios"], height=100)
-      offer["fecha_inicio"] = st.date_input("Fecha de inicio", value=offer["fecha_inicio"])
-      offer["caducidad"] = st.date_input("Caducidad de oferta", value=offer["caducidad"])
-      offer["aprobadores"] = st.text_input("Aprobadores", offer["aprobadores"])
-    saved = st.form_submit_button("Guardar oferta")
-    if saved:
-      ss.offers[cand] = offer; st.success("Oferta guardada.")
-
-  c1, c2, c3 = st.columns(3)
-  if c1.button("Enviar"):
-    offer["estado"] = "Enviada"; ss.offers[cand] = offer; st.success("Oferta enviada.")
-  if c2.button("Registrar contraoferta"):
-    offer["estado"] = "Contraoferta"; ss.offers[cand] = offer; st.info("Contraoferta registrada.")
-  if c3.button("Marcar aceptada"):
-    offer["estado"] = "Aceptada"; ss.offers[cand] = offer
-    st.success("¡Felicitaciones! Propuesta aceptada. Se generan tareas de Onboarding automáticamente.")
-  st.write(f"**Estado actual:** {ss.offers[cand]['estado']}")
-
-def page_onboarding():
-  st.header("Onboarding")
-  st.write("Checklist y responsables tras aceptar la oferta.")
-  data = {
-    "Tarea":["Contrato firmado","Documentos completos","Usuario/email creado","Acceso SAP IS-H","Examen médico",
-             "Inducción día 1","EPP/Uniforme entregado","Plan 30-60-90 cargado"],
-    "SLA":["48 h","72 h","24 h","24–48 h","según agenda","día 1","día 1","primer semana"],
-    "Responsable":["RR.HH.","RR.HH.","TI","TI","Salud Ocup.","RR.HH.","RR.HH.","Jefe/Tutor"]
-  }
-  st.dataframe(pd.DataFrame(data), use_container_width=True, height=260)
-
-def page_hh_tasks():
-  st.header("Tareas del Headhunter")
-  cand = st.text_input("Candidata/o", ss.get("selected_cand",""))
-  col1, col2, col3 = st.columns(3)
-  with col1: st.checkbox("✅ Contacto hecho")
-  with col2: st.checkbox("✅ Entrevista agendada")
-  with col3: st.checkbox("✅ Feedback recibido")
-  st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
-  st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
-  c1, c2 = st.columns(2)
-  if c1.button("Guardar"): st.success("Checklist y notas guardadas.")
-  if c2.button("Enviar a Comité"): st.info("Bloqueo de edición del HH y acta breve generada.")
-
-def page_agents():
-  st.header("Agentes")
-  with st.form("agent_form"):
-    rol = st.selectbox("Rol*", ["Headhunter","Coordinador RR.HH.","Admin RR.HH."], index=0)
-    objetivo = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
-    backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.")
-    guardrails = st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.")
-    herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
-    ok = st.form_submit_button("Crear/Actualizar Asistente")
-    if ok:
-      ss.agents.append({
-        "rol": rol, "objetivo": objetivo, "backstory": backstory,
-        "guardrails": guardrails, "herramientas": herramientas, "ts": datetime.utcnow().isoformat()
-      })
-      st.success("Asistente guardado. Esta configuración guiará la evaluación de CVs.")
-  if ss.agents:
-    st.subheader("Asistentes configurados")
-    st.dataframe(pd.DataFrame(ss.agents), use_container_width=True, height=240)
-
-def page_flows():
-  st.header("Flujos")
-  st.write("Define y documenta flujos (demo).")
-
-def page_agent_tasks():
-  st.header("Tareas de Agente")
-  st.write("Bandeja de tareas para asistentes (demo).")
-
-def page_analytics():
-  st.header("Analytics")
-  total_cands = len(ss.candidates)
-  avg_score = round(pd.Series([c["Score"] for c in ss.candidates]).mean(), 1) if ss.candidates else 0
-  high_match = sum(1 for c in ss.candidates if c["Score"] >= 60)
-  open_positions = int(ss.positions[ss.positions["Estado"]=="Abierto"].shape[0]) if not ss.positions.empty else 0
-  avg_days_open = round(ss.positions["Días Abierto"].mean(), 1) if not ss.positions.empty else 0
-
-  c1, c2, c3, c4, c5 = st.columns(5)
-  with c1: st.markdown(f'<div class="k-card"><div class="badge">📄</div><h4>Total CVs</h4><h2>{total_cands}</h2></div>', unsafe_allow_html=True)
-  with c2: st.markdown(f'<div class="k-card"><div class="badge">🏷️</div><h4>Score promedio</h4><h2>{avg_score}</h2></div>', unsafe_allow_html=True)
-  with c3: st.markdown(f'<div class="k-card"><div class="badge">✅</div><h4>Matches ≥60%</h4><h2>{high_match}</h2></div>', unsafe_allow_html=True)
-  with c4: st.markdown(f'<div class="k-card"><div class="badge">🧩</div><h4>Puestos abiertos</h4><h2>{open_positions}</h2></div>', unsafe_allow_html=True)
-  with c5: st.markdown(f'<div class="k-card"><div class="badge">⏱️</div><h4>Días abiertos (prom.)</h4><h2>{avg_days_open}</h2></div>', unsafe_allow_html=True)
-
-  st.write("")
-  left, right = st.columns(2)
-  with left:
-    st.subheader("Distribución de puntajes")
-    if ss.candidates:
-      df_scores = pd.DataFrame([{"Candidato": c["Name"], "Score": c["Score"]} for c in ss.candidates])
-      fig_hist = px.histogram(df_scores, x="Score", nbins=10, title="Histograma de Score")
-      fig_hist.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                             font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Cantidad")
-      st.plotly_chart(fig_hist, use_container_width=True)
-    else:
-      st.info("Aún no hay CVs cargados.")
-  with right:
-    st.subheader("Top Puestos por Leads")
-    if not ss.positions.empty:
-      df_pos = ss.positions.sort_values("Leads", ascending=False).head(5)
-      fig_pos = px.bar(df_pos, x="Puesto", y="Leads", title="Puestos con más Leads")
-      fig_pos.update_traces(hovertemplate="%{x}<br>Leads: %{y}")
-      fig_pos.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Leads")
-      st.plotly_chart(fig_pos, use_container_width=True)
-    else:
-      st.info("Sin datos de puestos.")
-
-  st.write("")
-  st.subheader("Ofertas (estado actual)")
-  df_off = _offers_to_df(ss.offers)
-  if not df_off.empty:
-    st.dataframe(df_off, use_container_width=True, height=220)
-    counts = df_off["Estado"].value_counts().reset_index()
-    counts.columns = ["Estado", "Cantidad"]
-    fig_off = px.bar(counts, x="Estado", y="Cantidad", title="Ofertas por estado")
-    fig_off.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                          font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(fig_off, use_container_width=True)
-  else:
-    st.info("No hay ofertas registradas aún.")
-
-  cta1, cta2 = st.columns(2)
-  with cta1:
-    st.subheader("Tareas próximas")
-    if ss.tasks:
-      df_tasks = pd.DataFrame(ss.tasks)
-      try:
-        df_tasks["due"] = pd.to_datetime(df_tasks["due"]); df_tasks = df_tasks.sort_values("due")
-      except Exception: pass
-      st.dataframe(df_tasks, use_container_width=True, height=200)
-    else:
-      st.caption("No hay tareas.")
-  with cta2:
-    st.subheader("Agentes configurados")
-    if ss.agents:
-      st.dataframe(pd.DataFrame(ss.agents)[["rol","objetivo","ts"]], use_container_width=True, height=200)
-    else:
-      st.caption("Aún no has creado agentes.")
-
-  st.write("")
-  b1, b2, b3 = st.columns(3)
-  with b1:
-    if st.button("Ir a Carga de CVs"): ss.section = "def_carga"; st.rerun()
-  with b2:
-    if st.button("Ir a Pipeline"): ss.section = "pipeline"; st.rerun()
-  with b3:
-    if st.button("Ir a Ofertas"): ss.section = "offer"; st.rerun()
-
-def page_create_task():
-  st.header("Crear tarea")
-  with st.form("t_form"):
-    titulo = st.text_input("Título")
-    desc = st.text_area("Descripción", height=150)
-    due = st.date_input("Fecha límite", value=date.today())
-    ok = st.form_submit_button("Guardar")
-    if ok:
-      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due)})
-      st.success("Tarea creada.")
-
-# =========================================================
-# ROUTER
-# =========================================================
-ROUTES = {
-  "def_carga": page_def_carga,
-  "puestos": page_puestos,
-  "eval": page_eval,
-  "pipeline": page_pipeline,
-  "interview": page_interview,
-  "offer": page_offer,
-  "onboarding": page_onboarding,
-  "hh_tasks": page_hh_tasks,
-  "agents": page_agents,
-  "flows": page_flows,
-  "agent_tasks": page_agent_tasks,
-  "analytics": page_analytics,
-  "create_task": page_create_task,
-}
-
-ROUTES.get(ss.section, page_def_carga)()
