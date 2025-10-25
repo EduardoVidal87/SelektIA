@@ -368,22 +368,17 @@ def render_topbar():
     if ss.auth is None:
         return
 
-    # Solo el chip de usuario (sin botón HTML duplicado)
-    st.markdown(
-        f"""
-        <div class="topbar">
-          <div class="user-chip">👤 {ss.auth['name']}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Fila superior: chip + botón alineados a la derecha
+    gap, gap2, chip_col, btn_col = st.columns([0.70, 0.15, 0.08, 0.07])
 
-    # ÚNICO botón real de logout
-    col1, col2 = st.columns([0.85, 0.15])
-    with col2:
+    with chip_col:
+        st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
+
+    with btn_col:
         if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
             ss.auth = None
             st.rerun()
+
 
 
 def require_auth():
