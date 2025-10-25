@@ -196,7 +196,7 @@ st.markdown("""
 [data-testid="stSidebar"] .sidebar-brand{
   margin-top: 0 !important;
   padding-bottom: 0 !important;
-  margin-bottom: 60px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
+  margin-bottom: 55px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
 }
 </style>
 """, unsafe_allow_html=True)
