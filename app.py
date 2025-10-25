@@ -88,21 +88,6 @@ ROLE_PRESETS = {
 # =========================================================
 # CSS — (botones a la IZQUIERDA + branding) + LOGIN/TOPBAR
 # =========================================================
-/* --- Botón "Cerrar sesión" con estilo de chip como Admin --- */
-.topbar .stButton>button{
-  background:#eef5ff !important;
-  border:1px solid #d7e7fb !important;
-  color:#123 !important;
-  border-radius:999px !important;
-  padding:6px 12px !important;
-  font-weight:700 !important;
-  box-shadow:none !important;
-}
-.topbar .stButton>button:hover{
-  background:#e9f2ff !important;
-}
-
-
 CSS = f"""
 :root {{
   --green: {PRIMARY};
@@ -380,19 +365,23 @@ def login_screen():
   st.markdown("</div></div>", unsafe_allow_html=True)
 
 def render_topbar():
-    if ss.auth is None:
-        return
-
-    # Chip + botón, alineados a la derecha
-    space, chip_col, btn_col = st.columns([0.82, 0.10, 0.08])
-
-    with chip_col:
-        st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
-
-    with btn_col:
-        if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
-            ss.auth = None
-            st.rerun()
+  if ss.auth is None: return
+  st.markdown(
+    f"""
+    <div class="topbar">
+      <div class="user-chip">👤 {ss.auth['name']}</div>
+      <form action="#" method="get">
+        <button type="button" id="logout-btn" style="background:#fff;border:1px solid #E3EDF6;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer">Cerrar sesión</button>
+      </form>
+    </div>
+    """, unsafe_allow_html=True
+  )
+  # Botón de logout real:
+  col1, col2 = st.columns([0.85,0.15])
+  with col2:
+    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
+      ss.auth=None
+      st.rerun()
 
 def require_auth():
   if ss.auth is None:
