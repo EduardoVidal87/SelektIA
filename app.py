@@ -927,34 +927,34 @@ def page_agents():
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
-    # --- Título "Flujos" fijo al hacer scroll ---
-    st.markdown(
-        """
-        <style>
-          /* Título fijo solo en la página Flujos */
-          #flows-title{
-            position: sticky;
-            top: calc(var(--content-top, 0px) + 8px); /* ajusta 4–12px a gusto */
-            z-index: 40;
-            background: var(--body, #F7FBFF);
-            padding: 6px 10px;
-            margin: 0 0 8px 0;
-            border-bottom: 1px solid #E3EDF6;           /* opcional */
-            box-shadow: 0 8px 10px -10px rgba(0,0,0,.06);/* opcional */
-          }
-          /* Un poco de aire al primer bloque tras el título */
-          #flows-title + div { margin-top: 10px !important; }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown('<h1 id="flows-title">Flujos</h1>', unsafe_allow_html=True)
+  # Título fijo solo en esta página
+  st.markdown("""
+  <style>
+  /* Título fijo de "Flujos" al hacer scroll (solo en esta página) */
+  #flows-title{
+    position: sticky;
+    top: calc(var(--content-top, 0px) + 8px); /* ajusta 4–12px a gusto */
+    z-index: 40;
+    background: var(--body, #F7FBFF);
+    padding: 6px 0 10px;
+    margin: 0 0 8px 0;
+    border-bottom: 1px solid #E3EDF6;       /* opcional */
+    box-shadow: 0 8px 10px -10px rgba(0,0,0,.06); /* opcional, leve */
+  }
+  /* Aire extra tras el título para que no tape el primer bloque */
+  #flows-title + div { margin-top: 10px !important; }
+  </style>
+  """, unsafe_allow_html=True)
 
-    vista_como = ss.auth["role"]
-    puede_aprobar = vista_como in ("Supervisor","Administrador")
+  # Pintamos el título fijo (en vez de st.header para poder fijarlo)
+  st.markdown('<h1 id="flows-title">Flujos</h1>', unsafe_allow_html=True)
 
-    left, right = st.columns([0.9, 1.1])
-    with left:
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor", "Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+
+  with left:
     st.subheader("Mis flujos")
     if not ss.workflows:
       st.info("No hay flujos aún. Crea uno a la derecha.")
@@ -962,44 +962,67 @@ def page_flows():
       rows = []
       for wf in ss.workflows:
         ag_label = "—"
-        ai = wf.get("agent_idx",-1)
+        ai = wf.get("agent_idx", -1)
         if 0 <= ai < len(ss.agents):
-          ag_label = ss.agents[ai].get("rol","Agente")
+          ag_label = ss.agents[ai].get("rol", "Agente")
         rows.append({
-          "ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
-          "Agente": ag_label, "Estado": wf.get("status","Borrador"),
-          "Programado": wf.get("schedule_at","—")
+          "ID": wf["id"],
+          "Nombre": wf["name"],
+          "Puesto": wf.get("role", "—"),
+          "Agente": ag_label,
+          "Estado": wf.get("status", "Borrador"),
+          "Programado": wf.get("schedule_at", "—")
         })
+
       df = pd.DataFrame(rows)
       st.dataframe(df, use_container_width=True, height=260)
 
       if rows:
-        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
-                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
-        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        sel = st.selectbox(
+          "Selecciona un flujo",
+          [r["ID"] for r in rows],
+          format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"] == x), x)
+        )
+        wf = next((w for w in ss.workflows if w["id"] == sel), None)
         if wf:
-          c1,c2,c3 = st.columns(3)
+          c1, c2, c3 = st.columns(3)
           with c1:
             if st.button("🧬 Duplicar"):
-              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
-              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
-              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado."); st.rerun()
+              clone = dict(wf)
+              clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"] = "Borrador"
+              clone["approved_by"] = ""
+              clone["approved_at"] = ""
+              ss.workflows.insert(0, clone)
+              save_workflows(ss.workflows)
+              st.success("Flujo duplicado.")
+              st.rerun()
           with c2:
             if st.button("🗑 Eliminar"):
-              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
-              st.success("Flujo eliminado."); st.rerun()
+              ss.workflows = [w for w in ss.workflows if w["id"] != wf["id"]]
+              save_workflows(ss.workflows)
+              st.success("Flujo eliminado.")
+              st.rerun()
           with c3:
             st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
-            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
-              a1,a2 = st.columns(2)
+            if wf.get("status") == "Pendiente de aprobación" and puede_aprobar:
+              a1, a2 = st.columns(2)
               with a1:
                 if st.button("✅ Aprobar"):
-                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.success("Aprobado."); st.rerun()
+                  wf["status"] = "Aprobado"
+                  wf["approved_by"] = vista_como
+                  wf["approved_at"] = datetime.now().isoformat()
+                  save_workflows(ss.workflows)
+                  st.success("Aprobado.")
+                  st.rerun()
               with a2:
                 if st.button("❌ Rechazar"):
-                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
+                  wf["status"] = "Rechazado"
+                  wf["approved_by"] = vista_como
+                  wf["approved_at"] = datetime.now().isoformat()
+                  save_workflows(ss.workflows)
+                  st.warning("Rechazado.")
+                  st.rerun()
 
   with right:
     st.subheader("Crear / Editar flujo")
@@ -1012,7 +1035,7 @@ def page_flows():
 
       st.markdown("**Job Description (elige una opción)**")
       jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
-      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf", "txt", "docx"], key="wf_jd_file")
       jd_from_file = ""
       if jd_file is not None:
         jd_from_file = extract_text_from_file(jd_file)
@@ -1022,7 +1045,7 @@ def page_flows():
       st.markdown("---")
       st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
       if ss.agents:
-        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i, a in enumerate(ss.agents)]
         agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
         agent_idx = int(agent_pick.split(" — ")[0])
       else:
@@ -1031,12 +1054,12 @@ def page_flows():
 
       st.markdown("---")
       st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
-      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_date = st.date_input("Fecha de ejecución", value=date.today() + timedelta(days=1))
       run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
       col_a, col_b, col_c = st.columns(3)
-      save_draft     = col_a.form_submit_button("💾 Guardar borrador")
-      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
-      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
+      save_draft    = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule      = col_c.form_submit_button("📅 Guardar y Programar")
 
     if save_draft or send_approval or schedule:
       jd_final = jd_from_file if jd_from_file else jd_text
@@ -1047,16 +1070,21 @@ def page_flows():
       else:
         wf = {
           "id": f"WF-{int(datetime.now().timestamp())}",
-          "name": name, "role": role,
-          "description": desc, "expected_output": expected,
+          "name": name,
+          "role": role,
+          "description": desc,
+          "expected_output": expected,
           "jd_text": jd_final[:200000],
           "agent_idx": agent_idx,
           "created_at": datetime.now().isoformat(),
-          "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""
+          "status": "Borrador",
+          "approved_by": "",
+          "approved_at": "",
+          "schedule_at": ""
         }
         if send_approval:
           wf["status"] = "Pendiente de aprobación"
-          st.success("Flujo enviado a aprobación. Supervisor/Administrador debe aprobarlo.")
+          st.success("Flujo enviado a aprobación.")
         if schedule:
           if puede_aprobar:
             wf["status"] = "Programado"
@@ -1065,13 +1093,14 @@ def page_flows():
           else:
             wf["status"] = "Pendiente de aprobación"
             wf["schedule_at"] = f"{run_date} {run_time.strftime('%H:%M')}"
-            st.info("Guardado y **pendiente de aprobación** por Supervisor/Administrador.")
+            st.info("Guardado y **pendiente de aprobación**.")
         if save_draft:
           st.success("Borrador guardado.")
 
         ss.workflows.insert(0, wf)
         save_workflows(ss.workflows)
         st.rerun()
+
 
 # ===================== ANALYTICS =====================
 def page_analytics():
