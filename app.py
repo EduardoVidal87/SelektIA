@@ -187,33 +187,22 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-/* Botones del sidebar (más juntos) */
+# Compactar separación de botones del sidebar
+st.markdown("""
+<style>
+/* Contenedor del botón sin margen extra */
 [data-testid="stSidebar"] .stButton{
-  margin: 0 !important;            /* elimina margen del contenedor */
+  margin:0 !important;
 }
-[data-testid="stSidebar"] .stButton>button {
-  width: 100% !important;
-  display:flex !important;
-  justify-content:flex-start !important;
-  align-items:center !important;
-  text-align:left !important;
+/* Botón más junto/compacto */
+[data-testid="stSidebar"] .stButton > button{
+  margin:2px 8px !important;    /* separación vertical reducida */
+  padding:8px 10px !important;  /* opcional: un poco menos de padding */
   gap:8px !important;
-  background: var(--sb-card) !important;
-  border:1px solid var(--sb-bg) !important;
-  color:#fff !important;
-  border-radius:12px !important;
-  padding:8px 10px !important;     /* un poco menos de padding */
-  margin:2px 8px !important;       /* <<< aquí se reduce la separación vertical */
-  font-weight:600 !important;
 }
+</style>
+""", unsafe_allow_html=True)
 
-/* Títulos del sidebar más compactos */
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] .stMarkdown h4 {
-  color: var(--green) !important;
-  margin: 8px 8px 4px !important;   /* menos espacio alrededor del título */
-}
-st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
