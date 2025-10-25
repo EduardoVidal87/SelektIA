@@ -414,39 +414,46 @@ def render_sidebar():
         <div class="brand-title">SelektIA</div>
         <div class="brand-sub">Powered by Wayki Consulting</div>
       </div>
-      """, unsafe_allow_html=True
+      """,
+      unsafe_allow_html=True
     )
 
+    # DASHBOARD
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
       ss.section = "analytics"
 
+    # ASISTENTE IA
     st.markdown("#### ASISTENTE IA")
-    for txt, sec in [("Flujos","flows"),("Agentes","agents"),("Tareas de Agente","agent_tasks")]:
+    for txt, sec in [("Flujos","flows"), ("Agentes","agents"), ("Tareas de Agente","agent_tasks")]:
       if st.button(txt, key=f"sb_{sec}"):
         ss.section = sec
 
+    # PROCESO DE SELECCIÓN
     st.markdown("#### PROCESO DE SELECCIÓN")
-    for txt, sec in [("Definición & Carga","def_carga"),("Puestos","puestos"),("Evaluación de CVs","eval"),
-                     ("Pipeline de Candidatos","pipeline"),("Entrevista (Gerencia)","interview"),
-                     ("Tareas del Headhunter","hh_tasks"),("Oferta","offer"),("Onboarding","onboarding")]:
+    for txt, sec in [
+      ("Definición & Carga","def_carga"),
+      ("Puestos","puestos"),
+      ("Evaluación de CVs","eval"),
+      ("Pipeline de Candidatos","pipeline"),
+      ("Entrevista (Gerencia)","interview"),
+      ("Tareas del Headhunter","hh_tasks"),
+      ("Oferta","offer"),
+      ("Onboarding","onboarding"),
+    ]:
       if st.button(txt, key=f"sb_{sec}"):
         ss.section = sec
 
-   st.markdown("#### ACCIONES")
-if st.button("Crear tarea", key="sb_task"):
-    ss.section = "create_task"
+    # ACCIONES
+    st.markdown("#### ACCIONES")
+    if st.button("Crear tarea", key="sb_task"):
+      ss.section = "create_task"
 
-# Botón Cerrar sesión en la sidebar (sin título “SESIÓN”)
-if st.button("Cerrar sesión", key="sb_logout"):
-    ss.auth = None
-    st.rerun()
+    # Cerrar sesión (SIN título "SESIÓN")
+    if st.button("Cerrar sesión", key="sb_logout"):
+      ss.auth = None
+      st.rerun()
 
-
- # Logout al final de la sidebar (sin título)
-if st.button("Cerrar sesión", key="sb_logout"):
-    ss.auth = None
-    st.rerun()
 
 
 # =========================================================
