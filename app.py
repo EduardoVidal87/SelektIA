@@ -243,6 +243,28 @@ padding-left: 8px !important;      /* opcional: acerca el texto al borde */
 DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
+# ---- Persistencia de roles ----
+ROLES_FILE = DATA_DIR / "roles.json"
+DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
+
+def load_roles():
+    """Carga roles guardados (además de los default)."""
+    if ROLES_FILE.exists():
+        try:
+            roles = json.loads(ROLES_FILE.read_text(encoding="utf-8"))
+            # Unifica con default, quita duplicados y ordena
+            roles = sorted(list({*DEFAULT_ROLES, *(r.strip() for r in roles if r.strip())}))
+            return roles
+        except:
+            pass
+    return DEFAULT_ROLES.copy()
+
+def save_roles(roles: list):
+    """Guarda sólo los no-default para no duplicar el archivo innecesariamente."""
+    roles_clean = sorted(list({r.strip() for r in roles if r.strip()}))
+    custom_only = [r for r in roles_clean if r not in DEFAULT_ROLES]
+    ROLES_FILE.write_text(json.dumps(custom_only, ensure_ascii=False, indent=2), encoding="utf-8")
+
 
 def load_json(path: Path, default):
   if path.exists():
@@ -813,36 +835,45 @@ def page_agents():
 st.markdown("---")
 st.subheader("Crear / Editar agente")
 with st.form("agent_form"):
-    # 1) Rol con opción de personalizado
-    rol_opts = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH.", "Otro (personalizado)"]
-    rol_pick = st.selectbox("Rol*", rol_opts, index=0)
+    # ---------- Rol con "➕ Nuevo…" + edición ----------
+    roles_actuales = load_roles()
+    NUEVO = "➕ Nuevo…"
+    rol_choice = st.selectbox("Rol*", roles_actuales + [NUEVO], index=0)
 
-    if rol_pick == "Otro (personalizado)":
+    if rol_choice == NUEVO:
         rol = st.text_input("Nuevo rol*", value="", placeholder="Escribe el nombre del rol")
     else:
-        rol = rol_pick
+        rol = st.text_input("Rol*", value=rol_choice)
 
-    # 2) Resto de campos
+    # ---------- Resto de campos ----------
     objetivo  = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
     backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
     guardrails= st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
-    herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+    herramientas = st.multiselect("Herramientas habilitadas",
+                                  ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
+                                  default=["Parser de PDF","Recomendador de skills"])
     llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
 
-    # Imagen por defecto (si el rol existe en el diccionario usamos esa; si es nuevo, no ponemos default)
     default_img = AGENT_DEFAULT_IMAGES.get(rol, "")
     img_src     = st.text_input("URL de imagen (opcional)", value=default_img)
-    perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+    perms       = st.multiselect("Permisos (quién puede editar)",
+                                 ["Colaborador","Supervisor","Administrador"],
+                                 default=["Supervisor","Administrador"])
 
     ok = st.form_submit_button("Guardar/Actualizar Agente")
 
-    # 3) Validación y guardado
     if ok:
-        if not rol.strip():
+        rol_final = (rol or "").strip()
+        if not rol_final:
             st.error("Por favor, ingresa un nombre para el rol.")
         else:
+            # Si el rol no existe aún, lo persistimos
+            if rol_final not in roles_actuales:
+                roles_actuales.append(rol_final)
+                save_roles(roles_actuales)
+
             ss.agents.append({
-                "rol": rol.strip(),
+                "rol": rol_final,
                 "objetivo": objetivo,
                 "backstory": backstory,
                 "guardrails": guardrails,
@@ -855,6 +886,7 @@ with st.form("agent_form"):
             save_agents(ss.agents)
             st.success("Agente guardado.")
             st.rerun()
+
 
 
 # ===================== FLUJOS (Workflows) =====================
