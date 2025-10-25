@@ -959,35 +959,18 @@ def page_agents():
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
-  # Título fijo solo en esta página
-  st.markdown("""
-  <style>
-  /* Título fijo de "Flujos" al hacer scroll (solo en esta página) */
-  #flows-title{
-    position: sticky;
-    top: calc(var(--content-top, 0px) + 8px); /* ajusta 4–12px a gusto */
-    z-index: 40;
-    background: var(--body, #F7FBFF);
-    padding: 6px 0 10px;
-    margin: 0 0 8px 0;
-    border-bottom: 1px solid #E3EDF6;       /* opcional */
-    box-shadow: 0 8px 10px -10px rgba(0,0,0,.06); /* opcional, leve */
-  }
-  /* Aire extra tras el título para que no tape el primer bloque */
-  #flows-title + div { margin-top: 10px !important; }
-  </style>
-  """, unsafe_allow_html=True)
-
-  # Pintamos el título fijo (en vez de st.header para poder fijarlo)
-  st.markdown('<h1 id="flows-title">Flujos</h1>', unsafe_allow_html=True)
+  # Título (el sticky lo maneja el CSS global)
+  st.header("Flujos")
 
   vista_como = ss.auth["role"]
   puede_aprobar = vista_como in ("Supervisor", "Administrador")
 
   left, right = st.columns([0.9, 1.1])
 
+  # -------------------- Panel izquierdo: Lista de flujos --------------------
   with left:
     st.subheader("Mis flujos")
+
     if not ss.workflows:
       st.info("No hay flujos aún. Crea uno a la derecha.")
     else:
@@ -1036,7 +1019,10 @@ def page_flows():
               st.success("Flujo eliminado.")
               st.rerun()
           with c3:
-            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            st.markdown(
+              f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>",
+              unsafe_allow_html=True
+            )
             if wf.get("status") == "Pendiente de aprobación" and puede_aprobar:
               a1, a2 = st.columns(2)
               with a1:
@@ -1056,14 +1042,25 @@ def page_flows():
                   st.warning("Rechazado.")
                   st.rerun()
 
+  # -------------------- Panel derecho: Crear / Editar flujo --------------------
   with right:
     st.subheader("Crear / Editar flujo")
+
     with st.form("wf_form"):
-      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      st.markdown(
+        "<div class='step'><div class='step-num'>1</div>"
+        "<div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>",
+        unsafe_allow_html=True
+      )
+
       name = st.text_input("Name*", value="Analizar CV")
       role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
       desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
-      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+      expected = st.text_area(
+        "Expected output*",
+        value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje",
+        height=80
+      )
 
       st.markdown("**Job Description (elige una opción)**")
       jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
@@ -1075,7 +1072,12 @@ def page_flows():
         st.text_area("Preview", jd_from_file[:4000], height=160)
 
       st.markdown("---")
-      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      st.markdown(
+        "<div class='step'><div class='step-num'>2</div>"
+        "<div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>",
+        unsafe_allow_html=True
+      )
+
       if ss.agents:
         agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i, a in enumerate(ss.agents)]
         agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
@@ -1085,9 +1087,15 @@ def page_flows():
         agent_idx = -1
 
       st.markdown("---")
-      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      st.markdown(
+        "<div class='step'><div class='step-num'>3</div>"
+        "<div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>",
+        unsafe_allow_html=True
+      )
+
       run_date = st.date_input("Fecha de ejecución", value=date.today() + timedelta(days=1))
       run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+
       col_a, col_b, col_c = st.columns(3)
       save_draft    = col_a.form_submit_button("💾 Guardar borrador")
       send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
@@ -1095,6 +1103,7 @@ def page_flows():
 
     if save_draft or send_approval or schedule:
       jd_final = jd_from_file if jd_from_file else jd_text
+
       if not jd_final.strip():
         st.error("Debes proporcionar un JD (texto o archivo).")
       elif agent_idx < 0:
@@ -1114,6 +1123,7 @@ def page_flows():
           "approved_at": "",
           "schedule_at": ""
         }
+
         if send_approval:
           wf["status"] = "Pendiente de aprobación"
           st.success("Flujo enviado a aprobación.")
@@ -1132,7 +1142,6 @@ def page_flows():
         ss.workflows.insert(0, wf)
         save_workflows(ss.workflows)
         st.rerun()
-
 
 # ===================== ANALYTICS =====================
 def page_analytics():
