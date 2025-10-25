@@ -163,6 +163,23 @@ st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
+/* Fuerza color y estilo del “Powered by Wayki Consulting” */
+[data-testid="stSidebar"] .sidebar-brand .brand-sub,
+[data-testid="stSidebar"] .sidebar-brand .brand-sub *{
+  color: var(--green) !important;   /* verde de la marca */
+  font-weight: 800 !important;      /* negrita */
+  opacity: 1 !important;
+}
+
+/* (opcional) por si el catch-all deja herencia rara en ese bloque */
+[data-testid="stSidebar"] .sidebar-brand{
+  color: inherit !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 /* ====== Powered by Wayki (color y estilo original) ====== */
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
   color: var(--green) !important;      /* verde original */
