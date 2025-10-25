@@ -176,7 +176,7 @@ st.markdown("""
 <style>
 /* Tamaño del "Powered by Wayki Consulting" */
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 14px !important;   /* ← cámbialo a 12, 16, 18, etc. */
+  font-size: 12px !important;   /* ← cámbialo a 12, 16, 18, etc. */
   line-height: 1.2 !important;
   margin-top: 4px !important;
   opacity: .95 !important;
