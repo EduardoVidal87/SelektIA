@@ -25,7 +25,7 @@ BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD    = "#33FFAC"
 
 # =========================================================
-# CSS — (logo más grande + menos espacio entre botones del sidebar)
+# CSS (sidebar más compacto + logo grande)
 # =========================================================
 CSS = f"""
 :root {{
@@ -50,12 +50,18 @@ html, body, [data-testid="stAppViewContainer"] {{
   background: var(--sb-bg) !important;
   color: var(--sb-tx) !important;
 }}
-/* Color de texto del sidebar por defecto */
 [data-testid="stSidebar"] * {{
   color: var(--sb-tx) !important;
 }}
 
-/* Títulos de sección del sidebar (márgenes más compactos) */
+/* Reducir espacios de markdown/párrafos en el sidebar */
+[data-testid="stSidebar"] .stMarkdown p,
+[data-testid="stSidebar"] .stMarkdown div {{
+  margin: 0 0 4px !important;
+  line-height: 1.15 !important;
+}}
+
+/* Títulos de sección del sidebar (compactos) */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
@@ -64,36 +70,34 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] h6 {{
   color: var(--green) !important;
   letter-spacing: .5px;
-  margin: 4px 12px 4px !important;   /* <== menos espacio vertical */
+  margin: 2px 12px 2px !important;
 }}
 
-/* Branding (logo centrado) */
+/* Branding (logo centrado y grande) */
 .sidebar-brand {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
-  padding: 6px 0 4px; /* menos altura */
+  padding: 4px 0 2px;
   text-align:center;
 }}
-/* Logo más grande */
-[data-testid="stSidebar"] .sidebar-brand .brand-title {{
+.sidebar-brand .brand-title {{
   color: var(--green) !important;
   font-weight: 800 !important;
-  font-size: 42px !important;   /* <== AGRANDADO */
+  font-size: 44px !important;   /* LOGO MÁS GRANDE */
   line-height: 1.05 !important;
 }}
-/* Powered by en el color del logo */
-[data-testid="stSidebar"] .sidebar-brand .brand-sub {{
+.sidebar-brand .brand-sub {{
   margin-top: 2px !important;
-  color: {PRIMARY} !important;
+  color: {PRIMARY} !important;   /* mismo color que el logo */
   font-size: 11.5px !important;
   opacity: .95 !important;
 }}
 
-/* Botones del sidebar (texto a la izquierda, menos espacios) */
+/* Botones del sidebar (texto a la izq + compactos) */
 [data-testid="stSidebar"] .stButton > button {{
   width: 100% !important;
   display: flex !important;
-  justify-content: flex-start !important;  /* IZQUIERDA */
+  justify-content: flex-start !important;
   align-items: center !important;
   text-align: left !important;
   gap: 8px !important;
@@ -103,15 +107,16 @@ html, body, [data-testid="stAppViewContainer"] {{
   color: #ffffff !important;
   border-radius: 12px !important;
 
-  padding: 8px 12px !important;   /* <== menos padding */
-  margin: 4px 10px !important;    /* <== menos margen vertical */
+  padding: 6px 10px !important;
+  margin: 2px 10px !important;
   font-weight: 600 !important;
+  line-height: 1.15 !important;
 }}
 [data-testid="stSidebar"] .stButton > button * {{
   text-align: left !important;
 }}
 
-/* Botones del CUERPO: alineación izquierda (sin cambios) */
+/* Botones del CUERPO: alineación izquierda */
 .block-container .stButton > button {{
   width: auto !important;
   display: flex !important;
@@ -126,17 +131,11 @@ html, body, [data-testid="stAppViewContainer"] {{
   padding: .50rem .90rem !important;
   font-weight: 700 !important;
 }}
-.block-container .stButton > button:hover {{
-  filter: brightness(.96);
-}}
+.block-container .stButton > button:hover {{ filter: brightness(.96); }}
 
-/* Títulos de páginas del cuerpo */
-h1, h2, h3 {{
-  color: {TITLE_DARK};
-}}
-h1 strong, h2 strong, h3 strong {{
-  color: var(--green);
-}}
+/* Títulos en el cuerpo */
+h1, h2, h3 {{ color: {TITLE_DARK}; }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
 /* Inputs claros */
 .block-container [data-testid="stSelectbox"] > div > div,
@@ -180,15 +179,15 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 # =========================================================
 ss = st.session_state
 if "section" not in ss:
-  ss.section = "def_carga"
+  ss.section = "def_carga"   # sección inicial
 if "tasks" not in ss:
   ss.tasks = []
 if "candidates" not in ss:
-  ss.candidates = []
+  ss.candidates = []         # [{Name, Score, Reasons, _bytes, _is_pdf, meta: dict}]
 if "offers" not in ss:
-  ss.offers = {}
+  ss.offers = {}             # {candidate_name: {...}}
 if "agents" not in ss:
-  ss.agents = []
+  ss.agents = []             # [{rol, objetivo, backstory, guardrails, herramientas}]
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -278,24 +277,30 @@ with st.sidebar:
     ss.section = "analytics"
 
   st.markdown("#### ASISTENTE IA")
-  for txt, sec in [("Flujos","flows"), ("Agentes","agents"), ("Tareas de Agente","agent_tasks")]:
-    if st.button(txt, key=f"sb_{sec}"):
-      ss.section = sec
+  if st.button("Flujos", key="sb_flows"):
+    ss.section = "flows"
+  if st.button("Agentes", key="sb_agents"):
+    ss.section = "agents"
+  if st.button("Tareas de Agente", key="sb_agent_tasks"):
+    ss.section = "agent_tasks"
 
   st.markdown("#### PROCESO DE SELECCIÓN")
-  pages = [
-    ("Definición & Carga","def_carga"),
-    ("Puestos","puestos"),
-    ("Evaluación de CVs","eval"),
-    ("Pipeline de Candidatos","pipeline"),
-    ("Entrevista (Gerencia)","interview"),
-    ("Tareas del Headhunter","hh_tasks"),
-    ("Oferta","offer"),
-    ("Onboarding","onboarding"),
-  ]
-  for txt, sec in pages:
-    if st.button(txt, key=f"sb_{sec}"):
-      ss.section = sec
+  if st.button("Definición & Carga", key="sb_def"):
+    ss.section = "def_carga"
+  if st.button("Puestos", key="sb_puestos"):
+    ss.section = "puestos"
+  if st.button("Evaluación de CVs", key="sb_eval"):
+    ss.section = "eval"
+  if st.button("Pipeline de Candidatos", key="sb_pipe"):
+    ss.section = "pipeline"
+  if st.button("Entrevista (Gerencia)", key="sb_iv"):
+    ss.section = "interview"
+  if st.button("Tareas del Headhunter", key="sb_hh"):
+    ss.section = "hh_tasks"
+  if st.button("Oferta", key="sb_off"):
+    ss.section = "offer"
+  if st.button("Onboarding", key="sb_on"):
+    ss.section = "onboarding"
 
   st.markdown("#### ACCIONES")
   if st.button("Crear tarea", key="sb_task"):
@@ -306,14 +311,18 @@ with st.sidebar:
 # =========================================================
 def page_def_carga():
   st.header("Definición & Carga")
-  puesto = st.selectbox("Puesto",
-      ["Enfermera/o Asistencial","Tecnólogo/a Médico","Recepcionista de Admisión",
-       "Médico/a General","Químico/a Farmacéutico/a"], index=0)
+  puesto = st.selectbox(
+      "Puesto",
+      ["Enfermera/o Asistencial", "Tecnólogo/a Médico", "Recepcionista de Admisión",
+       "Médico/a General", "Químico/a Farmacéutico/a"],
+      index=0
+  )
   jd_text = st.text_area("Descripción / JD", height=180,
                          placeholder="Objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.")
   kw_text = st.text_area("Palabras clave (coma separada)", height=100,
                          value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos")
-  files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf","txt"], accept_multiple_files=True)
+
+  files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf", "txt"], accept_multiple_files=True)
   if files:
     ss.candidates = []
     for f in files:
@@ -321,24 +330,32 @@ def page_def_carga():
       f.seek(0)
       text = extract_text_from_file(f)
       score, reasons = simple_score(text, jd_text, kw_text)
+      # Meta simple (demo)
       years = 0
-      for token in ["years","años","experiencia"]:
+      for token in ["years", "años", "experiencia"]:
         if token in text.lower():
           years = max(years, 5)
       ss.candidates.append({
-        "Name": f.name, "Score": score, "Reasons": reasons,
-        "_bytes": f_bytes, "_is_pdf": Path(f.name).suffix.lower()==".pdf",
-        "meta": {"anios_exp": years, "ultima_actualizacion": datetime.today().date().isoformat()}
+        "Name": f.name,
+        "Score": score,
+        "Reasons": reasons,
+        "_bytes": f_bytes,
+        "_is_pdf": Path(f.name).suffix.lower()==".pdf",
+        "meta": {
+          "anios_exp": years,
+          "ultima_actualizacion": datetime.today().date().isoformat()
+        }
       })
     st.success("CVs cargados y analizados.")
 
 def page_puestos():
   st.header("Puestos")
   st.dataframe(
-    ss.positions[["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen",
-                  "HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación",
-                  "Hiring Manager","Estado","ID"]]
-       .sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
+    ss.positions[
+      ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen",
+       "HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación",
+       "Hiring Manager","Estado","ID"]
+    ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
     use_container_width=True, height=380
   )
 
@@ -347,20 +364,21 @@ def page_eval():
   if not ss.candidates:
     st.info("Carga CVs en **Definición & Carga**.")
     return
-  df = pd.DataFrame(ss.candidates).sort_values("Score", ascending=False)
+  df = pd.DataFrame(ss.candidates)
+  df_sorted = df.sort_values("Score", ascending=False)
   st.subheader("Ranking de Candidatos")
-  st.dataframe(df[["Name","Score","Reasons"]], use_container_width=True, height=230)
+  st.dataframe(df_sorted[["Name","Score","Reasons"]], use_container_width=True, height=230)
 
   st.subheader("Comparación de puntajes")
-  bar_colors = [BAR_GOOD if s >= 60 else BAR_DEFAULT for s in df["Score"]]
-  fig = px.bar(df, x="Name", y="Score", title="Comparación de puntajes (todos los candidatos)")
+  bar_colors = [BAR_GOOD if s >= 60 else BAR_DEFAULT for s in df_sorted["Score"]]
+  fig = px.bar(df_sorted, x="Name", y="Score", title="Comparación de puntajes (todos los candidatos)")
   fig.update_traces(marker_color=bar_colors, hovertemplate="%{x}<br>Score: %{y}")
   fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
                     font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score")
   st.plotly_chart(fig, use_container_width=True)
 
   st.subheader("Visor de CV (PDF/TXT)")
-  selected = st.selectbox("Elige un candidato", df["Name"].tolist())
+  selected = st.selectbox("Elige un candidato", df_sorted["Name"].tolist())
   cand = df[df["Name"]==selected].iloc[0]
   if cand["_is_pdf"]:
     pdf_viewer_pdfjs(cand["_bytes"], height=480, scale=1.10)
@@ -370,27 +388,38 @@ def page_eval():
 
 def page_pipeline():
   st.header("Pipeline de Candidatos")
+
   if not ss.candidates:
     st.info("Primero carga CVs en **Definición & Carga**.")
     return
+
   df = pd.DataFrame(ss.candidates).sort_values("Score", ascending=False)
 
-  c1, c2 = st.columns([1.2, 1])
-  with c1:
-    st.markdown("**Candidatos (haz clic para ver detalles)**")
-    for i, row in df.iterrows():
-      label = f"{row['Name']} — {row['Score']}%"
-      if st.button(label, key=f"pi_{i}"):
-        ss["selected_cand"] = row["Name"]
+  colL, colR = st.columns([1.25, 1], gap="large")
 
-  with c2:
+  # ===== IZQUIERDA: TABLA NO EDITABLE (se mantiene el modelo aprobado) =====
+  with colL:
+    st.markdown("**Candidatos (selecciona para ver detalle)**")
+    # Tabla concisa
+    df_left = df[["Name", "Score"]].reset_index(drop=True)
+    st.dataframe(df_left, use_container_width=True, height=300)
+
+    # Selector sincronizado (para evitar interacciones raras con la tabla)
+    selected = st.selectbox("Selecciona un candidato", df_left["Name"].tolist(),
+                            index=0 if "selected_cand" not in ss else
+                                   max(0, df_left["Name"].tolist().index(ss["selected_cand"])) )
+    ss["selected_cand"] = selected
+
+  # ===== DERECHA: DETALLE + ACCIONES =====
+  with colR:
     st.markdown("**Detalle del candidato**")
     if "selected_cand" not in ss:
-      st.caption("Selecciona un candidato de la lista.")
+      st.caption("Selecciona un candidato de la tabla.")
       return
-    sel = ss["selected_cand"]
-    row = df[df["Name"]==sel].iloc[0]
-    st.markdown(f"**{sel}**")
+
+    row = df[df["Name"]==ss["selected_cand"]].iloc[0]
+    st.markdown(f"**{row['Name']}**  \nScore: **{row['Score']}%**")
+
     st.markdown('<div class="k-card">', unsafe_allow_html=True)
     st.markdown("**Match estimado**  \n" + ("✅ Alto" if row["Score"]>=60 else "🟡 Medio"))
     st.markdown("**Validated Skills**  \n- HIS")
@@ -400,6 +429,7 @@ def page_pipeline():
     st.markdown(f"**Años de experiencia:** {row['meta'].get('anios_exp',0)}")
     st.markdown(f"**Última actualización CV:** {row['meta'].get('ultima_actualizacion','—')}")
     st.markdown("</div>", unsafe_allow_html=True)
+
     st.write("")
     cbtn1, cbtn2 = st.columns(2)
     with cbtn1:
@@ -407,13 +437,14 @@ def page_pipeline():
         st.success("Nota agregada.")
     with cbtn2:
       if st.button("Mover a ‘Entrevista (Gerencia)’"):
-        ss.section = "interview"; st.rerun()
+        ss.section = "interview"
+        st.rerun()
 
 def page_interview():
   st.header("Entrevista (Gerencia)")
   st.write("Use la rúbrica para calificar y decidir movimiento del candidato.")
   with st.form("iv_form"):
-    cand = st.text_input("Candidato/a", ss.get("selected_cand",""))
+    cand = st.text_input("Candidato/a", ss.get("selected_cand", ""))
     tecnica = st.slider("Técnico (0-10)", 0, 10, 7)
     cultura = st.slider("Cultura (0-10)", 0, 10, 7)
     comp = st.slider("Compensación (0-10)", 0, 10, 6)
@@ -421,6 +452,7 @@ def page_interview():
     submitted = st.form_submit_button("Guardar evaluación")
     if submitted:
       st.success("Evaluación guardada.")
+
   c1, c2 = st.columns(2)
   with c1:
     if st.button("Mover a Oferta"):
@@ -457,15 +489,15 @@ def page_offer():
     with c1:
       offer["puesto"] = st.text_input("Puesto", offer["puesto"])
       offer["ubicacion"] = st.text_input("Ubicación", offer["ubicacion"])
-      offer["modalidad"] = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"],
-                                        index=["Presencial","Híbrido","Remoto"].index(offer["modalidad"]))
+      offer["modalidad"] = st.selectbox("Modalidad", ["Presencial","Híbrido","Remoto"], index=["Presencial","Híbrido","Remoto"].index(offer["modalidad"]))
       offer["salario"] = st.text_input("Salario (rango y neto)", offer["salario"])
     with c2:
       offer["beneficios"] = st.text_area("Bonos/beneficios", offer["beneficios"], height=100)
       offer["fecha_inicio"] = st.date_input("Fecha de inicio", value=offer["fecha_inicio"])
       offer["caducidad"] = st.date_input("Caducidad de oferta", value=offer["caducidad"])
       offer["aprobadores"] = st.text_input("Aprobadores", offer["aprobadores"])
-    if st.form_submit_button("Guardar oferta"):
+    saved = st.form_submit_button("Guardar oferta")
+    if saved:
       ss.offers[cand] = offer
       st.success("Oferta guardada.")
 
@@ -479,6 +511,7 @@ def page_offer():
   if c3.button("Marcar aceptada"):
     offer["estado"] = "Aceptada"; ss.offers[cand] = offer
     st.success("¡Felicitaciones! Propuesta aceptada. Se generan tareas de Onboarding automáticamente.")
+
   st.write(f"**Estado actual:** {ss.offers[cand]['estado']}")
 
 def page_onboarding():
@@ -494,16 +527,22 @@ def page_onboarding():
 
 def page_hh_tasks():
   st.header("Tareas del Headhunter")
-  st.text_input("Candidata/o", ss.get("selected_cand",""))
+  cand = st.text_input("Candidata/o", ss.get("selected_cand",""))
   col1, col2, col3 = st.columns(3)
-  with col1: st.checkbox("✅ Contacto hecho")
-  with col2: st.checkbox("✅ Entrevista agendada")
-  with col3: st.checkbox("✅ Feedback recibido")
+  with col1:
+    st.checkbox("✅ Contacto hecho")
+  with col2:
+    st.checkbox("✅ Entrevista agendada")
+  with col3:
+    st.checkbox("✅ Feedback recibido")
   st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
   st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
+
   c1, c2 = st.columns(2)
-  if c1.button("Guardar"): st.success("Checklist y notas guardadas.")
-  if c2.button("Enviar a Comité"): st.info("Bloqueo de edición del HH y acta breve generada.")
+  if c1.button("Guardar"):
+    st.success("Checklist y notas guardadas.")
+  if c2.button("Enviar a Comité"):
+    st.info("Bloqueo de edición del HH y acta breve generada.")
 
 def page_agents():
   st.header("Agentes")
@@ -512,10 +551,9 @@ def page_agents():
     objetivo = st.text_input("Objetivo*", "Identificar a los mejores profesionales para el cargo definido en el JD")
     backstory = st.text_area("Backstory*", "Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.")
     guardrails = st.text_area("Guardrails", "No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.")
-    herramientas = st.multiselect("Herramientas habilitadas",
-                                  ["Parser de PDF","Recomendador de skills","Comparador JD-CV"],
-                                  default=["Parser de PDF","Recomendador de skills"])
-    if st.form_submit_button("Crear/Actualizar Asistente"):
+    herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+    ok = st.form_submit_button("Crear/Actualizar Asistente")
+    if ok:
       ss.agents.append({
         "rol": rol, "objetivo": objetivo, "backstory": backstory,
         "guardrails": guardrails, "herramientas": herramientas, "ts": datetime.utcnow().isoformat()
@@ -543,7 +581,8 @@ def page_create_task():
     titulo = st.text_input("Título")
     desc = st.text_area("Descripción", height=150)
     due = st.date_input("Fecha límite", value=date.today())
-    if st.form_submit_button("Guardar"):
+    ok = st.form_submit_button("Guardar")
+    if ok:
       ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due)})
       st.success("Tarea creada.")
 
