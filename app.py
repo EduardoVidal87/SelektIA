@@ -187,150 +187,83 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-# Alinear título con los botones (Admin / Cerrar sesión)
+
+# ======= Alinear título con los botones (Admin / Cerrar sesión) =======
 st.markdown("""
 <style>
 :root{
-  --content-top: 20px;     /* altura del contenido (ajusta 4–14px según tu logo) */
-  --topbar-right-gap: 16px;  /* separación del borde derecho */
-  --topbar-width: 260px;  /* ancho aproximado ocupado por Admin + botón */
+  --content-top: 20px;         /* altura conjunta título/topbar (ajusta 16–24) */
+  --topbar-right-gap: 16px;    /* separación del borde derecho */
+  --topbar-width: 280px;       /* ancho aprox. ocupado por Admin + botón */
 }
 
 /* Contenido más arriba */
-.block-container{
-  padding-top: var(--content-top) !important;
-}
+.block-container{ padding-top: var(--content-top) !important; position:relative !important; }
 
-/* Topbar en la misma franja del título (arriba, a la derecha) */
+/* Marcador topbar */
 .topbar{
   position: absolute !important;
   top: var(--content-top) !important;
   right: var(--topbar-right-gap) !important;
-  z-index: 10 !important;
+  z-index: 9 !important;
   margin: 0 !important;
+  height: 0 !important; /* solo actúa como sentinela */
 }
 
-/* Título sin margen superior y con espacio a la derecha para no chocar con la topbar */
-.block-container h1:first-child{
+/* BLOQUE REAL con los botones (hermano del marcador .topbar) */
+.topbar + div[data-testid="stHorizontalBlock"]{
+  position: absolute !important;
+  top: var(--content-top) !important;
+  right: var(--topbar-right-gap) !important;
+  z-index: 10 !important;
+  width: auto !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.topbar + div[data-testid="stHorizontalBlock"] [data-testid="column"]{ padding:0 !important; }
+
+/* Título sin margen superior y con reserva a la derecha */
+.block-container h1:first-child,
+.block-container h2:first-child,
+.block-container h3:first-child{
   margin-top: 0 !important;
   margin-right: calc(var(--topbar-width) + var(--topbar-right-gap)) !important;
   line-height: 1.1 !important;
 }
 
-/* (Opcional) si a veces usas h2/h3 como primero */
-.block-container h2:first-child,
-.block-container h3:first-child{
-  margin-top: 0 !important;
-  margin-right: calc(var(--topbar-width) + var(--topbar-right-gap)) !important;
-}
-
-/* Evita que Streamlit meta espacio extra arriba en el primer bloque */
-.block-container [data-testid="stVerticalBlock"] > div:first-child{
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Alinear el título del panel derecho con la altura del logo
-st.markdown("""
-<style>
-:root{
-  /* Ajusta este valor para subir/bajar el contenido */
-  --content-top: 6px;   /* prueba 0–12px según el tamaño de tu logo */
-}
-
-/* Reduce el padding superior del contenido */
-.block-container{
-  padding-top: var(--content-top) !important;
-}
-
-/* Quita el margen superior del primer título */
-.block-container h1:first-child{
-  margin-top: 0 !important;
-}
-
-/* Opcional: también para h2/h3 si a veces van primero */
-.block-container h2:first-child,
-.block-container h3:first-child{
-  margin-top: 0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Aumentar tamaño de "Powered by Wayki Consulting"
-st.markdown("""
-<style>
-[data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 12px !important;     /* ← súbelo: 14, 16, 18, etc. (default ~11.5px) */
-  line-height: 1.2 !important;
-  opacity: .95 !important;        /* puedes subir a 1 si lo quieres 100% sólido */
-  /* Opcional:
-  font-weight: 700 !important;    /* para hacerlo más grueso */
-  letter-spacing: .2px !important;
-  margin-top: 4px !important;     /* un poco más de aire respecto al título */
-  */
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Tamaño del logo (texto) en el sidebar
-st.markdown("""
-<style>
-[data-testid="stSidebar"] .sidebar-brand .brand-title{
-  font-size: 55px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
-  line-height: 1.05 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Más espacio entre el logo del sidebar y el primer título
-st.markdown("""
-<style>
-/* Quita el margen/offset negativo previo y agrega aire abajo del logo */
+/* Más espacio bajo el logo del sidebar (tú lo tenías a 60px) */
 [data-testid="stSidebar"] .sidebar-brand{
   margin-top: 0 !important;
   padding-bottom: 0 !important;
-  margin-bottom: 60px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Sidebar ultra-compacto (mínimo espacio vertical)
-st.markdown("""
-<style>
-/* 1) Quita casi todo el espacio entre bloques del sidebar */
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
-  gap: 2px !important;                 /* espacio entre hijos del bloque */
-}
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{
-  margin: 0 !important;                /* elimina margen inferior por widget */
-  padding: 0 !important;
+  margin-bottom: 60px !important;
 }
 
-/* 2) Títulos (h4) con margen mínimo */
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] .stMarkdown h4{
-  margin: 4px 8px 2px !important;      /* arriba | lados | abajo */
-  line-height: 1.1 !important;
-}
-
-/* 3) Markdown normal (los textos como "Analytics", etc.) más pegados */
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{
-  margin: 2px 8px !important;          /* reduce el espacio de los <p> */
-}
-
-/* 4) Botones: sin separación vertical y padding compacto */
-[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] .stButton > button{
-  margin: 0 8px !important;            /* sin margen arriba/abajo */
-  padding: 6px 10px !important;
+/* Tamaño del logo de texto (sidebar) */
+[data-testid="stSidebar"] .sidebar-brand .brand-title{
+  font-size: 55px !important;
   line-height: 1.05 !important;
-  gap: 6px !important;
 }
+
+/* Tamaño del subtexto "Powered by Wayki Consulting" */
+[data-testid="stSidebar"] .sidebar-brand .brand-sub{
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  opacity: .95 !important;
+  letter-spacing: .2px !important;
+  margin-top: 4px !important;
+}
+
+/* Sidebar ultra-compacto (márgenes mínimos) */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap:2px !important; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{ margin:0 !important; padding:0 !important; }
+[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4{ margin:4px 8px 2px !important; line-height:1.1 !important; }
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin:2px 8px !important; }
+[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
+[data-testid="stSidebar"] .stButton > button{ margin:0 8px !important; padding:6px 10px !important; line-height:1.05 !important; gap:6px !important; }
 </style>
 """, unsafe_allow_html=True)
-
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
@@ -510,8 +443,8 @@ def login_screen():
 
 def render_topbar():
   if ss.auth is None: return
-  # Chip + botón (el botón hereda estilos por el atributo title = help)
-  st.markdown("<div class='topbar'>", unsafe_allow_html=True)
+  # Marcador de topbar y bloque real con columnas (chip + botón)
+  st.markdown("<div class='topbar'></div>", unsafe_allow_html=True)
   col_sp, col_chip, col_btn = st.columns([0.82, 0.10, 0.08])
   with col_chip:
     st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
@@ -519,7 +452,6 @@ def render_topbar():
     if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
       ss.auth = None
       st.rerun()
-  st.markdown("</div>", unsafe_allow_html=True)
 
 def require_auth():
   if ss.auth is None:
@@ -540,7 +472,6 @@ def render_sidebar():
       </div>
       """, unsafe_allow_html=True
     )
-    # (No mostramos "Rol: ...", tal como pediste)
 
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
@@ -877,7 +808,7 @@ def page_agents():
           with c2:
             st.text_input("Role*", value=ag.get("rol",""), disabled=True)
             st.text_input("Goal*", value=ag.get("objetivo",""), disabled=True)
-            st.text_area("Backstory*", value=ag.get("backstory",""), height=160, disabled=True)
+            st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
             st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
             st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
             st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
