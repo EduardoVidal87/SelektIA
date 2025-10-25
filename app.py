@@ -396,9 +396,6 @@ def login_screen():
         st.error("Usuario o contraseña incorrectos.")
   st.markdown("</div></div>", unsafe_allow_html=True)
 
-def render_topbar():
-  # Eliminado: no mostramos chip Admin ni botón de logout en el topbar
-  return
 
 def require_auth():
   if ss.auth is None:
@@ -436,9 +433,15 @@ def render_sidebar():
       if st.button(txt, key=f"sb_{sec}"):
         ss.section = sec
 
-    st.markdown("#### ACCIONES")
-    if st.button("Crear tarea", key="sb_task"):
-      ss.section = "create_task"
+   st.markdown("#### ACCIONES")
+if st.button("Crear tarea", key="sb_task"):
+    ss.section = "create_task"
+
+# Botón Cerrar sesión en la sidebar (sin título “SESIÓN”)
+if st.button("Cerrar sesión", key="sb_logout"):
+    ss.auth = None
+    st.rerun()
+
 
  # Logout al final de la sidebar (sin título)
 if st.button("Cerrar sesión", key="sb_logout"):
@@ -1032,6 +1035,5 @@ ROUTES = {
 # APP
 # =========================================================
 if require_auth():
-  render_topbar()      # (no pinta nada, se dejó por compatibilidad)
   render_sidebar()
   ROUTES.get(ss.section, page_def_carga)()
