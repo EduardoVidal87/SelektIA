@@ -187,6 +187,51 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+# Alinear título con los botones (Admin / Cerrar sesión)
+st.markdown("""
+<style>
+:root{
+  --content-top: 8px;     /* altura del contenido (ajusta 4–14px según tu logo) */
+  --topbar-right-gap: 16px;  /* separación del borde derecho */
+  --topbar-width: 260px;  /* ancho aproximado ocupado por Admin + botón */
+}
+
+/* Contenido más arriba */
+.block-container{
+  padding-top: var(--content-top) !important;
+}
+
+/* Topbar en la misma franja del título (arriba, a la derecha) */
+.topbar{
+  position: absolute !important;
+  top: var(--content-top) !important;
+  right: var(--topbar-right-gap) !important;
+  z-index: 10 !important;
+  margin: 0 !important;
+}
+
+/* Título sin margen superior y con espacio a la derecha para no chocar con la topbar */
+.block-container h1:first-child{
+  margin-top: 0 !important;
+  margin-right: calc(var(--topbar-width) + var(--topbar-right-gap)) !important;
+  line-height: 1.1 !important;
+}
+
+/* (Opcional) si a veces usas h2/h3 como primero */
+.block-container h2:first-child,
+.block-container h3:first-child{
+  margin-top: 0 !important;
+  margin-right: calc(var(--topbar-width) + var(--topbar-right-gap)) !important;
+}
+
+/* Evita que Streamlit meta espacio extra arriba en el primer bloque */
+.block-container [data-testid="stVerticalBlock"] > div:first-child{
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Alinear el título del panel derecho con la altura del logo
 st.markdown("""
 <style>
