@@ -927,7 +927,26 @@ def page_agents():
 
 # ===================== FLUJOS (Workflows) =====================
 def page_flows():
-  st.header("Flujos")
+    # --- Título "Flujos" fijo al hacer scroll ---
+st.markdown("""
+<style>
+  /* Título fijo solo en la página Flujos */
+  #flows-title{
+    position: sticky;
+    top: calc(var(--content-top, 0px) + 8px);  /* ajusta 4–12px a gusto */
+    z-index: 40;
+    background: var(--body, #F7FBFF);
+    padding: 6px 0 10px;
+    margin: 0 0 8px 0;
+    border-bottom: 1px solid #E3EDF6;          /* opcional */
+    box-shadow: 0 8px 10px -10px rgba(0,0,0,.06); /* opcional */
+  }
+  /* Un poco de aire al primer bloque tras el título */
+  #flows-title + div { margin-top: 10px !important; }
+</style>
+""", unsafe_allow_html=True)
+st.markdown('<h1 id="flows-title">Flujos</h1>', unsafe_allow_html=True)
+
 
   vista_como = ss.auth["role"]
   puede_aprobar = vista_como in ("Supervisor","Administrador")
