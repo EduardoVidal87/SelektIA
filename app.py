@@ -88,9 +88,8 @@ ROLE_PRESETS = {
 # =========================================================
 # CSS — (botones a la IZQUIERDA + branding) + LOGIN/TOPBAR
 # =========================================================
-CSS += """
-/* --- Botón de Cerrar sesión con estilo de chip --- */
-.topbar .chip-btn .stButton>button{
+/* --- Botón "Cerrar sesión" con estilo de chip como Admin --- */
+.topbar .stButton>button{
   background:#eef5ff !important;
   border:1px solid #d7e7fb !important;
   color:#123 !important;
@@ -99,10 +98,10 @@ CSS += """
   font-weight:700 !important;
   box-shadow:none !important;
 }
-.topbar .chip-btn .stButton>button:hover{
+.topbar .stButton>button:hover{
   background:#e9f2ff !important;
 }
-"""
+
 
 CSS = f"""
 :root {{
@@ -384,18 +383,16 @@ def render_topbar():
     if ss.auth is None:
         return
 
-    # Chip de usuario + botón chip, alineados a la derecha
-    c1, c2, chip_col, btn_col = st.columns([0.70, 0.15, 0.08, 0.07])
+    # Chip + botón, alineados a la derecha
+    space, chip_col, btn_col = st.columns([0.82, 0.10, 0.08])
 
     with chip_col:
         st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
 
     with btn_col:
-        st.markdown("<div class='chip-btn'>", unsafe_allow_html=True)
         if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
             ss.auth = None
             st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
 def require_auth():
   if ss.auth is None:
