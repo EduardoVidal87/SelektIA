@@ -46,6 +46,113 @@ EVAL_INSTRUCTION = (
 )
 
 # =========================================================
+# PRESETS DE PUESTOS: JD + KEYWORDS + POOL DE SKILLS PARA GENERAR CVS
+# =========================================================
+ROLE_PRESETS = {
+  "Enfermera/o Asistencial": {
+    "jd": (
+      "Brindar atención de enfermería segura y de calidad a pacientes hospitalizados y ambulatorios, "
+      "cumpliendo protocolos clínicos y normas de bioseguridad. Realizar valoración inicial y seguimiento "
+      "(signos vitales, dolor, riesgo de caídas/IAAS), administrar medicamentos y terapias según prescripción, "
+      "ejecutar procedimientos (curaciones, instalación de vía periférica, toma de muestras), y registrar en HIS / SAP IS-H. "
+      "Educar al paciente y familia sobre cuidados y alta segura. Participar en rondas clínicas, auditorías, y acciones "
+      "para la seguridad del paciente. Mantener vigentes certificaciones BLS/ACLS."
+    ),
+    "keywords": "HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos, triage, signos vitales, curaciones, vía periférica, administración de medicamentos, registro clínico",
+    "must": ["HIS","BLS","ACLS","IAAS","Seguridad del paciente"],
+    "nice": ["SAP IS-H","Educación al paciente","Protocolos"],
+    "synth_skills": ["HIS","BLS","ACLS","IAAS","Educación al paciente","Seguridad del paciente","Protocolos","Excel"]
+  },
+  "Tecnólogo/a Médico": {
+    "jd": (
+      "Realizar procedimientos de apoyo al diagnóstico (laboratorio, imágenes o terapia física, según especialidad), "
+      "asegurando la calidad técnica y seguridad del paciente. Gestionar muestras/equipos, registrar resultados en HIS, "
+      "cumplir normas IAAS y bioseguridad. Coordinar con médicos y enfermería."
+    ),
+    "keywords": "HIS, laboratorio, radiología, terapia física, calibración de equipos, bioseguridad, IAAS, reporte de resultados, control de calidad",
+    "must": ["HIS","IAAS","Bioseguridad"],
+    "nice": ["Control de calidad","Gestión de equipos"],
+    "synth_skills": ["HIS","IAAS","Bioseguridad","Control de calidad","Gestión de equipos","Excel"]
+  },
+  "Recepcionista de Admisión": {
+    "jd": (
+      "Brindar atención presencial y telefónica a pacientes, gestionar admisiones/citas, facturación y caja básica. "
+      "Registrar en HIS/ERP, verificar coberturas, resolver dudas y escalar incidencias. Mantener altos estándares "
+      "de servicio y confidencialidad."
+    ),
+    "keywords": "atención al cliente, admisión, call center, HIS, ERP, facturación, caja, manejo de objeciones, protocolo de atención",
+    "must": ["Atención al cliente","HIS"],
+    "nice": ["ERP","Facturación","Caja"],
+    "synth_skills": ["Atención al cliente","HIS","ERP","Facturación","Caja","Protocolos"]
+  },
+  "Médico/a General": {
+    "jd": (
+      "Atender consulta externa y emergencia, realizar historia clínica, diagnósticos y prescripción basada en guías. "
+      "Coordinar interconsultas, registrar en HIS / SAP IS-H, promover educación al paciente y seguridad clínica. "
+      "Participar en comités y actividades IAAS."
+    ),
+    "keywords": "HIS, SAP IS-H, anamnesis, diagnóstico, prescripción, protocolos, IAAS, seguridad del paciente, guardias",
+    "must": ["HIS","Protocolos","Seguridad del paciente"],
+    "nice": ["SAP IS-H","IAAS"],
+    "synth_skills": ["HIS","Protocolos","Seguridad del paciente","IAAS","SAP IS-H","Educación al paciente"]
+  },
+  "Químico/a Farmacéutico/a": {
+    "jd": (
+      "Gestionar farmacia hospitalaria, dispensación segura, validación de prescripciones, control de stock y "
+      "farmacovigilancia. Registrar en HIS/ERP, asegurar cumplimiento de BPM y normativas."
+    ),
+    "keywords": "dispensación, HIS, ERP, farmacovigilancia, BPM, control de stock, validación de recetas, protocolos",
+    "must": ["HIS","ERP","BPM"],
+    "nice": ["Farmacovigilancia","Control de stock"],
+    "synth_skills": ["HIS","ERP","BPM","Farmacovigilancia","Control de stock","Protocolos"]
+  },
+  # ——— Roles generales (no clínicos) solicitados ———
+  "Asistente Administrativo": {
+    "jd": (
+      "Brindar soporte administrativo: gestión documental, agenda, compras menores, logística de reuniones y "
+      "reportes en Excel. Manejo de correo, redacción, atención a proveedores y archivo. Apoyo en facturación y caja chica."
+    ),
+    "keywords": "Excel, Word, PowerPoint, gestión documental, atención a proveedores, compras, logística, caja chica, facturación, redacción",
+    "must": ["Excel","Gestión documental","Redacción"],
+    "nice": ["Facturación","Caja"],
+    "synth_skills": ["Excel","Word","PowerPoint","Gestión documental","Redacción","Facturación","Caja","Atención al cliente"]
+  },
+  "Ingeniero/a de Proyectos": {
+    "jd": (
+      "Planificar, ejecutar y controlar proyectos de ingeniería. Elaborar cronogramas, presupuestos, especificaciones y "
+      "gestión de riesgos. Seguimiento de avances, control de cambios y reportes a stakeholders. Manejo de MS Project, "
+      "AutoCAD/BIM y metodologías PMBOK/Agile."
+    ),
+    "keywords": "MS Project, AutoCAD, BIM, presupuestos, cronogramas, control de cambios, riesgos, PMBOK, Agile, KPI, licitaciones",
+    "must": ["MS Project","AutoCAD","Presupuestos"],
+    "nice": ["BIM","PMBOK","Agile"],
+    "synth_skills": ["MS Project","AutoCAD","BIM","Presupuestos","Cronogramas","Riesgos","PMBOK","Agile","Excel","Power BI"]
+  },
+  "Business Analytics": {
+    "jd": (
+      "Recolectar, transformar y analizar datos para generar insights accionables. Modelar KPIs, construir dashboards en "
+      "Power BI/Tableau, SQL intermedio-avanzado, storytelling con datos y documentación. Trabajar con stakeholders "
+      "de negocio para priorizar hipótesis y experimientos."
+    ),
+    "keywords": "SQL, Power BI, Tableau, ETL, KPI, storytelling, Excel avanzado, Python, A/B testing, métricas de negocio",
+    "must": ["SQL","Power BI"],
+    "nice": ["Tableau","Python","ETL"],
+    "synth_skills": ["SQL","Power BI","Tableau","Excel","ETL","KPIs","Storytelling","Python","A/B testing"]
+  },
+  "Diseñador/a UX": {
+    "jd": (
+      "Liderar procesos de research, definición de flujos, wireframes y prototipos de alta fidelidad. "
+      "Validar con usuarios, handoff a desarrollo y medición post-lanzamiento. Dominio de Figma, heurísticas de usabilidad "
+      "y accesibilidad. Experiencia en design systems."
+    ),
+    "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
+    "must": ["Figma","UX Research","Prototipado"],
+    "nice": ["Heurísticas","Accesibilidad","Design System"],
+    "synth_skills": ["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
+  },
+}
+
+# =========================================================
 # CSS — (botones a la IZQUIERDA + branding alineado)
 # =========================================================
 CSS = f"""
@@ -215,6 +322,8 @@ if "tasks" not in ss: ss.tasks = []
 if "candidates" not in ss: ss.candidates = []
 if "offers" not in ss: ss.offers = {}
 if "agents" not in ss: ss.agents = []
+
+# Carga de puestos base (incluyendo generales nuevos)
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
@@ -222,16 +331,26 @@ if "positions" not in ss:
        "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
        "Hiring Manager":"Rivers Brykson","Estado":"Abierto",
        "Experiencia Min":3,"MustHave":"Python, APIs REST, SQL","NiceToHave":"AWS, Docker","JD":"Construcción de APIs y servicios backend."},
-      {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
-       "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
-       "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
+      {"ID":"10,376,415","Puesto":"Asistente Administrativo","Días Abierto":7,
+       "Leads":450,"Nuevos":25,"Recruiter Screen":8,"HM Screen":5,
+       "Entrevista Telefónica":3,"Entrevista Presencial":2,"Ubicación":"Lima, Perú",
+       "Hiring Manager":"Lucía Vega","Estado":"Abierto",
+       "Experiencia Min":1,"MustHave":"Excel, Gestión documental, Redacción","NiceToHave":"Facturación, Caja","JD":ROLE_PRESETS["Asistente Administrativo"]["jd"]},
+      {"ID":"10,376,646","Puesto":"Business Analytics","Días Abierto":14,
+       "Leads":1300,"Nuevos":40,"Recruiter Screen":10,"HM Screen":6,
+       "Entrevista Telefónica":4,"Entrevista Presencial":3,"Ubicación":"Santiago, Chile",
        "Hiring Manager":"Angela Cruz","Estado":"Abierto",
-       "Experiencia Min":8,"MustHave":"Performance, SEO, CRM","NiceToHave":"B2B SaaS, RevOps","JD":"Liderar estrategia de marketing y crecimiento."},
-      {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
-       "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
-       "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
+       "Experiencia Min":2,"MustHave":"SQL, Power BI","NiceToHave":"Tableau, Python","JD":ROLE_PRESETS["Business Analytics"]["jd"]},
+      {"ID":"10,376,777","Puesto":"Diseñador/a UX","Días Abierto":10,
+       "Leads":900,"Nuevos":22,"Recruiter Screen":7,"HM Screen":4,
+       "Entrevista Telefónica":3,"Entrevista Presencial":2,"Ubicación":"Bogotá, Colombia",
        "Hiring Manager":"Rivers Brykson","Estado":"Abierto",
-       "Experiencia Min":4,"MustHave":"Forecasting, Excel, SQL","NiceToHave":"Python, Power BI","JD":"Planificación de la demanda y análisis de inventario."}
+       "Experiencia Min":2,"MustHave":"Figma, UX Research, Prototipado","NiceToHave":"Heurísticas, Accesibilidad, Design System","JD":ROLE_PRESETS["Diseñador/a UX"]["jd"]},
+      {"ID":"10,376,888","Puesto":"Ingeniero/a de Proyectos","Días Abierto":20,
+       "Leads":1100,"Nuevos":18,"Recruiter Screen":6,"HM Screen":5,
+       "Entrevista Telefónica":4,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
+       "Hiring Manager":"Rivers Brykson","Estado":"Abierto",
+       "Experiencia Min":3,"MustHave":"MS Project, AutoCAD, Presupuestos","NiceToHave":"BIM, PMBOK, Agile","JD":ROLE_PRESETS["Ingeniero/a de Proyectos"]["jd"]},
   ])
 
 # =========================================================
@@ -247,7 +366,13 @@ SKILL_SYNONYMS = {
   "Educación al paciente": ["educación al paciente", "patient education"],
   "Seguridad del paciente": ["seguridad del paciente", "patient safety"],
   "Protocolos": ["protocolos", "protocol"],
-  # Tech genéricas
+  # Administración y soporte
+  "Gestión documental": ["gestión documental", "archivo", "document control"],
+  "Redacción": ["redacción", "writing", "composición de documentos"],
+  "Atención al cliente": ["atención al cliente", "customer service"],
+  "Facturación": ["facturación", "billing"],
+  "Caja": ["caja", "cash handling"],
+  # Tech genéricas y datos
   "Python": ["python"],
   "APIs REST": ["api rest", "apis rest", "rest api", "restful"],
   "SQL": ["sql", "postgres", "mysql", "t-sql"],
@@ -255,11 +380,33 @@ SKILL_SYNONYMS = {
   "AWS": ["aws", "amazon web services"],
   "Power BI": ["power bi"],
   "Excel": ["excel", "xlsx"],
-  "Forecasting": ["forecasting", "pronóstico", "demand planning", "planificación de la demanda"],
+  "Tableau": ["tableau"],
+  "ETL": ["etl", "extract transform load"],
+  "KPIs": ["kpi", "kpis", "indicadores"],
   # Marketing
   "SEO": ["seo", "search engine optimization"],
   "CRM": ["crm", "salesforce", "hubspot"],
   "Performance": ["performance marketing", "paid media", "sem", "ads", "campañas"],
+  # Ingeniería de proyectos
+  "MS Project": ["ms project", "microsoft project"],
+  "AutoCAD": ["autocad"],
+  "BIM": ["bim", "revit"],
+  "Presupuestos": ["presupuesto", "presupuestos", "costeo"],
+  "Cronogramas": ["cronograma", "cronogramas", "planning"],
+  "Riesgos": ["riesgos", "risk management"],
+  "PMBOK": ["pmbok"],
+  "Agile": ["agile", "scrum", "kanban"],
+  # UX
+  "Figma": ["figma"],
+  "UX Research": ["ux research", "investigación de usuarios"],
+  "Prototipado": ["prototipado", "prototype", "prototipos"],
+  "Wireframes": ["wireframes", "wireframing"],
+  "Accesibilidad": ["accesibilidad", "accessibility", "wcag"],
+  "Heurísticas": ["heurísticas", "heuristic"],
+  "Design System": ["design system"],
+  # Otros
+  "ERP": ["erp", "sap", "oracle ebs"],
+  "Bioseguridad": ["bioseguridad"],
 }
 
 # =========================================================
@@ -377,7 +524,6 @@ def extract_meta(cv_text: str) -> dict:
   }
 
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
-  # se mantiene para compatibilidad con partes antiguas (no define el ranking por skills)
   base = 0; reasons = []
   text_low = cv_text.lower(); jd_low = jd.lower()
   hits = 0; kws = [k.strip().lower() for k in keywords.split(",") if k.strip()]
@@ -455,7 +601,7 @@ def _dummy_cv_text(query: str, location: str) -> str:
   )
 
 def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str, query: str, location: str) -> dict:
-  text = _dummy_cv_text(query or "Profesional de Salud", location or "Lima")
+  text = _dummy_cv_text(query or "Profesional", location or "Lima")
   score, reasons = simple_score(text, jd_text, keywords)
   meta = extract_meta(text)
   return {
@@ -468,36 +614,37 @@ def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str
     "meta": meta
   }
 
-# ====== Generación de 20 CVs de muestra (demo) ======
+# ====== Generación de CVs de muestra por rol (demo) ======
 FIRST_NAMES = ["Ana","Bruno","Carla","Daniel","Elena","Fernando","Gabriela","Hugo","Irene","Javier","Karina","Luis","María","Nicolás","Olga","Pablo","Rocío","Sofía","Tomás","Valeria"]
 LAST_NAMES  = ["Rojas","García","Quispe","Torres","Muñoz","Pérez","Salas","Vargas","Huamán","Ramírez","Castro","Mendoza","Flores","López","Fernández","Cortez","Ramos","Díaz","Campos","Navarro"]
 
 def _synth_cv_text(role: str, pool_skills: list[str], city: str, years: int) -> str:
-  picked = random.sample(pool_skills, k=min(len(pool_skills), random.randint(4,7)))
+  k = min(len(pool_skills), max(4, min(8, len(pool_skills))))
+  picked = random.sample(pool_skills, k=random.randint(4, k))
   txt = (
     f"Resumen profesional — {role} en {city}. "
     f"Experiencia: {years} años. Manejo de {', '.join(picked)}. "
     f"Universidad Nacional Mayor de San Marcos. Participación en proyectos de mejora continua y protocolos. "
-    f"Certificaciones: BLS, ACLS. Responsabilidades: soporte, documentación y educación al paciente."
+    f"Responsabilidades: soporte, coordinación y documentación."
   )
   return txt
 
-def generate_20_sample_cvs(jd_text: str) -> list[dict]:
-  jd_sk = list(infer_skills(jd_text) or {"HIS","Protocolos","Educación al paciente","Seguridad del paciente","IAAS"})
+def generate_sample_cvs_for_role(role: str, jd_text: str, n: int = 25) -> list[dict]:
+  preset = ROLE_PRESETS.get(role, {})
+  pool = preset.get("synth_skills") or list(infer_skills(jd_text) or {"Excel","Gestión documental"})
   cities = ["Lima, Perú","Santiago, Chile","Bogotá, Colombia","Quito, Ecuador","Ciudad de México, MX"]
-  role = "Profesional de Salud"
   out = []
-  for i in range(20):
+  for i in range(n):
     name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
-    years = random.choice([1,2,3,4,5,6,7,8,10,12])
+    years = random.choice([0,1,1,2,3,4,5,6,7,8,10])
     city = random.choice(cities)
-    text = _synth_cv_text(role, jd_sk + ["SAP IS-H","Excel","Power BI","SQL"], city, years)
+    text = _synth_cv_text(role, pool, city, years)
     meta = extract_meta(text)
     meta["anios_exp"] = years
-    file_name = f"CV_Muestra_{i+1:02d}_{name.replace(' ','_')}.txt"
+    file_name = f"CV_{role.replace('/','-')}_{i+1:02d}_{name.replace(' ','_')}.txt"
     out.append({
       "Name": file_name,
-      "Score": 0,  # el ranking real lo define el fit por skills
+      "Score": 0,
       "Reasons": "",
       "_bytes": text.encode("utf-8"),
       "_is_pdf": False,
@@ -552,16 +699,17 @@ with st.sidebar:
 # =========================================================
 def page_def_carga():
   st.header("Definición & Carga")
-  puesto = st.selectbox(
-      "Puesto",
-      ["Enfermera/o Asistencial", "Tecnólogo/a Médico", "Recepcionista de Admisión",
-       "Médico/a General", "Químico/a Farmacéutico/a"],
-      index=0
-  )
-  jd_text = st.text_area("Descripción / JD", height=180,
-                         placeholder="Objetivo del puesto, responsabilidades, protocolos y habilidades deseadas.")
-  kw_text = st.text_area("Palabras clave (coma separada)", height=100,
-                         value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos")
+
+  # Selector de puesto con presets
+  roles = list(ROLE_PRESETS.keys())
+  default_role_idx = roles.index("Enfermera/o Asistencial")
+  role = st.selectbox("Puesto", roles, index=default_role_idx)
+  preset = ROLE_PRESETS.get(role, {})
+
+  # JD y keywords precargados (editables)
+  jd_text = st.text_area("Descripción / JD", height=180, value=preset.get("jd",""))
+  kw_text = st.text_area("Palabras clave (coma separada)", height=100, value=preset.get("keywords",""))
+  ss["last_role"] = role
   ss["last_jd_text"] = jd_text
   ss["last_kw_text"] = kw_text
 
@@ -587,9 +735,9 @@ def page_def_carga():
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
       sources = st.multiselect("Portales", options=JOB_BOARDS, default=["laborum.pe"])
-      qty = st.number_input("Cantidad por portal", min_value=1, max_value=20, value=5, step=1)
+      qty = st.number_input("Cantidad por portal", min_value=1, max_value=30, value=6, step=1)
     with col2:
-      search_q = st.text_input("Búsqueda", value="Enfermera/o Asistencial")
+      search_q = st.text_input("Búsqueda", value=role)
       location = st.text_input("Ubicación", value="Lima, Perú")
     with col3:
       posted_since = st.date_input("Publicado desde", value=date.today() - timedelta(days=15))
@@ -602,18 +750,18 @@ def page_def_carga():
       ss.candidates = (ss.candidates or []) + imported
       st.success(f"Importados {len(imported)} CVs simulados desde: {', '.join(sources)}.")
 
-  # Generar 20 CVs sintéticos
-  with st.expander("🧪 Generar 20 CVs de muestra (demo)"):
-    st.caption("Crea 20 CVs sintéticos para probar toda la app, con textos y habilidades variadas.")
+  # Generar CVs de muestra para el rol actual
+  with st.expander("🧪 Generar CVs de muestra para este puesto (demo)"):
+    n = st.slider("Cantidad", min_value=10, max_value=40, value=25, step=5)
+    st.caption("Crea CVs sintéticos con skills acordes al puesto seleccionado.")
     if st.button("Generar CVs de muestra"):
-      ss.candidates = generate_20_sample_cvs(ss.get("last_jd_text",""))
-      st.success("Se generaron 20 CVs de muestra.")
+      ss.candidates = generate_sample_cvs_for_role(role, jd_text, n=n)
+      st.success(f"Se generaron {n} CVs de muestra para {role}.")
 
 def page_puestos():
   st.header("Puestos")
   left, center, right = st.columns([0.95, 1.2, 0.9])
 
-  # Lista
   with left:
     st.markdown("**Puestos abiertos**")
     if ss.positions.empty:
@@ -654,7 +802,6 @@ def page_puestos():
                              format_func=lambda x: labels_for_radio[options.index(x)])
       ss["selected_position_id"] = selected_id
 
-  # Fila seleccionada
   selected_row = None
   if not ss.positions.empty and ss.get("selected_position_id"):
     try:
@@ -662,7 +809,6 @@ def page_puestos():
     except Exception:
       selected_row = ss.positions.iloc[0].to_dict()
 
-  # Detalle
   with center:
     if not selected_row:
       st.caption("Selecciona un puesto para ver el detalle.")
@@ -690,7 +836,6 @@ def page_puestos():
       jd = (selected_row.get("JD", "") or "").strip() or "—"
       st.write(jd)
 
-  # Insights
   with right:
     if selected_row:
       label, css = _match_level(selected_row)
@@ -718,7 +863,6 @@ def page_puestos():
           st.markdown(row2, unsafe_allow_html=True)
       st.markdown("</div>", unsafe_allow_html=True)
 
-  # Vista clásica
   st.markdown("")
   with st.expander("📋 Ver tabla completa (vista clásica)"):
     st.dataframe(
@@ -730,7 +874,7 @@ def page_puestos():
       use_container_width=True, height=320
     )
 
-  # Crear puesto
+  # Crear puesto (se mantiene igual que antes)
   with st.expander("➕ Crear nuevo puesto"):
     c1, c2 = st.columns(2)
     with c1:
@@ -814,16 +958,20 @@ def page_puestos():
 def page_eval():
   st.header("Resultados de evaluación")
   if not ss.candidates:
-    st.info("Carga CVs en **Definición & Carga**.")
+    st.info("Carga o genera CVs en **Definición & Carga**.")
     return
 
-  jd_text = ss.get("last_jd_text", "") or ""
-  jd_text = st.text_area("JD para matching por skills (opcional)", jd_text, height=140)
+  jd_text = st.text_area("JD para matching por skills (opcional)", ss.get("last_jd_text",""), height=140)
 
   with st.expander("Configurar skills objetivo (opcional)"):
+    preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
     c1, c2 = st.columns(2)
-    with c1: must_default = st.text_area("Must-have (coma separada)", value="")
-    with c2: nice_default = st.text_area("Nice-to-have (coma separada)", value="")
+    with c1:
+      must_default = ", ".join(preset.get("must", []))
+      must_default = st.text_area("Must-have (coma separada)", value=must_default)
+    with c2:
+      nice_default = ", ".join(preset.get("nice", []))
+      nice_default = st.text_area("Nice-to-have (coma separada)", value=nice_default)
   must_list = [s.strip() for s in (must_default or "").split(",") if s.strip()]
   nice_list = [s.strip() for s in (nice_default or "").split(",") if s.strip()]
 
@@ -905,12 +1053,13 @@ def page_eval():
 def page_pipeline():
   st.header("Pipeline de Candidatos")
   if not ss.candidates:
-    st.info("Primero carga CVs en **Definición & Carga**.")
+    st.info("Primero carga o genera CVs en **Definición & Carga**.")
     return
 
   # Calculamos FIT por skills para ordenar el pipeline
   jd_text = ss.get("last_jd_text", "") or ""
-  must_list, nice_list = [], []
+  must_list = ROLE_PRESETS.get(ss.get("last_role",""), {}).get("must", [])
+  nice_list = ROLE_PRESETS.get(ss.get("last_role",""), {}).get("nice", [])
   ranked = []
   for c in ss.candidates:
     cv_text = c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
