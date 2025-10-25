@@ -38,7 +38,7 @@ CURRENCIES = ["USD", "PEN", "EUR", "CLP", "MXN", "COP", "ARS"]
 JOB_BOARDS = ["laborum.pe", "Computrabajo", "Bumeran", "Indeed", "LinkedIn Jobs"]
 
 # =========================================================
-# CSS — (botones siempre a la IZQUIERDA + branding alineado)
+# CSS — (botones a la IZQUIERDA + branding alineado)
 # =========================================================
 CSS = f"""
 :root {{
@@ -67,7 +67,7 @@ html, body, [data-testid="stAppViewContainer"] {{
   color: var(--sb-tx) !important;
 }}
 
-/* Branding (logo centrado, alineado) */
+/* Branding (logo centrado, alineado con título del cuerpo) */
 .sidebar-brand {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
@@ -163,7 +163,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   color: {TITLE_DARK} !important;
 }}
 
-/* Tarjeta derecha pipeline */
+/* Tarjeta */
 .k-card {{
   background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px;
 }}
@@ -172,6 +172,26 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;
   padding:4px 10px;font-size:12px;color:#1B2A3C;
 }}
+"""
+
+# Chips/badges de match + pills de skills
+CSS += """
+.match-chip {
+  display:inline-flex; align-items:center; gap:8px;
+  border-radius:999px; padding:6px 12px; font-weight:700; font-size:12.5px;
+  border:1px solid #E3EDF6; background:#F1F7FD; color:#1B2A3C;
+}
+.match-dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
+.match-strong { background: #33FFAC; }
+.match-good   { background: #A7F3D0; }
+.match-ok     { background: #E9F3FF; }
+
+.skill-pill {
+  display:inline-flex; align-items:center; gap:6px;
+  margin: 4px 6px 0 0; padding:6px 10px; border-radius:999px;
+  border:1px solid #E3EDF6; background:#FFFFFF; color:#1B2A3C; font-size:12px;
+}
+.skill-pill.checked { background:#F1F7FD; border-color:#E3EDF6; }
 """
 
 # =========================================================
@@ -192,15 +212,18 @@ if "positions" not in ss:
       {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
        "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
        "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
-       "Hiring Manager":"Rivers Brykson","Estado":"Abierto"},
+       "Hiring Manager":"Rivers Brykson","Estado":"Abierto",
+       "Experiencia Min":3,"MustHave":"Python, APIs REST, SQL","NiceToHave":"AWS, Docker","JD":"Construcción de APIs y servicios backend."},
       {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
        "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
        "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
-       "Hiring Manager":"Angela Cruz","Estado":"Abierto"},
+       "Hiring Manager":"Angela Cruz","Estado":"Abierto",
+       "Experiencia Min":8,"MustHave":"Performance, SEO, CRM","NiceToHave":"B2B SaaS, RevOps","JD":"Liderar estrategia de marketing y crecimiento."},
       {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
        "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
        "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
-       "Hiring Manager":"Rivers Brykson","Estado":"Abierto"}
+       "Hiring Manager":"Rivers Brykson","Estado":"Abierto",
+       "Experiencia Min":4,"MustHave":"Forecasting, Excel, SQL","NiceToHave":"Python, Power BI","JD":"Planificación de la demanda y análisis de inventario."}
   ])
 
 # =========================================================
@@ -307,7 +330,25 @@ def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
     return ("Publicado", date.today().isoformat(), ", ".join(urls))
   return ("Listo para publicar", "", "")
 
-# ===== Generadores para integración demo de portales =====
+# ===== Helpers puestos (UI y lógica) =====
+def _skills_from_csv(text: str) -> list[str]:
+  return [s.strip() for s in (text or "").split(",") if s.strip()]
+
+def _match_level(row: dict | pd.Series) -> tuple[str, str]:
+  """Devuelve (label, clase_css) basado en señales simples."""
+  try:
+    leads = int(row.get("Leads", 0))
+    nuevos = int(row.get("Nuevos", 0))
+    expmin = int(row.get("Experiencia Min", 0) or 0)
+  except Exception:
+    leads, nuevos, expmin = 0, 0, 0
+  if (leads >= 3000) or (nuevos >= 20) or (expmin >= 5):
+    return ("Strong Match", "match-strong")
+  if (leads >= 1200) or (nuevos >= 8) or (expmin >= 3):
+    return ("Good Match", "match-good")
+  return ("Ok Match", "match-ok")
+
+# ===== Portales (demo) =====
 def _dummy_name(board: str, idx: int) -> str:
   base = {
     "laborum.pe": "LAB",
@@ -316,10 +357,9 @@ def _dummy_name(board: str, idx: int) -> str:
     "Indeed": "IND",
     "LinkedIn Jobs": "LIJ",
   }.get(board, "EXT")
-  return f"{base}_Candidato_{idx:02d}.pdf"  # mantenemos sufijo pdf en nombre, aunque el contenido sea TXT
+  return f"{base}_Candidato_{idx:02d}.pdf"  # nombre con .pdf aunque el contenido sea TXT
 
 def _dummy_cv_text(query: str, location: str) -> str:
-  # Genera texto de CV con keywords habituales y señales para extract_meta
   skills = ["HIS", "SAP IS-H", "BLS", "ACLS", "IAAS", "educación al paciente", "seguridad del paciente", "protocolos"]
   core = ", ".join(skills[:6])
   return (
@@ -332,13 +372,12 @@ def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str
   text = _dummy_cv_text(query or "Profesional de Salud", location or "Lima")
   score, reasons = simple_score(text, jd_text, keywords)
   meta = extract_meta(text)
-  # Contenido TXT en bytes (sin convertir a PDF real, para mantener simple y robusto)
   return {
     "Name": _dummy_name(board, idx),
     "Score": score,
     "Reasons": reasons,
     "_bytes": text.encode("utf-8"),
-    "_is_pdf": False,  # seguimos TXT para evitar generar PDFs
+    "_is_pdf": False,
     "meta": meta
   }
 
@@ -432,13 +471,143 @@ def page_def_carga():
       for board in sources:
         for i in range(1, int(qty)+1):
           imported.append(_make_candidate_from_board(board, i, jd_text, kw_text, search_q, location))
-      # Si ya había candidatos (manuales), los conservamos y añadimos los importados
       ss.candidates = (ss.candidates or []) + imported
       st.success(f"Importados {len(imported)} CVs simulados desde: {', '.join(sources)}.")
 
 def page_puestos():
   st.header("Puestos")
 
+  # ==== Layout 3 columnas: lista / detalle / insights ====
+  left, center, right = st.columns([0.95, 1.2, 0.9])
+
+  # ---------- LEFT: Lista de puestos con badge de match ----------
+  with left:
+    st.markdown("**Puestos abiertos**")
+    if ss.positions.empty:
+      st.info("Aún no hay puestos creados.")
+      selected_id = None
+    else:
+      df_list = ss.positions.copy()
+      df_list = df_list.sort_values(["Estado", "Días Abierto", "Leads"], ascending=[True, True, False]).reset_index(drop=True)
+
+      # Render visual tipo “cards” y construir opciones para radio
+      options = []
+      labels_for_radio = []
+      for _, row in df_list.iterrows():
+        label, css = _match_level(row)
+        st.markdown(
+          f"""
+          <div style="border:1px solid #E3EDF6; border-radius:12px; padding:10px; margin-bottom:8px; background:#FFFFFF;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:800;color:{TITLE_DARK};">{row['Puesto']}</div>
+                <div style="font-size:12px;opacity:.8">{row.get('Ubicación','')}</div>
+              </div>
+              <div class="match-chip">
+                <span class="match-dot {css}"></span>{label}
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; font-size:12px; opacity:.85">
+              <span>Leads: <b>{row.get('Leads',0)}</b></span>
+              <span>Nuevos: <b>{row.get('Nuevos',0)}</b></span>
+              <span>Días abierto: <b>{row.get('Días Abierto',0)}</b></span>
+            </div>
+          </div>
+          """,
+          unsafe_allow_html=True
+        )
+        options.append(row["ID"])
+        labels_for_radio.append(f"{row['Puesto']} — {row.get('Ubicación','')} · {label}")
+
+      preselect = ss.get("selected_position_id", options[0] if options else None)
+      selected_id = st.radio("Selecciona un puesto", options=options,
+                             index=options.index(preselect) if preselect in options else 0,
+                             format_func=lambda x: labels_for_radio[options.index(x)])
+      ss["selected_position_id"] = selected_id
+
+  # Localizar fila seleccionada
+  selected_row = None
+  if not ss.positions.empty and ss.get("selected_position_id"):
+    try:
+      selected_row = ss.positions[ss.positions["ID"] == ss["selected_position_id"]].iloc[0].to_dict()
+    except Exception:
+      selected_row = ss.positions.iloc[0].to_dict()
+
+  # ---------- CENTER: Detalle del puesto + JD + acciones ----------
+  with center:
+    if not selected_row:
+      st.caption("Selecciona un puesto para ver el detalle.")
+    else:
+      title = selected_row.get("Puesto", "—")
+      ubic = selected_row.get("Ubicación", "—")
+      st.markdown(f"<h2 style='margin:0;color:{TITLE_DARK}'>{title}</h2>", unsafe_allow_html=True)
+      st.caption(ubic)
+
+      cta, cta2 = st.columns([1,1])
+      with cta:
+        if st.button("Publicar ahora", key="pub_now"):
+          estado_ap = selected_row.get("Estado Aprobación", "Pendiente")
+          if (estado_ap == "Aprobado"):
+            status, fpub, sites = _simulate_publish(selected_row.get("Publicaciones",""))
+            ss.positions.loc[ss.positions["ID"] == selected_row["ID"], "Estado Publicación"] = status
+            ss.positions.loc[ss.positions["ID"] == selected_row["ID"], "Fecha Publicación"] = fpub
+            ss.positions.loc[ss.positions["ID"] == selected_row["ID"], "Publicado En"] = sites
+            st.success("Puesto publicado (simulado).")
+          else:
+            st.info("Este puesto aún no está aprobado.")
+      with cta2:
+        st.button("Agregar al Job Cart", key="add_cart")  # demo
+
+      st.markdown("---")
+      st.subheader("Job Description")
+      jd = (selected_row.get("JD", "") or "").strip() or "—"
+      st.write(jd)
+
+  # ---------- RIGHT: Tarjeta de “Strong/Good/Ok Match” + skills ----------
+  with right:
+    if selected_row:
+      label, css = _match_level(selected_row)
+      st.markdown('<div class="k-card">', unsafe_allow_html=True)
+      st.markdown(
+        f'<div class="match-chip" style="margin-bottom:8px;"><span class="match-dot {css}"></span>{label}</div>',
+        unsafe_allow_html=True
+      )
+
+      exp_min = selected_row.get("Experiencia Min", 0) or 0
+      if isinstance(exp_min, float): exp_min = int(exp_min)
+      exp_txt = f"≥ {exp_min} años de experiencia" if exp_min else "Experiencia deseada: no especificada"
+      st.markdown(f"- {exp_txt}")
+
+      st.markdown("**Matching Skills**")
+      must = _skills_from_csv(selected_row.get("MustHave",""))
+      nice = _skills_from_csv(selected_row.get("NiceToHave",""))
+
+      if not must and not nice:
+        st.caption("Aún no has definido skills para este puesto.")
+      else:
+        row1 = "".join([f'<span class="skill-pill checked">✓ {s}</span>' for s in must[:12]])
+        if row1: st.markdown(row1, unsafe_allow_html=True)
+        if nice:
+          st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+          st.caption("Deseables")
+          row2 = "".join([f'<span class="skill-pill">{s}</span>' for s in nice[:12]])
+          st.markdown(row2, unsafe_allow_html=True)
+
+      st.markdown("</div>", unsafe_allow_html=True)
+
+  # ---------- Vista clásica (tabla) ----------
+  st.markdown("")
+  with st.expander("📋 Ver tabla completa (vista clásica)"):
+    st.dataframe(
+      ss.positions[
+        ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen",
+         "HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación",
+         "Hiring Manager","Estado","ID"]
+      ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
+      use_container_width=True, height=320
+    )
+
+  # ---------- Crear nuevo puesto (formulario completo) ----------
   with st.expander("➕ Crear nuevo puesto"):
     c1, c2 = st.columns(2)
     with c1:
@@ -473,7 +642,6 @@ def page_puestos():
     screening = st.text_area("Preguntas de screening (una por línea)", height=120, value="")
     post_urls = st.text_area("URLs de publicación (una por línea o separadas por coma)", height=70, value="")
 
-    # === Aprobación de requisición ===
     st.markdown("---")
     st.subheader("Aprobación de requisición")
     require_approval = st.toggle("Requiere aprobación antes de publicar", value=True)
@@ -527,16 +695,6 @@ def page_puestos():
 
       ss.positions = pd.concat([pd.DataFrame([new_row]), ss.positions], ignore_index=True)
       st.success("Puesto creado.")
-
-  # Lista de puestos (tabla base intacta)
-  st.dataframe(
-    ss.positions[
-      ["Puesto","Días Abierto","Leads","Nuevos","Recruiter Screen",
-       "HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación",
-       "Hiring Manager","Estado","ID"]
-      ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
-    use_container_width=True, height=380
-  )
 
 def page_eval():
   st.header("Resultados de evaluación")
@@ -618,7 +776,6 @@ def page_pipeline():
     st.markdown("</div>", unsafe_allow_html=True)
     st.write("")
 
-    # Visor de CV integrado en Pipeline
     st.subheader("CV")
     if row["_is_pdf"]:
       pdf_viewer_embed(row["_bytes"], height=420)
