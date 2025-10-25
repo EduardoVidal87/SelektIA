@@ -545,10 +545,21 @@ def page_agents():
     with st.form("agent_new_form"):
       c1, c2 = st.columns(2)
       with c1:
-        role_name  = st.text_input("Rol*", value="")
-        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
-        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
-        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+    # Fallback robusto por si la URL está vacía o es inválida
+    safe_img = img if (isinstance(img, str) and img.strip()) \
+        else AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"))
+
+    # Evitamos st.image() para no disparar validaciones GIF/PIL
+    st.markdown(
+        f"""
+        <img src="{safe_img}"
+             style="width:180px;height:180px;border-radius:999px;
+                    object-fit:cover;border:4px solid #F1F7FD;">
+        """,
+        unsafe_allow_html=True
+    )
+    st.caption("Modelo LLM (simulado)")
+
       with c2:
         herramientas = st.multiselect(
           "Herramientas habilitadas",
