@@ -666,6 +666,24 @@ def page_agents():
     ag = ss.agents[ss.agent_view_idx]
     img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
     st.markdown("### Detalle del agente")
+    with c1:
+    # Fallback robusto por si la URL está vacía o inválida
+    if isinstance(img, str) and img.strip():
+        safe_img = img
+    else:
+        safe_img = AGENT_DEFAULT_IMAGES.get(ag.get("rol", "Headhunter"))
+
+    # Usamos <img> en HTML para evitar validaciones de PIL/GIF de st.image()
+    st.markdown(
+        f"""
+        <img src="{safe_img}"
+             style="width:180px;height:180px;border-radius:999px;
+                    object-fit:cover;border:4px solid #F1F7FD;">
+        """,
+        unsafe_allow_html=True
+    )
+    st.caption("Modelo LLM (simulado)")
+
     st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
