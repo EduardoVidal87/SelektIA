@@ -3,6 +3,7 @@
 
 import io
 import base64
+import re
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
@@ -60,21 +61,20 @@ html, body, [data-testid="stAppViewContainer"] {{
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
   padding: 0 0 2px;
-  /* Ajuste fino de alineación vertical: subimos el bloque */
-  margin-top: -10px;                /* <- ajuste único para alinear con la línea roja */
+  margin-top: -10px;
   position: relative;
-  top: -2px;                        /* micro ajuste adicional */
+  top: -2px;
   text-align:center;
 }}
 .sidebar-brand .brand-title {{
   color: var(--green) !important;
   font-weight: 800 !important;
-  font-size: 44px !important;       /* LOGO grande */
+  font-size: 44px !important;
   line-height: 1.05 !important;
 }}
 .sidebar-brand .brand-sub {{
   margin-top: 2px !important;
-  color: var(--green) !important;   /* mismo color del logo */
+  color: var(--green) !important;
   font-size: 11.5px !important;
   opacity: .95 !important;
 }}
@@ -96,17 +96,17 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] .stButton > button {{
   width: 100% !important;
   display: flex !important;
-  justify-content: flex-start !important;  /* IZQUIERDA */
+  justify-content: flex-start !important;
   align-items: center !important;
   text-align: left !important;
   gap: 8px !important;
 
   background: var(--sb-card) !important;
-  border: 1px solid var(--sb-bg) !important;  /* borde mismo color del panel */
+  border: 1px solid var(--sb-bg) !important;
   color: #ffffff !important;
   border-radius: 12px !important;
-  padding: 9px 12px !important;               /* más compacto */
-  margin: 6px 8px !important;                 /* menor separación vertical */
+  padding: 9px 12px !important;
+  margin: 6px 8px !important;
   font-weight: 600 !important;
 }}
 [data-testid="stSidebar"] .stButton > button * {{
@@ -117,7 +117,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 .block-container .stButton > button {{
   width: auto !important;
   display: flex !important;
-  justify-content: flex-start !important;  /* IZQUIERDA */
+  justify-content: flex-start !important;
   align-items: center !important;
   text-align: left !important;
 
@@ -236,6 +236,59 @@ def extract_text_from_file(uploaded_file) -> str:
     st.error(f"Error al leer '{uploaded_file.name}': {e}")
     return ""
 
+def _max_years(text_low: str) -> int:
+  years = 0
+  # patrones "X años", "X years"
+  for m in re.finditer(r'(\d{{1,2}})\s*(años|year|years)', text_low):
+    try:
+      years = max(years, int(m.group(1)))
+    except:
+      pass
+  # fallback mínimo si menciona experiencia
+  if years == 0 and ("años" in text_low or "experiencia" in text_low or "years" in text_low):
+    years = 5
+  return years
+
+def extract_meta(cv_text: str) -> dict:
+  """
+  Extrae heurísticamente datos del CV (simulado):
+  universidad, años de experiencia, título, ubicación.
+  No usa IA real, solo regex + listas simples.
+  """
+  text_low = cv_text.lower()
+
+  # Universidad
+  universidad = ""
+  uni_match = re.search(r'(universidad|university)\s+([^\n,;]+)', text_low)
+  if uni_match:
+    universidad = (uni_match.group(0) or "").strip().title()
+
+  # Años de experiencia
+  anios_exp = _max_years(text_low)
+
+  # Título (muy simple)
+  titulo = ""
+  for key in ["licenciado", "bachiller", "ingeniero", "enfermera", "enfermero", "químico", "médico", "tecnólogo"]:
+    if key in text_low:
+      titulo = key.title()
+      break
+
+  # Ubicación (lista corta de ciudades frecuentes)
+  ubicacion = ""
+  ciudades = ["lima", "santiago", "bogotá", "ciudad de méxico", "mexico city", "quito", "buenos aires", "montevideo", "la paz"]
+  for c in ciudades:
+    if c in text_low:
+      ubicacion = c.title()
+      break
+
+  return {
+    "universidad": universidad or "—",
+    "anios_exp": anios_exp,
+    "titulo": titulo or "—",
+    "ubicacion": ubicacion or "—",
+    "ultima_actualizacion": datetime.today().date().isoformat()
+  }
+
 def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   base = 0
   reasons = []
@@ -263,7 +316,6 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   return base, " — ".join(reasons)
 
 def _offers_to_df(offers_dict: dict) -> pd.DataFrame:
-  """Convierte ss.offers en DataFrame amigable para Analytics."""
   if not offers_dict:
     return pd.DataFrame(columns=["Candidato","Puesto","Ubicación","Modalidad","Salario","Estado","Inicio","Caduca"])
   rows = []
@@ -350,21 +402,15 @@ def page_def_carga():
       f.seek(0)
       text = extract_text_from_file(f)
       score, reasons = simple_score(text, jd_text, kw_text)
-      # Meta simple (demo)
-      years = 0
-      for token in ["years", "años", "experiencia"]:
-        if token in text.lower():
-          years = max(years, 5)
+
+      meta = extract_meta(text)
       ss.candidates.append({
         "Name": f.name,
         "Score": score,
         "Reasons": reasons,
         "_bytes": f_bytes,
         "_is_pdf": Path(f.name).suffix.lower()==".pdf",
-        "meta": {
-          "anios_exp": years,
-          "ultima_actualizacion": datetime.today().date().isoformat()
-        }
+        "meta": meta
       })
     st.success("CVs cargados y analizados.")
 
@@ -411,34 +457,65 @@ def page_pipeline():
   if not ss.candidates:
     st.info("Primero carga CVs en **Definición & Carga**.")
     return
-  df = pd.DataFrame(ss.candidates).sort_values("Score", ascending=False)
 
+  df = pd.DataFrame(ss.candidates).sort_values("Score", ascending=False).reset_index(drop=True)
+
+  # ---- LEFT: Tabla con columnas solicitadas ----
   c1, c2 = st.columns([1.2, 1])
-  with c1:
-    st.markdown("**Candidatos (haz clic para ver detalles)**")
-    for i, row in df.iterrows():
-      label = f"{row['Name']} — {row['Score']}%"
-      if st.button(label, key=f"pi_{i}"):
-        ss["selected_cand"] = row["Name"]
 
+  with c1:
+    st.markdown("**Candidatos**")
+    table_rows = []
+    for c in ss.candidates:
+      m = c.get("meta", {})
+      table_rows.append({
+        "Candidato": c["Name"],
+        "Score": c["Score"],
+        "Años Exp.": m.get("anios_exp", 0),
+        "Universidad": m.get("universidad", "—"),
+        "Actualizado": m.get("ultima_actualizacion", "—"),
+      })
+    df_table = pd.DataFrame(table_rows).sort_values(["Score","Años Exp."], ascending=[False, False])
+    st.dataframe(df_table, use_container_width=True, height=360)
+
+    # Selector (sin cambiar el patrón visual)
+    names = df_table["Candidato"].tolist()
+    preselect = ss.get("selected_cand", names[0] if names else "")
+    sel_name = st.radio("Selecciona un candidato", names, index=names.index(preselect) if preselect in names else 0)
+    ss["selected_cand"] = sel_name
+
+  # ---- RIGHT: Detalle estilo tarjeta existente ----
   with c2:
     st.markdown("**Detalle del candidato**")
     if "selected_cand" not in ss:
-      st.caption("Selecciona un candidato de la lista.")
+      st.caption("Selecciona un candidato de la tabla.")
       return
-    sel = ss["selected_cand"]
-    row = df[df["Name"]==sel].iloc[0]
-    st.markdown(f"**{sel}**")
+
+    row = next((c for c in ss.candidates if c["Name"] == ss["selected_cand"]), None)
+    if not row:
+      st.caption("Candidato no encontrado.")
+      return
+
+    m = row.get("meta", {})
+    st.markdown(f"**{row['Name']}**")
     st.markdown('<div class="k-card">', unsafe_allow_html=True)
-    st.markdown("**Match estimado**  \n" + ("✅ Alto" if row["Score"]>=60 else "🟡 Medio"))
-    st.markdown("**Validated Skills**  \n- HIS")
-    st.markdown("**Likely Skills**  \n- IAAS")
-    st.markdown("**Skills to Validate**  \n- SAP IS-H  \n- BLS  \n- ACLS  \n- educación al paciente")
+
+    # Badges y resumen
+    match_txt = "✅ Alto" if row["Score"] >= 60 else "🟡 Medio"
+    st.markdown(f"**Match estimado:** {match_txt}")
+    st.markdown(f"**Score:** {row['Score']}%")
     st.markdown("---")
-    st.markdown(f"**Años de experiencia:** {row['meta'].get('anios_exp',0)}")
-    st.markdown(f"**Última actualización CV:** {row['meta'].get('ultima_actualizacion','—')}")
+
+    # Campos solicitados
+    st.markdown("**Universidad**  \n" + m.get("universidad", "—"))
+    st.markdown(f"**Años de experiencia**  \n{m.get('anios_exp', 0)}")
+    st.markdown("**Ubicación**  \n" + m.get("ubicacion", "—"))
+    st.markdown("**Título**  \n" + m.get("titulo", "—"))
+    st.markdown("**Última actualización CV**  \n" + m.get("ultima_actualizacion", "—"))
+
     st.markdown("</div>", unsafe_allow_html=True)
     st.write("")
+
     cbtn1, cbtn2 = st.columns(2)
     with cbtn1:
       if st.button("Añadir nota 'Buen encaje'"):
@@ -447,6 +524,12 @@ def page_pipeline():
       if st.button("Mover a ‘Entrevista (Gerencia)’"):
         ss.section = "interview"
         st.rerun()
+
+    # Descargar CV
+    if row["_is_pdf"]:
+      st.download_button("Descargar CV (PDF)", data=row["_bytes"], file_name=row["Name"], mime="application/pdf")
+    else:
+      st.download_button("Descargar CV (TXT)", data=row["_bytes"], file_name=row["Name"], mime="text/plain")
 
 def page_interview():
   st.header("Entrevista (Gerencia)")
@@ -579,7 +662,6 @@ def page_agent_tasks():
 
 def page_analytics():
   st.header("Analytics")
-  # ===================== KPIs (de todas las otras pestañas) =====================
   total_cands = len(ss.candidates)
   avg_score = round(pd.Series([c["Score"] for c in ss.candidates]).mean(), 1) if ss.candidates else 0
   high_match = sum(1 for c in ss.candidates if c["Score"] >= 60)
@@ -600,7 +682,6 @@ def page_analytics():
 
   st.write("")
 
-  # ===================== Gráficos =====================
   left, right = st.columns(2)
   with left:
     st.subheader("Distribución de puntajes")
@@ -627,12 +708,10 @@ def page_analytics():
 
   st.write("")
 
-  # ===================== Ofertas =====================
   st.subheader("Ofertas (estado actual)")
   df_off = _offers_to_df(ss.offers)
   if not df_off.empty:
     st.dataframe(df_off, use_container_width=True, height=220)
-    # Conteo por estado
     counts = df_off["Estado"].value_counts().reset_index()
     counts.columns = ["Estado", "Cantidad"]
     fig_off = px.bar(counts, x="Estado", y="Cantidad", title="Ofertas por estado")
@@ -642,13 +721,11 @@ def page_analytics():
   else:
     st.info("No hay ofertas registradas aún.")
 
-  # ===================== Tareas & Agentes =====================
   cta1, cta2 = st.columns(2)
   with cta1:
     st.subheader("Tareas próximas")
     if ss.tasks:
       df_tasks = pd.DataFrame(ss.tasks)
-      # orden por fecha
       try:
         df_tasks["due"] = pd.to_datetime(df_tasks["due"])
         df_tasks = df_tasks.sort_values("due")
@@ -666,7 +743,6 @@ def page_analytics():
       st.caption("Aún no has creado agentes.")
 
   st.write("")
-  # Enlaces rápidos (no alteran patrón visual)
   b1, b2, b3 = st.columns(3)
   with b1:
     if st.button("Ir a Carga de CVs"):
