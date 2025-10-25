@@ -216,7 +216,7 @@ st.markdown("""
 /* 2) Títulos (h4) con margen mínimo */
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] .stMarkdown h4{
-  margin: 2px 8px 2px !important;      /* arriba | lados | abajo */
+  margin: 2px 6px 2px !important;      /* arriba | lados | abajo */
   line-height: 1.1 !important;
 }
 
