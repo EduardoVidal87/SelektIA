@@ -86,7 +86,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS (sidebar, login centrado, títulos verde, botón logout estilo chip)
+# CSS (sidebar, login, estilos)
 # =========================================================
 CSS = f"""
 :root {{
@@ -111,9 +111,10 @@ header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; 
 /* Títulos del sidebar al verde original */
 [data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4 {{ color: var(--green) !important; }}
 
-.sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:-10px; position:relative; top:-2px; text-align:center; }}
-.sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:44px !important; line-height:1.05 !important; }}
-.sidebar-brand .brand-sub {{ margin-top:2px !important; color: var(--green) !important; font-size:11.5px !important; opacity:.95 !important; }}
+/* Marca en sidebar */
+.sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:0; text-align:center; }}
+.sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:55px !important; line-height:1.05 !important; }}
+.sidebar-brand .brand-sub {{ margin-top:4px !important; color: var(--green) !important; font-size:12px !important; opacity:.95 !important; }}
 
 /* Botones del sidebar */
 [data-testid="stSidebar"] .stButton>button {{
@@ -168,102 +169,9 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   border-radius:24px !important; height:48px !important; padding:0 16px !important;
 }}
 .login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
-
-/* ---------- Topbar ---------- */
-.topbar{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px}}
-.user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:6px 12px;font-weight:700;color:#123;}}
-
-/* Botón "Cerrar sesión" con el MISMO look del chip Admin */
-button[title="Salir de la sesión actual"]{{
-  background:#eef5ff !important;
-  border:1px solid #d7e7fb !important;
-  color:#123 !important;
-  border-radius:999px !important;
-  padding:6px 12px !important;
-  font-weight:700 !important;
-  box-shadow:none !important;
-}}
-button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-
-# ======= Alinear título con los botones (Admin / Cerrar sesión) =======
-st.markdown("""
-<style>
-:root{
-  --content-top: 20px;         /* altura conjunta título/topbar (ajusta 16–24) */
-  --topbar-right-gap: 16px;    /* separación del borde derecho */
-  --topbar-width: 280px;       /* ancho aprox. ocupado por Admin + botón */
-}
-
-/* Contenido más arriba */
-.block-container{ padding-top: var(--content-top) !important; position:relative !important; }
-
-/* Marcador topbar */
-.topbar{
-  position: absolute !important;
-  top: var(--content-top) !important;
-  right: var(--topbar-right-gap) !important;
-  z-index: 9 !important;
-  margin: 0 !important;
-  height: 0 !important; /* solo actúa como sentinela */
-}
-
-/* BLOQUE REAL con los botones (hermano del marcador .topbar) */
-.topbar + div[data-testid="stHorizontalBlock"]{
-  position: absolute !important;
-  top: var(--content-top) !important;
-  right: var(--topbar-right-gap) !important;
-  z-index: 10 !important;
-  width: auto !important;
-  margin: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-}
-.topbar + div[data-testid="stHorizontalBlock"] [data-testid="column"]{ padding:0 !important; }
-
-/* Título sin margen superior y con reserva a la derecha */
-.block-container h1:first-child,
-.block-container h2:first-child,
-.block-container h3:first-child{
-  margin-top: 0 !important;
-  margin-right: calc(var(--topbar-width) + var(--topbar-right-gap)) !important;
-  line-height: 1.1 !important;
-}
-
-/* Más espacio bajo el logo del sidebar (tú lo tenías a 60px) */
-[data-testid="stSidebar"] .sidebar-brand{
-  margin-top: 0 !important;
-  padding-bottom: 0 !important;
-  margin-bottom: 60px !important;
-}
-
-/* Tamaño del logo de texto (sidebar) */
-[data-testid="stSidebar"] .sidebar-brand .brand-title{
-  font-size: 55px !important;
-  line-height: 1.05 !important;
-}
-
-/* Tamaño del subtexto "Powered by Wayki Consulting" */
-[data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 12px !important;
-  line-height: 1.2 !important;
-  opacity: .95 !important;
-  letter-spacing: .2px !important;
-  margin-top: 4px !important;
-}
-
-/* Sidebar ultra-compacto (márgenes mínimos) */
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap:2px !important; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4{ margin:4px 8px 2px !important; line-height:1.1 !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin:2px 8px !important; }
-[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] .stButton > button{ margin:0 8px !important; padding:6px 10px !important; line-height:1.05 !important; gap:6px !important; }
-</style>
-""", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia (Agentes / Flujos)
@@ -442,16 +350,8 @@ def login_screen():
   st.markdown("</div></div>", unsafe_allow_html=True)
 
 def render_topbar():
-  if ss.auth is None: return
-  # Marcador de topbar y bloque real con columnas (chip + botón)
-  st.markdown("<div class='topbar'></div>", unsafe_allow_html=True)
-  col_sp, col_chip, col_btn = st.columns([0.82, 0.10, 0.08])
-  with col_chip:
-    st.markdown(f"<div class='user-chip'>👤 {ss.auth['name']}</div>", unsafe_allow_html=True)
-  with col_btn:
-    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
-      ss.auth = None
-      st.rerun()
+  # Eliminado: no mostramos chip Admin ni botón de logout en el topbar
+  return
 
 def require_auth():
   if ss.auth is None:
@@ -492,6 +392,12 @@ def render_sidebar():
     st.markdown("#### ACCIONES")
     if st.button("Crear tarea", key="sb_task"):
       ss.section = "create_task"
+
+    # --- NUEVO: Sección de sesión (logout) al final de la sidebar ---
+    st.markdown("#### SESIÓN")
+    if st.button("Cerrar sesión", key="sb_logout", help="Salir de la sesión actual"):
+      ss.auth = None
+      st.rerun()
 
 # =========================================================
 # PÁGINAS
@@ -808,7 +714,7 @@ def page_agents():
           with c2:
             st.text_input("Role*", value=ag.get("rol",""), disabled=True)
             st.text_input("Goal*", value=ag.get("objetivo",""), disabled=True)
-            st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+            st.text_area("Backstory*", value=ag.get("backstory",""), height=160, disabled=True)
             st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
             st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
             st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
@@ -1079,6 +985,6 @@ ROUTES = {
 # APP
 # =========================================================
 if require_auth():
-  render_topbar()
+  render_topbar()      # (no pinta nada, se dejó por compatibilidad)
   render_sidebar()
   ROUTES.get(ss.section, page_def_carga)()
