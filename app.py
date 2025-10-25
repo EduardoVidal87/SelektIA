@@ -172,6 +172,18 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+# Más espacio entre el logo del sidebar y el primer título
+st.markdown("""
+<style>
+/* Quita el margen/offset negativo previo y agrega aire abajo del logo */
+[data-testid="stSidebar"] .sidebar-brand{
+  margin-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 50px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Sidebar ultra-compacto (mínimo espacio vertical)
 st.markdown("""
 <style>
