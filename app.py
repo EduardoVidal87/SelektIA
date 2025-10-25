@@ -191,7 +191,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand .brand-title{
-  font-size: 60px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
+  font-size: 55px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
   line-height: 1.05 !important;
 }
 </style>
@@ -204,7 +204,7 @@ st.markdown("""
 [data-testid="stSidebar"] .sidebar-brand{
   margin-top: 0 !important;
   padding-bottom: 0 !important;
-  margin-bottom: 40px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
+  margin-bottom: 60px !important;   /* <-- ajusta este valor a tu gusto (18–32px) */
 }
 </style>
 """, unsafe_allow_html=True)
