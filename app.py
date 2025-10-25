@@ -74,24 +74,31 @@ html, body, [data-testid="stAppViewContainer"] {{
 }}
 
 /* Branding (logo centrado y grande) */
-.sidebar-brand {{
+.sidebar-brand {
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
-  padding: 4px 0 2px;
+  /* padding: 4px 0 2px;  <-- línea antigua */
+  padding: 0 0 2px;
+  margin-top: 14px;          /* NUEVO: alinea con la altura del h1 */
   text-align:center;
-}}
-.sidebar-brand .brand-title {{
+}
+.sidebar-brand .brand-title {
   color: var(--green) !important;
   font-weight: 800 !important;
-  font-size: 44px !important;   /* LOGO MÁS GRANDE */
+  font-size: 44px !important;   /* logo grande */
   line-height: 1.05 !important;
-}}
-.sidebar-brand .brand-sub {{
+}
+.sidebar-brand .brand-sub {
   margin-top: 2px !important;
-  color: {PRIMARY} !important;   /* mismo color que el logo */
+  color: var(--green) !important;   /* mismo color que el logo (#00CD78) */
   font-size: 11.5px !important;
   opacity: .95 !important;
-}}
+}
+
+/* Opcional: fino ajuste para pantallas altas */
+@media (min-height: 800px) {
+  .sidebar-brand { margin-top: 18px; }
+}
 
 /* Botones del sidebar (texto a la izq + compactos) */
 [data-testid="stSidebar"] .stButton > button {{
