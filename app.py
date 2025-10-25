@@ -187,6 +187,32 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+# Alinear el título del panel derecho con la altura del logo
+st.markdown("""
+<style>
+:root{
+  /* Ajusta este valor para subir/bajar el contenido */
+  --content-top: 6px;   /* prueba 0–12px según el tamaño de tu logo */
+}
+
+/* Reduce el padding superior del contenido */
+.block-container{
+  padding-top: var(--content-top) !important;
+}
+
+/* Quita el margen superior del primer título */
+.block-container h1:first-child{
+  margin-top: 0 !important;
+}
+
+/* Opcional: también para h2/h3 si a veces van primero */
+.block-container h2:first-child,
+.block-container h3:first-child{
+  margin-top: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Aumentar tamaño de "Powered by Wayki Consulting"
 st.markdown("""
 <style>
