@@ -191,7 +191,7 @@ st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 st.markdown("""
 <style>
 :root{
-  --content-top: 8px;     /* altura del contenido (ajusta 4–14px según tu logo) */
+  --content-top: 6px;     /* altura del contenido (ajusta 4–14px según tu logo) */
   --topbar-right-gap: 16px;  /* separación del borde derecho */
   --topbar-width: 260px;  /* ancho aproximado ocupado por Admin + botón */
 }
