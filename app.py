@@ -23,13 +23,6 @@ TITLE_DARK = "#142433"
 BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD    = "#33FFAC"
 
-DEPARTMENTS = ["Tecnología","Marketing","Operaciones","Finanzas","RR.HH.","Atención al cliente","Ventas","Salud"]
-EMP_TYPES   = ["Tiempo completo","Medio tiempo","Prácticas","Temporal","Consultoría"]
-SENIORITIES = ["Junior","Semi Senior","Senior","Lead","Manager","Director"]
-WORK_MODELS = ["Presencial","Híbrido","Remoto"]
-SHIFTS      = ["Diurno","Nocturno","Rotativo"]
-PRIORITIES  = ["Alta","Media","Baja"]
-CURRENCIES  = ["USD","PEN","EUR","CLP","MXN","COP","ARS"]
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
 
 EVAL_INSTRUCTION = (
@@ -40,9 +33,9 @@ EVAL_INSTRUCTION = (
 
 # ===== Login simulado (usuarios de demo) =====
 USERS = {
-  "colab": {"password":"colab123","role":"Colaborador","name":"Colaborador"},
-  "super": {"password":"super123","role":"Supervisor","name":"Supervisor"},
-  "admin": {"password":"admin123","role":"Administrador","name":"Administrador"},
+  "colab": {"password":"colab123","role":"Colaborador","name":"Colab"},
+  "super": {"password":"super123","role":"Supervisor","name":"Sup"},
+  "admin": {"password":"admin123","role":"Administrador","name":"Admin"},
 }
 
 AGENT_DEFAULT_IMAGES = {
@@ -93,7 +86,7 @@ ROLE_PRESETS = {
 }
 
 # =========================================================
-# CSS — (botones siempre a la IZQUIERDA + branding alineado)
+# CSS — (botones siempre a la IZQUIERDA + branding alineado) + LOGIN/TOPBAR
 # =========================================================
 CSS = f"""
 :root {{
@@ -103,157 +96,70 @@ CSS = f"""
   --body: {BODY_BG};
   --sb-card: {CARD_BG};
 }}
+html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
+.block-container {{ background: transparent !important; padding-top: 1.25rem !important; }}
 
-/* Fondo app */
-html, body, [data-testid="stAppViewContainer"] {{
-  background: var(--body) !important;
-}}
-.block-container {{
-  background: transparent !important;
-  padding-top: 1.25rem !important;
-}}
+/* Sidebar */
+[data-testid="stSidebar"] {{ background: var(--sb-bg) !important; color: var(--sb-tx) !important; }}
+[data-testid="stSidebar"] * {{ color: var(--sb-tx) !important; }}
+.sidebar-brand {{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 2px; margin-top:-10px; position:relative; top:-2px; text-align:center; }}
+.sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:44px !important; line-height:1.05 !important; }}
+.sidebar-brand .brand-sub {{ margin-top:2px !important; color: var(--green) !important; font-size:11.5px !important; opacity:.95 !important; }}
 
-/* Sidebar base */
-[data-testid="stSidebar"] {{
-  background: var(--sb-bg) !important;
-  color: var(--sb-tx) !important;
-}}
-[data-testid="stSidebar"] * {{
-  color: var(--sb-tx) !important;
+/* Sidebar buttons */
+[data-testid="stSidebar"] .stButton>button {{
+  width: 100% !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
+  gap:8px !important; background: var(--sb-card) !important; border:1px solid var(--sb-bg) !important; color:#fff !important;
+  border-radius:12px !important; padding:9px 12px !important; margin:6px 8px !important; font-weight:600 !important;
 }}
 
-/* Branding */
-.sidebar-brand {{
-  display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  padding: 0 0 2px;
-  margin-top: -10px;
-  position: relative;
-  top: -2px;
-  text-align:center;
+/* Body buttons */
+.block-container .stButton>button {{
+  width:auto !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
+  background: var(--green) !important; color:#082017 !important; border-radius:10px !important; border:none !important; padding:.50rem .90rem !important; font-weight:700 !important;
 }}
-.sidebar-brand .brand-title {{
-  color: var(--green) !important;
-  font-weight: 800 !important;
-  font-size: 44px !important;
-  line-height: 1.05 !important;
-}}
-.sidebar-brand .brand-sub {{
-  margin-top: 2px !important;
-  color: var(--green) !important;
-  font-size: 11.5px !important;
-  opacity: .95 !important;
-}}
+.block-container .stButton>button:hover {{ filter: brightness(.96); }}
 
-/* Títulos de sección del sidebar (verde) + compacidad */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] h5,
-[data-testid="stSidebar"] h6 {{
-  color: var(--green) !important;
-  letter-spacing: .5px;
-  margin: 12px 10px 6px !important;
-  line-height: 1.05 !important;
-}}
+/* Typography */
+h1, h2, h3 {{ color: {TITLE_DARK}; }}
+h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Botones del sidebar (texto a la izquierda y compactos) */
-[data-testid="stSidebar"] .stButton > button {{
-  width: 100% !important;
-  display: flex !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  text-align: left !important;
-  gap: 8px !important;
-
-  background: var(--sb-card) !important;
-  border: 1px solid var(--sb-bg) !important;
-  color: #ffffff !important;
-  border-radius: 12px !important;
-  padding: 9px 12px !important;
-  margin: 6px 8px !important;
-  font-weight: 600 !important;
-}}
-[data-testid="stSidebar"] .stButton > button * {{
-  text-align: left !important;
-}}
-
-/* ====== CUERPO: Botones alineados a la izquierda ====== */
-.block-container .stButton > button {{
-  width: auto !important;
-  display: flex !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  text-align: left !important;
-
-  background: var(--green) !important;
-  color: #082017 !important;
-  border-radius: 10px !important;
-  border: none !important;
-  padding: .50rem .90rem !important;
-  font-weight: 700 !important;
-}}
-.block-container .stButton > button:hover {{
-  filter: brightness(.96);
-}}
-
-/* Títulos del cuerpo */
-h1, h2, h3 {{
-  color: {TITLE_DARK};
-}}
-h1 strong, h2 strong, h3 strong {{
-  color: var(--green);
-}}
-
-/* Inputs claros */
-.block-container [data-testid="stSelectbox"] > div > div,
+/* Inputs */
+.block-container [data-testid="stSelectbox"]>div>div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
 .block-container [data-testid="stTextArea"] textarea {{
-  background: #F1F7FD !important;
-  color: {TITLE_DARK} !important;
-  border: 1.5px solid #E3EDF6 !important;
-  border-radius: 10px !important;
+  background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
 }}
 
-/* Tablas */
-.block-container table {{
-  background: #fff !important;
-  border: 1px solid #E3EDF6 !important;
-  border-radius: 8px !important;
-}}
-.block-container thead th {{
-  background: #F1F7FD !important;
-  color: {TITLE_DARK} !important;
-}}
+/* Tables */
+.block-container table {{ background:#fff !important; border:1px solid #E3EDF6 !important; border-radius:8px !important; }}
+.block-container thead th {{ background:#F1F7FD !important; color:{TITLE_DARK} !important; }}
 
-/* Tarjeta derecha pipeline */
-.k-card {{
-  background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px;
-}}
-.badge {{
-  display:inline-flex;align-items:center;gap:6px;
-  background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;
-  padding:4px 10px;font-size:12px;color:#1B2A3C;
-}}
+/* Cards */
+.k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
+.badge {{ display:inline-flex;align-items:center;gap:6px;background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;padding:4px 10px;font-size:12px;color:#1B2A3C; }}
 
-/* —— Agentes: botones ghost y detalle visible —— */
+/* Agents */
 .agent-wrap .stButton>button{{background:var(--body)!important;color:{TITLE_DARK}!important;border:1px solid #E3EDF6!important;border-radius:10px!important;font-weight:700!important;padding:6px 10px!important}}
 .agent-wrap .stButton>button:hover{{background:#fff!important}}
 .agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
 .agent-detail input:disabled, .agent-detail textarea:disabled{{background:#EEF5FF!important;color:{TITLE_DARK}!important;border:1.5px solid #D7E7FB!important;opacity:1!important}}
 
-/* —— Workflows —— */
+/* Workflows */
 .step-num{{width:26px;height:26px;border-radius:999px;border:2px solid #DDE7F5;display:flex;align-items:center;justify-content:center;font-weight:800;color:#345;}}
 .step{{display:flex;gap:10px;align-items:center;margin:8px 0}}
 .status-chip{{display:inline-flex;gap:8px;align-items:center;border:1px solid #E3EDF6;background:#F6FAFF;border-radius:999px;padding:4px 10px;font-size:12px}}
 
-/* —— Login full-screen —— */
+/* Login full-screen */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
-.login-card{{background:#0f223d;border:1px solid #24344d;border-radius:16px;padding:28px 26px;width:min(420px,92vw);box-shadow:0 16px 38px rgba(0,0,0,.35)}}
-.login-logo{{color:{PRIMARY};font-weight:900;font-size:34px;text-align:center;letter-spacing:.5px}}
-.login-sub{{color:#9fb2d3;text-align:center;margin-top:2px;font-size:12.5px}}
+.login-card{{background:#0f223d;border:1px solid #24344d;border-radius:16px;padding:22px 22px;width:min(380px,92vw);box-shadow:0 16px 38px rgba(0,0,0,.35)}}
+.login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:10px}}
+.login-sub{{color:#9fb2d3;text-align:center;margin:2px 0 12px 0;font-size:12.5px}}
+
+/* Topbar (usuario + logout) */
+.topbar{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px}}
+.user-chip{{background:#eef5ff;border:1px solid #d7e7fb;border-radius:999px;padding:5px 10px;font-weight:700;color:#123;}}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -322,9 +228,7 @@ SKILL_SYNONYMS = {
   "BIM":["bim","revit"], "Presupuestos":["presupuesto","presupuestos"], "Figma":["figma"], "UX Research":["ux research","investigación de usuarios"],
   "Prototipado":["prototipado","prototype"],
 }
-
 def _normalize(t:str)->str: return re.sub(r"\s+"," ",(t or "")).strip().lower()
-
 def infer_skills(text:str)->set:
   t=_normalize(text); out=set()
   for k,syns in SKILL_SYNONYMS.items():
@@ -407,25 +311,55 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   return base, " — ".join(reasons)
 
 # =========================================================
-# LOGIN (simulado)
+# LOGIN + TOPBAR
 # =========================================================
+def asset_logo_wayki():
+  local = Path("assets/logo-wayki.png")
+  if local.exists(): return str(local)
+  # fallback muy ligero
+  return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
+
 def login_screen():
   st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
-  st.markdown('<div class="login-logo">Wayki Consulting</div>', unsafe_allow_html=True)
+  # Logo centrado
+  try:
+    st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
+    st.image(asset_logo_wayki(), width=120)
+    st.markdown("</div>", unsafe_allow_html=True)
+  except:
+    pass
   st.markdown('<div class="login-sub">Acceso a SelektIA — Demo</div>', unsafe_allow_html=True)
-  st.write("")
-  with st.form("login_form"):
+  with st.form("login_form", clear_on_submit=False):
     u = st.text_input("Usuario")
     p = st.text_input("Contraseña", type="password")
     ok = st.form_submit_button("Ingresar")
-  if ok:
-    if u in USERS and USERS[u]["password"] == p:
-      ss.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
-      st.success("Bienvenido.")
-      st.experimental_rerun()
-    else:
-      st.error("Usuario o contraseña incorrectos.")
+    if ok:
+      if u in USERS and USERS[u]["password"] == p:
+        ss.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
+        st.success("Bienvenido.")
+        st.rerun()  # <- evita el doble click
+      else:
+        st.error("Usuario o contraseña incorrectos.")
   st.markdown("</div></div>", unsafe_allow_html=True)
+
+def render_topbar():
+  if ss.auth is None: return
+  st.markdown(
+    f"""
+    <div class="topbar">
+      <div class="user-chip">👤 {ss.auth['name']}</div>
+      <form action="#" method="get">
+        <button type="button" id="logout-btn" style="background:#fff;border:1px solid #E3EDF6;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer">Cerrar sesión</button>
+      </form>
+    </div>
+    """, unsafe_allow_html=True
+  )
+  # Botón de logout real:
+  col1, col2 = st.columns([0.85,0.15])
+  with col2:
+    if st.button("Cerrar sesión", key="logout_real", help="Salir de la sesión actual"):
+      ss.auth=None
+      st.rerun()
 
 def require_auth():
   if ss.auth is None:
@@ -434,7 +368,7 @@ def require_auth():
   return True
 
 # =========================================================
-# SIDEBAR (branding + navegación)
+# SIDEBAR (solo navegación)
 # =========================================================
 def render_sidebar():
   with st.sidebar:
@@ -446,9 +380,7 @@ def render_sidebar():
       </div>
       """, unsafe_allow_html=True
     )
-    st.caption(f"👤 {ss.auth['name']} — {ss.auth['role']}")
-    if st.button("Cerrar sesión"):
-      ss.auth=None; st.experimental_rerun()
+    st.caption(f"Rol: {ss.auth['role']}")
 
     st.markdown("#### DASHBOARD")
     if st.button("Analytics", key="sb_analytics"):
@@ -969,7 +901,6 @@ def page_flows():
 def page_analytics():
   st.header("Analytics")
 
-  # KPIs principales
   total_puestos = len(ss.positions)
   total_cvs = len(ss.candidates)
   avg_fit = None
@@ -983,6 +914,7 @@ def page_analytics():
       f,_=score_fit_by_skills(jd,must,nice,txt or "")
       fits.append(f)
     avg_fit = round(sum(fits)/len(fits),1)
+
   c1,c2,c3 = st.columns(3)
   c1.metric("Puestos activos", total_puestos)
   c2.metric("CVs en bandeja", total_cvs)
@@ -990,7 +922,6 @@ def page_analytics():
 
   st.markdown("---")
 
-  # Gráfico: distribución de fits
   if total_cvs:
     bins = []
     jd = ss.get("last_jd_text","")
@@ -1006,13 +937,11 @@ def page_analytics():
     fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
     st.plotly_chart(fig, use_container_width=True)
 
-  # Gráfico: puestos por días abiertos
   dfp = ss.positions[["Puesto","Días Abierto"]].copy()
   fig2 = px.bar(dfp, x="Puesto", y="Días Abierto", title="Días abiertos por puesto")
   fig2.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_tickangle=-20)
   st.plotly_chart(fig2, use_container_width=True)
 
-  # Tabla: top skills detectadas en CVs
   if total_cvs:
     skill_counts={}
     for c in ss.candidates:
@@ -1065,5 +994,9 @@ ROUTES = {
 # APP
 # =========================================================
 if require_auth():
+  # topbar (usuario + cerrar sesión)
+  render_topbar()
+  # sidebar navegación
   render_sidebar()
+  # router
   ROUTES.get(ss.section, page_def_carga)()
