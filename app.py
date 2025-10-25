@@ -203,7 +203,7 @@ st.markdown("""
 
 /* 1) Sube el contenido del panel derecho un poco (ajusta 0–12px) */
 :root{
-  --content-top: 6px;   /* prueba 8, 10, 12, … hasta que calce con tu logo */
+  --content-top: 6px;   /* prueba 4, 6, 8, … hasta que calce con tu logo */
 }
 .block-container{
   padding-top: var(--content-top) !important;
@@ -213,7 +213,7 @@ st.markdown("""
       Ajusta -2, -4, -6 … hasta que coincida con el título. */
 .sidebar-brand{
   position: relative;
-  top: -6px !important;     /* mueve hacia arriba; valores típicos: -4 a -12 */
+  top: -6px !important;     /* mueve hacia arriba; valores típicos: -10 a -14 */
   margin-top: 0 !important; /* sin margen extra arriba */
 }
 
