@@ -187,6 +187,16 @@ button[title="Salir de la sesión actual"]:hover{{ background:#e9f2ff !important
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+# Tamaño del logo (texto) en el sidebar
+st.markdown("""
+<style>
+[data-testid="stSidebar"] .sidebar-brand .brand-title{
+  font-size: 70px !important;   /* ← ajusta este valor: p.ej. 44, 48, 56, 64 */
+  line-height: 1.05 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Más espacio entre el logo del sidebar y el primer título
 st.markdown("""
 <style>
