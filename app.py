@@ -34,6 +34,9 @@ SHIFTS = ["Diurno", "Nocturno", "Rotativo"]
 PRIORITIES = ["Alta", "Media", "Baja"]
 CURRENCIES = ["USD", "PEN", "EUR", "CLP", "MXN", "COP", "ARS"]
 
+# Portales simulados (integración demo)
+JOB_BOARDS = ["laborum.pe", "Computrabajo", "Bumeran", "Indeed", "LinkedIn Jobs"]
+
 # =========================================================
 # CSS — (botones siempre a la IZQUIERDA + branding alineado)
 # =========================================================
@@ -304,6 +307,41 @@ def _simulate_publish(urls_text: str) -> tuple[str, str, str]:
     return ("Publicado", date.today().isoformat(), ", ".join(urls))
   return ("Listo para publicar", "", "")
 
+# ===== Generadores para integración demo de portales =====
+def _dummy_name(board: str, idx: int) -> str:
+  base = {
+    "laborum.pe": "LAB",
+    "Computrabajo": "CTJ",
+    "Bumeran": "BUM",
+    "Indeed": "IND",
+    "LinkedIn Jobs": "LIJ",
+  }.get(board, "EXT")
+  return f"{base}_Candidato_{idx:02d}.pdf"  # mantenemos sufijo pdf en nombre, aunque el contenido sea TXT
+
+def _dummy_cv_text(query: str, location: str) -> str:
+  # Genera texto de CV con keywords habituales y señales para extract_meta
+  skills = ["HIS", "SAP IS-H", "BLS", "ACLS", "IAAS", "educación al paciente", "seguridad del paciente", "protocolos"]
+  core = ", ".join(skills[:6])
+  return (
+    f"Resumen profesional — {query} en {location}. Universidad Nacional Mayor de San Marcos. "
+    f"Experiencia: 5 años en hospitales y clínicas. Certificaciones: BLS, ACLS. "
+    f"Habilidades: {core}. Logros: implementación de protocolos IAAS."
+  )
+
+def _make_candidate_from_board(board: str, idx: int, jd_text: str, keywords: str, query: str, location: str) -> dict:
+  text = _dummy_cv_text(query or "Profesional de Salud", location or "Lima")
+  score, reasons = simple_score(text, jd_text, keywords)
+  meta = extract_meta(text)
+  # Contenido TXT en bytes (sin convertir a PDF real, para mantener simple y robusto)
+  return {
+    "Name": _dummy_name(board, idx),
+    "Score": score,
+    "Reasons": reasons,
+    "_bytes": text.encode("utf-8"),
+    "_is_pdf": False,  # seguimos TXT para evitar generar PDFs
+    "meta": meta
+  }
+
 # =========================================================
 # SIDEBAR (branding + navegación)
 # =========================================================
@@ -360,20 +398,43 @@ def page_def_carga():
   kw_text = st.text_area("Palabras clave (coma separada)", height=100,
                          value="HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos")
 
+  # ---- Carga manual de CVs ----
   files = st.file_uploader("Subir CVs (PDF o TXT)", type=["pdf","txt"], accept_multiple_files=True)
   if files:
-    ss.candidates = []
-    for f in files:
-      f_bytes = f.read(); f.seek(0)
-      text = extract_text_from_file(f)
-      score, reasons = simple_score(text, jd_text, kw_text)
-      meta = extract_meta(text)
-      ss.candidates.append({
-        "Name": f.name, "Score": score, "Reasons": reasons,
-        "_bytes": f_bytes, "_is_pdf": Path(f.name).suffix.lower()==".pdf",
-        "meta": meta
-      })
-    st.success("CVs cargados y analizados.")
+    if st.button("Procesar CVs cargados"):
+      ss.candidates = []
+      for f in files:
+        f_bytes = f.read(); f.seek(0)
+        text = extract_text_from_file(f)
+        score, reasons = simple_score(text, jd_text, kw_text)
+        meta = extract_meta(text)
+        ss.candidates.append({
+          "Name": f.name, "Score": score, "Reasons": reasons,
+          "_bytes": f_bytes, "_is_pdf": Path(f.name).suffix.lower()==".pdf", "meta": meta
+        })
+      st.success("CVs cargados y analizados.")
+
+  # ---- Integración con portales (demo) ----
+  with st.expander("🔌 Importar desde portales (demo)"):
+    col1, col2, col3 = st.columns([1,1,1])
+    with col1:
+      sources = st.multiselect("Portales", options=JOB_BOARDS, default=["laborum.pe"])
+      qty = st.number_input("Cantidad por portal", min_value=1, max_value=20, value=5, step=1)
+    with col2:
+      search_q = st.text_input("Búsqueda", value="Enfermera/o Asistencial")
+      location = st.text_input("Ubicación", value="Lima, Perú")
+    with col3:
+      posted_since = st.date_input("Publicado desde", value=date.today() - timedelta(days=15))
+    st.caption("Nota: Integración simulada para demo (sin scraping real).")
+
+    if st.button("Traer CVs (demo)"):
+      imported = []
+      for board in sources:
+        for i in range(1, int(qty)+1):
+          imported.append(_make_candidate_from_board(board, i, jd_text, kw_text, search_q, location))
+      # Si ya había candidatos (manuales), los conservamos y añadimos los importados
+      ss.candidates = (ss.candidates or []) + imported
+      st.success(f"Importados {len(imported)} CVs simulados desde: {', '.join(sources)}.")
 
 def page_puestos():
   st.header("Puestos")
@@ -421,7 +482,6 @@ def page_puestos():
     approval_date = st.date_input("Fecha de aprobación (si aplica)", value=date.today())
     approval_notes = st.text_area("Notas de aprobación", height=70, value="")
 
-    # Guardar puesto
     save = st.button("Guardar puesto")
     if save:
       new_row = {
@@ -431,7 +491,6 @@ def page_puestos():
         "Entrevista Telefónica": 0, "Entrevista Presencial": 0,
         "Ubicación": location, "Hiring Manager": hiring_manager or recruiter,
         "Estado": "Abierto",
-
         # Metadatos extendidos del puesto
         "Departamento": department, "Tipo Empleo": emp_type, "Seniority": seniority,
         "Modalidad": work_model, "Vacantes": openings, "Recruiter": recruiter,
@@ -441,21 +500,18 @@ def page_puestos():
         "Fecha Objetivo": str(target_date), "Expira": str(expiry_date),
         "Aprobadores": approvers, "JD": jd, "MustHave": must, "NiceToHave": nice,
         "Beneficios": benefits, "Screening Qs": screening, "Publicaciones": post_urls,
-
         # Aprobación
         "Requiere Aprobación": require_approval,
         "Estado Aprobación": approval_status,
         "Aprobado Por": approved_by if approval_status == "Aprobado" else "",
         "Fecha Aprobación": str(approval_date) if approval_status == "Aprobado" else "",
         "Notas Aprobación": approval_notes,
-
         # Publicación (se calcula abajo)
         "Estado Publicación": "Borrador",
         "Fecha Publicación": "",
         "Publicado En": ""
       }
-
-      # Lógica de publicación automática
+      # Publicación automática
       should_publish = (not require_approval) or (approval_status == "Aprobado")
       if should_publish:
         pub_status, pub_date, pub_sites = _simulate_publish(post_urls)
