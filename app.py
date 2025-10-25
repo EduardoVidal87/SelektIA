@@ -172,6 +172,20 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+<style>
+/* Tamaño del "Powered by Wayki Consulting" */
+[data-testid="stSidebar"] .sidebar-brand .brand-sub{
+  font-size: 12px !important;   /* ← cámbialo a 12, 14, 16, 18, etc. */
+  line-height: 1.2 !important;
+  margin-top: 4px !important;
+  opacity: .95 !important;
+  /* opcional:
+  font-weight: 700 !important;   /* más grueso */
+  letter-spacing: .2px !important;
+  */
+}
+</style>
+
 # Más espacio entre el logo del sidebar y el primer título
 st.markdown("""
 <style>
