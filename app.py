@@ -765,52 +765,201 @@ def page_flows():
 
 # ====== Analytics / Tareas ======
 def page_analytics():
-  st.header("Analytics")
-  total_puestos = len(ss.positions)
-  total_cvs = len(ss.candidates)
-  avg_fit = None
-  if total_cvs:
-    jd = ss.get("last_jd_text",""); preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
-    must, nice = preset.get("must",[]), preset.get("nice",[])
-    fits=[]
-    for c in ss.candidates:
-      txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
-      f,_=score_fit_by_skills(jd,must,nice,txt or ""); fits.append(f)
-    avg_fit = round(sum(fits)/len(fits),1)
-  c1,c2,c3 = st.columns(3)
-  c1.metric("Puestos activos", total_puestos)
-  c2.metric("CVs en bandeja", total_cvs)
-  c3.metric("Fit promedio (skills)", avg_fit if avg_fit is not None else "—")
-  st.markdown("---")
-  if total_cvs:
-    bins=[]; jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
-    must, nice = preset.get("must",[]), preset.get("nice",[])
-    for c in ss.candidates:
-      txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
-      f,_=score_fit_by_skills(jd,must,nice,txt or ""); bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
-    df=pd.DataFrame({"Fit band":bins})
-    fig=px.histogram(df, x="Fit band", title="Distribución de Fit por skills")
-    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
-    st.plotly_chart(fig, use_container_width=True)
-  dfp = ss.positions[["Puesto","Días Abierto"]].copy()
-  fig2 = px.bar(dfp, x="Puesto", y="Días Abierto", title="Días abiertos por puesto")
-  fig2.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_tickangle=-20)
-  st.plotly_chart(fig2, use_container_width=True)
+    import numpy as np
+    import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import random
+    from datetime import date, timedelta
 
-def page_agent_tasks():
-  st.header("Tareas de Agente")
-  st.write("Bandeja de tareas para asistentes (demo).")
+    st.header("Analytics")
 
-def page_create_task():
-  st.header("Crear tarea")
-  with st.form("t_form"):
-    titulo = st.text_input("Título")
-    desc = st.text_area("Descripción", height=150)
-    due = st.date_input("Fecha límite", value=date.today())
-    ok = st.form_submit_button("Guardar")
-    if ok:
-      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due)})
-      st.success("Tarea creada.")
+    # ----------------------------- Helpers de color/estética -----------------------------
+    def _hex_to_rgb(h):
+        h = h.lstrip("#")
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    def _tint(hex_color, alpha):
+        r, g, b = _hex_to_rgb(hex_color)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    ACCENT = PRIMARY  # usa tu color principal
+    ACCENT_90 = _tint(ACCENT, 0.90)
+    ACCENT_70 = _tint(ACCENT, 0.70)
+    ACCENT_50 = _tint(ACCENT, 0.50)
+    ACCENT_35 = _tint(ACCENT, 0.35)
+    ACCENT_20 = _tint(ACCENT, 0.20)
+
+    def _kpi_card(col, title, value, series):
+        """Pequeño KPI con sparkline area en el fondo (mismo verde)."""
+        with col:
+            st.markdown(f"**{title}**")
+            st.markdown(f"<div style='font-size:28px;font-weight:800;color:{TITLE_DARK}'>{value}</div>", unsafe_allow_html=True)
+            if series is not None and len(series) > 1:
+                s = pd.DataFrame({"x": list(range(len(series))), "y": series})
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=s["x"], y=s["y"],
+                    mode="lines",
+                    line=dict(color=ACCENT, width=2),
+                    fill="tozeroy",
+                    fillcolor=_tint(ACCENT, 0.25),
+                    hoverinfo="skip",
+                ))
+                fig.update_layout(
+                    height=52, margin=dict(l=0, r=0, t=0, b=0),
+                    xaxis=dict(visible=False), yaxis=dict(visible=False),
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ----------------------------- Datos base (reales/sintéticos) -----------------------------
+    # Puestos y CVs
+    total_puestos = len(ss.positions) if "positions" in ss else 0
+    total_cvs = len(ss.candidates) if "candidates" in ss else 0
+
+    # Fit promedio (si cargaste CVs con "Score" lo usamos; si no, demo)
+    fits = []
+    if total_cvs:
+        for c in ss.candidates:
+            if "Score" in c and isinstance(c["Score"], (int, float)):
+                fits.append(c["Score"])
+    avg_fit = round(float(np.mean(fits)), 1) if fits else None
+
+    # Series para sparkline (estables)
+    rng = random.Random(42)
+    series_len = 24
+    s_apps = [rng.randint(30, 90) for _ in range(series_len)]
+    s_interest = [rng.randint(10, 30) for _ in range(series_len)]
+    s_reply_days = [rng.uniform(2.5, 5.8) for _ in range(series_len)]
+
+    # Valores KPI
+    kpi_apps = total_cvs if total_cvs else int(np.mean(s_apps) * 3.2)
+    kpi_interest_rate = f"{(np.mean(s_interest)/100):.1%}"
+    kpi_time_to_reply = f"{np.mean(s_reply_days):.1f} d"
+
+    # ----------------------------- KPIs (fila superior) -----------------------------
+    k1, k2, k3 = st.columns(3)
+    _kpi_card(k1, "Findem-Influenced Applications", f"{kpi_apps:,}", s_apps)
+    _kpi_card(k2, "Contact-to-interest Rate", kpi_interest_rate, s_interest)
+    _kpi_card(k3, "Time to reply (days)", kpi_time_to_reply, s_reply_days)
+
+    st.markdown("---")
+
+    # ----------------------------- Fechas semanales para barras -----------------------------
+    # últimas 10 semanas
+    N_W = 10
+    base = date.today()
+    weeks = [base - timedelta(days=7*i) for i in range(N_W)][::-1]
+    week_lbl = [w.strftime("%b %d") for w in weeks]
+
+    # ----------------------------- 1) Stacked % por canal -----------------------------
+    # Canales
+    channels = ["Inbound", "External", "ATS Candidates", "Employee Connections", "Other"]
+    # Distribuciones demo/estables
+    rng = random.Random(99)
+    dist = []
+    for _ in weeks:
+        row = [rng.randint(5, 45) for _ in channels]
+        row_sum = sum(row)
+        row = [x*100/row_sum for x in row]  # porcentaje
+        dist.append(row)
+    df_chan = pd.DataFrame(dist, columns=channels)
+    df_chan.insert(0, "Week", week_lbl)
+
+    fig_stack = go.Figure()
+    palette = [ACCENT_90, ACCENT_70, ACCENT_50, ACCENT_35, ACCENT_20]
+    for i, ch in enumerate(channels):
+        fig_stack.add_bar(
+            x=df_chan["Week"], y=df_chan[ch], name=ch, marker_color=palette[i]
+        )
+    fig_stack.update_layout(
+        barmode="stack", title="Findem-influenced Application by Hiring Channel",
+        plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        yaxis_title="%",
+        font=dict(color=TITLE_DARK),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # ----------------------------- 2) Embudo de Outreach -----------------------------
+    # Cifras demo o derivadas
+    contacted = kpi_apps if isinstance(kpi_apps, int) else 800
+    replied = max(int(contacted * 0.23), 1)
+    interested = max(int(replied * 0.6), 1)
+    interviewed = max(int(interested * 0.55), 1)
+
+    fig_funnel = go.Figure(go.Funnel(
+        y=["Contacted", "Replied", "Interested", "Interviewed"],
+        x=[contacted, replied, interested, interviewed],
+        textinfo="value+percent previous",
+        marker=dict(color=ACCENT)
+    ))
+    fig_funnel.update_layout(
+        title="Outreach Funnel Conversion",
+        plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # ----------------------------- 3) Reply rate por canal (barras H) -----------------------------
+    reply_rate = pd.DataFrame({
+        "Channel": channels,
+        "Reply %": [38, 26, 19, 25, 12]
+    })
+    fig_reply = px.bar(
+        reply_rate, x="Reply %", y="Channel", orientation="h",
+        title="Reply Rate by Hiring Channel",
+        color_discrete_sequence=[ACCENT]
+    )
+    fig_reply.update_layout(
+        plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # ----------------------------- 4) Contact-to-Interest por canal -----------------------------
+    cti = pd.DataFrame({
+        "Channel": channels,
+        "Contact-to-Interest %": [15, 11, 9, 13, 6]
+    })
+    fig_cti = px.bar(
+        cti, x="Channel", y="Contact-to-Interest %",
+        title="Contact-to-Interest Rate by Hiring Channel",
+        color_discrete_sequence=[ACCENT]
+    )
+    fig_cti.update_layout(
+        plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # ----------------------------- 5) Time to Reply por canal -----------------------------
+    ttr = pd.DataFrame({
+        "Channel": channels,
+        "Days": [3.8, 4.6, 5.1, 3.4, 4.2]
+    })
+    fig_ttr = px.bar(
+        ttr, x="Channel", y="Days", title="Time to Reply by Hiring Channel",
+        color_discrete_sequence=[ACCENT]
+    )
+    fig_ttr.update_layout(
+        plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # ----------------------------- Layout del tablero -----------------------------
+    # Fila 1: Stacked + Funnel
+    r1c1, r1c2 = st.columns([1.1, 0.9])
+    with r1c1: st.plotly_chart(fig_stack, use_container_width=True, config={"displayModeBar": False})
+    with r1c2: st.plotly_chart(fig_funnel, use_container_width=True, config={"displayModeBar": False})
+
+    # Fila 2: Reply + CTI + TTR
+    r2c1, r2c2, r2c3 = st.columns([1, 1, 1])
+    with r2c1: st.plotly_chart(fig_reply, use_container_width=True, config={"displayModeBar": False})
+    with r2c2: st.plotly_chart(fig_cti, use_container_width=True, config={"displayModeBar": False})
+    with r2c3: st.plotly_chart(fig_ttr, use_container_width=True, config={"displayModeBar": False})
 
 ROUTES = {
   "def_carga": page_def_carga, "puestos": page_puestos, "eval": page_eval, "pipeline": page_eval,
