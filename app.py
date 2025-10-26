@@ -40,9 +40,9 @@ USERS = {
 }
 
 AGENT_DEFAULT_IMAGES = {
-  "Headhunter":        "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto=format&fit=crop",
-  "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto=format&fit=crop",
-  "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto=format&fit=crop",
+  "Headhunter":        "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto-format&fit=crop",
+  "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto-format&fit=crop",
+  "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto-format&fit=crop",
 }
 LLM_MODELS = ["gpt-4o-mini","gpt-4.1","gpt-4o","claude-3.5-sonnet","claude-3-haiku","gemini-1.5-pro","mixtral-8x7b","llama-3.1-70b"]
 
@@ -85,6 +85,11 @@ ROLE_PRESETS = {
     "synth_skills": ["Atención al cliente","Registro","Caja","Facturación","SAP","HIS","Comunicación"]
   }
 }
+
+# (NUEVO y CORREGIDO) Bytes de un PDF de ejemplo mínimo para la previsualización
+DUMMY_PDF_BYTES = base64.b64decode(
+    b'JVBERi0xLjAKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzMCAzMF0vUGFyZW50IDIgMCBSPj5lbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTIgMDAwMDAgbiAKMDAwMDAwMDA5OSAwMDAwMCBuIAp0cmFpbGVyPDwvU2l6ZSA0L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMTQ3CiUlRU9G'
+)
 
 # =========================================================
 # CSS (Original)
@@ -203,14 +208,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# Persistencia (Agentes / Flujos / Roles)
+# Persistencia (Agentes / Flujos / Roles / Tareas)
 # =========================================================
 DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
-
 ROLES_FILE = DATA_DIR / "roles.json"
+TASKS_FILE = DATA_DIR / "tasks.json" # Archivo para tareas
+
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
+
+# --- TAREAS PREDETERMINADAS (para la primera carga) ---
+DEFAULT_TASKS = [
+    {"id": str(uuid.uuid4()), "titulo":"Revisar CVs top 5", "desc":"Analizar a los 5 candidatos con mayor fit para 'Business Analytics'.", "due":str(date.today() + timedelta(days=2)), "assigned_to": "Headhunter", "status": "Pendiente", "created_at": (date.today() - timedelta(days=3)).isoformat()},
+    {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "created_at": (date.today() - timedelta(days=8)).isoformat()},
+    {"id": str(uuid.uuid4()), "titulo":"Crear workflow de Onboarding", "desc":"Definir pasos en 'Flujos' para Contratado.", "due":str(date.today() - timedelta(days=1)), "assigned_to": "Admin RR.HH.", "status": "Completada", "created_at": (date.today() - timedelta(days=15)).isoformat()},
+    {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "created_at": date.today().isoformat()}
+]
 
 def load_roles():
   if ROLES_FILE.exists():
@@ -231,7 +245,14 @@ def load_json(path: Path, default):
   if path.exists():
     try: return json.loads(path.read_text(encoding="utf-8"))
     except: return default
+  # Si no existe, crea el archivo con los datos por defecto
+  if default is not None:
+      try:
+          save_json(path, default)
+      except Exception as e:
+          print(f"Error creating default file {path}: {e}")
   return default
+
 
 def save_json(path: Path, data):
   path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -241,6 +262,10 @@ def save_agents(agents): save_json(AGENTS_FILE, agents)
 def load_workflows(): return load_json(WORKFLOWS_FILE, [])
 def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 
+# --- Funciones de carga y guardado de tareas ---
+def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
+def save_tasks(tasks): save_json(TASKS_FILE, tasks)
+
 # =========================================================
 # ESTADO
 # =========================================================
@@ -248,14 +273,11 @@ ss = st.session_state
 if "auth" not in ss: ss.auth = None
 if "section" not in ss:  ss.section = "publicacion_sourcing" 
 
-# --- Estado para Tareas (acciones inline) ---
-if "tasks" not in ss:    
-    ss.tasks = [
-        {"id": str(uuid.uuid4()), "titulo":"Revisar CVs top 5", "desc":"Analizar a los 5 candidatos con mayor fit para 'Business Analytics'.", "due":str(date.today() + timedelta(days=2)), "assigned_to": "Headhunter", "status": "Pendiente", "created_at": (date.today() - timedelta(days=3)).isoformat(), "priority":"Alta"},
-        {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "created_at": (date.today() - timedelta(days=8)).isoformat(), "priority":"Media"},
-        {"id": str(uuid.uuid4()), "titulo":"Crear workflow de Onboarding", "desc":"Definir pasos en 'Flujos' para Contratado.", "due":str(date.today() - timedelta(days=1)), "assigned_to": "Admin RR.HH.", "status": "Completada", "created_at": (date.today() - timedelta(days=15)).isoformat(), "priority":"Baja"},
-        {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "created_at": date.today().isoformat(), "priority":"Alta"}
-    ]
+# --- Estado para Tareas (cargado desde archivo) ---
+if "tasks_loaded" not in ss: 
+    ss.tasks = load_tasks()
+    ss.tasks_loaded = True
+
 if "candidates" not in ss: ss.candidates = []
 if "offers" not in ss:  ss.offers = {}
 if "agents_loaded" not in ss:
@@ -285,7 +307,7 @@ if "positions" not in ss:
   ])
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
 # Para acciones inline de tareas
-if "expanded_task_id" not in ss: ss.expanded_task_id = None
+if "expanded_task_id" not in ss: ss.expanded_task_id = None # Controla el st.dialog
 if "show_assign_for" not in ss: ss.show_assign_for = None
 
 # =========================================================
@@ -423,82 +445,20 @@ def calculate_analytics(candidates):
 
 # ====== Helpers de TAREAS (Acciones) ======
 def _status_pill(s: str)->str:
-  colors = {"Pendiente": "#9AA6B2","En Proceso": "#0072E3","Completada": "#10B981"}
+  colors = {
+    "Pendiente": "#9AA6B2",
+    "En Proceso": "#0072E3",
+    "Completada": "#10B981",
+    "En Espera": "#FFB700" # (NUEVO) Estado
+  }
   c = colors.get(s, "#9AA6B2")
   return f'<span class="badge" style="border-color:{c}33;background:{c}14;color:#0A2230">{s}</span>'
 
-def _priority_pill(p: str)->str:
-  colors = {"Alta":"#E11D48","Media":"#F59E0B","Baja":"#6B7280"}
-  c = colors.get(p, "#6B7280")
-  return f'<span class="badge" style="border-color:{c}33;background:{c}14;color:#0A2230">{p}</span>'
-
-def task_detail_panel(task: dict):
-  """Panel detalle estilo ficha (como tu 2ª imagen) + visor PDF a la derecha."""
-  left, right = st.columns([0.45, 0.55])
-  with left:
-    st.markdown("#### Información")
-    st.write(f"**Id**: {task.get('id','—')}")
-    st.write(f"**Fecha de creación**: {task.get('created_at','—')}")
-    st.write(f"**Fecha de vencimiento**: {task.get('due','—')}")
-    st.write(f"**Prioridad**: {task.get('priority','Media')}")
-    ext = task.get("external_eval")
-    if ext is None:
-      ext = task.get("score") or 80
-    st.write(f"**Resultado de evaluación externa**: {ext}%")
-    st.markdown("#### Datos de negocio")
-    st.caption(task.get("business_data","—"))
-    st.markdown("#### Datos personalizados")
-    st.caption(task.get("custom_data","—"))
-
-  with right:
-    st.markdown("#### Currículum / Adjuntos")
-    pdf_bytes = task.get("pdf_bytes")
-    pdf_name = task.get("pdf_name","adjunto.pdf")
-    if pdf_bytes:
-      try:
-        b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-        st.components.v1.html(
-          f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="520px"/>',
-          height=520
-        )
-        st.download_button("Descargar PDF", data=pdf_bytes, file_name=pdf_name, use_container_width=True)
-      except Exception:
-        st.info("No se pudo renderizar el PDF, pero puedes descargarlo arriba.")
-    else:
-      st.info("La tarea no tiene PDF adjunto.")
-
-def create_task_from_flow(
-    name:str,
-    due_date:date,
-    desc:str,
-    assigned:str="Coordinador RR.HH.",
-    status:str="Pendiente",
-    priority:str="Media",
-    pdf_bytes:bytes|None=None,
-    pdf_name:str|None=None,
-    score:int|None=None
-):
-  t = {
-    "id": f"T-{int(datetime.now().timestamp())}",
-    "titulo": f"Flujo: {name}",
-    "desc": desc or "Tarea generada desde Flujos.",
-    "due": due_date.isoformat(),
-    "assigned_to": assigned,
-    "status": status,
-    "priority": priority,
-    "created_at": date.today().isoformat(),
-    "pdf_bytes": pdf_bytes,
-    "pdf_name": pdf_name or "adjunto.pdf",
-    "score": score
-  }
-  ss.tasks.insert(0, t)
-
+# (MODIFICADO) render_task_row
 def render_task_row(task: dict):
-  # Garantiza id y prioridad
-  t_id = task.get("id") or f"T-{int(datetime.now().timestamp())}"; task["id"] = t_id
-  task.setdefault("priority","Media")
-
-  col1,col2,col3,col4,col5,col6 = st.columns([2.2,1.0,1.3,1.3,1.1,1.6])
+  # 'task' es una referencia directa a un ítem en ss.tasks
+  t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
+  col1,col2,col3,col4,col5 = st.columns([3,1.2,1.6,1.6,1.8])
   with col1:
     st.markdown(f"**{task.get('titulo','—')}**")
     st.caption(task.get("desc","—"))
@@ -509,74 +469,85 @@ def render_task_row(task: dict):
   with col4:
     st.markdown(f"**Asignado a:** {task.get('assigned_to','—')}")
   with col5:
-    st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
-
-  with col6:
-    accion = st.selectbox(
-      "Acciones",
-      ["Selecciona…","Ver detalle","Asignar tarea","Tomar tarea","Eliminar"],
-      key=f"accion_{t_id}", label_visibility="collapsed"
-    )
-
+    accion = st.selectbox("Acciones", ["Selecciona…","Ver detalle","Asignar tarea","Tomar tarea","Eliminar"],
+                          key=f"accion_{t_id}", label_visibility="collapsed")
     if accion == "Ver detalle":
-      ss.expanded_task_id = t_id
+      ss.expanded_task_id = t_id # (NUEVO) Esto ahora abre el st.dialog
       ss.show_assign_for = None
-
+      st.rerun() # Rerun para que el dialog se muestre
     elif accion == "Asignar tarea":
       ss.show_assign_for = t_id
       ss.expanded_task_id = None
-
+      st.rerun()
     elif accion == "Tomar tarea":
       current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
       task["assigned_to"] = current_user
       task["status"] = "En Proceso"
+      save_tasks(ss.tasks) # Guardar cambio
       ss.show_assign_for = None; ss.expanded_task_id = None
       st.toast("Tarea tomada.")
       st.rerun()
-
     elif accion == "Eliminar":
       ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
+      save_tasks(ss.tasks) # Guardar eliminación
       ss.show_assign_for = None; ss.expanded_task_id = None
       st.warning("Tarea eliminada.")
       st.rerun()
 
-  # ----- Bloque de asignación con 2 niveles -----
+  # (MODIFICADO) Asignación inline
   if ss.show_assign_for == t_id:
     with st.container():
-      c1,c2,c3 = st.columns([1.2,1.8,0.8])
+      c1,c2,c3 = st.columns([1.5,1.5,1])
       with c1:
-        scope = st.selectbox("Destino", ["Espera","Equipo","Usuario"], key=f"assign_scope_{t_id}")
+        assign_type = st.selectbox("Tipo de Asignación", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
       with c2:
-        if scope == "Usuario":
-          user = st.selectbox("Usuario", ["Headhunter","Coordinador RR.HH.","Admin RR.HH.","Agente de Análisis","Colab","Sup","Admin"],
-                              index=0, key=f"assign_user_{t_id}")
-        else:
-          user = None
+        nuevo_assignee = ""
+        if assign_type == "En Espera":
+            nuevo_assignee = "En Espera"
+            st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
+        elif assign_type == "Equipo":
+            nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
+        elif assign_type == "Usuario":
+            nuevo_assignee = st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"val_us_{t_id}")
+      
       with c3:
         if st.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
-          if scope == "Espera":
-            task["assigned_to"] = "—"
-            task["status"] = "Pendiente"
-          elif scope == "Equipo":
-            task["assigned_to"] = "Coordinador RR.HH."
-            task["status"] = "Pendiente"
-            ss.section = "agent_tasks"   # redirigir a pestaña de equipo
-          elif scope == "Usuario":
-            task["assigned_to"] = user
-            task["status"] = "Pendiente"
-          ss.show_assign_for = None
-          st.success("Asignación actualizada.")
-          st.rerun()
+          task["assigned_to"] = nuevo_assignee
+          if assign_type == "En Espera":
+              task["status"] = "En Espera"
+          else:
+              # Si estaba en espera, la saca de ahí
+              if task["status"] == "En Espera":
+                  task["status"] = "Pendiente"
 
-  # ----- Detalle expandido tipo ficha -----
-  if ss.expanded_task_id == t_id:
-    with st.container():
-      st.markdown('<div class="k-card" style="margin-top:8px;">', unsafe_allow_html=True)
-      task_detail_panel(task)
-      st.markdown('</div>', unsafe_allow_html=True)
+          save_tasks(ss.tasks) # Guardar cambio
+          ss.show_assign_for = None
+          
+          if assign_type == "Equipo":
+              st.success("Asignado a Equipo. Redirigiendo...")
+              st.session_state.section = "agent_tasks" # Redirige
+              st.rerun()
+          else:
+              st.success("Cambios guardados.")
+              st.rerun()
+
+  # (ELIMINADO) El detalle expandido inline ya no se usa, se reemplaza por el st.dialog
+
+def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente"):
+  t = {
+    "id": str(uuid.uuid4()),
+    "titulo": f"Ejecutar flujo: {name}",
+    "desc": desc or "Tarea generada desde Flujos.",
+    "due": due_date.isoformat(),
+    "assigned_to": assigned,
+    "status": status,
+    "created_at": date.today().isoformat(),
+  }
+  ss.tasks.insert(0, t)
+  save_tasks(ss.tasks) # Guardar tarea creada
 
 # =========================================================
-# INICIALIZACIÓN DE CANDIDATOS
+# INICIALIZACIÓN DE CANDIDATOS (MODIFICADO)
 # =========================================================
 if "candidate_init" not in ss:
   initial_candidates = [
@@ -590,9 +561,10 @@ if "candidate_init" not in ss:
     c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
     c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
     c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
-    c["_bytes"] = "Contenido de CV simulado".encode()
+    # (MODIFICADO) Usar bytes de PDF válidos
+    c["_bytes"] = DUMMY_PDF_BYTES
     c["_is_pdf"] = True
-    c["_text"] = f"Simulación de CV. Experiencia 5 años. SQL, Power BI, Python, Excel. Candidato {c['Name']}."
+    c["_text"] = f"CV de {c['Name']}. Experiencia 5 años. Skills: SQL, Power BI, Python, Excel. Candidato {c['Name']}."
     c["meta"] = extract_meta(c["_text"]) 
     if c["stage"] == "Descartado": c["Score"] = random.randint(20, 34)
     if c["stage"] == "Contratado": c["Score"] = 95
@@ -668,18 +640,18 @@ def render_sidebar():
         ("Oferta","pipeline", "Oferta"), 
         ("Onboarding","pipeline", "Contratado")
     ]:
-        if txt in ["Entrevista (Gerencia)", "Oferta", "Onboarding"]:
-            if st.button(txt, key=f"sb_{sec}_{txt.replace(' ', '_')}"): 
-                ss.section = "pipeline"
-                ss.pipeline_filter = target_stage
-        elif txt == "Pipeline de Candidatos":
-              if st.button(txt, key=f"sb_{sec}"): 
-                ss.section = sec
-                ss.pipeline_filter = None
-        else:
-            if st.button(txt, key=f"sb_{sec}"): 
-                ss.section = sec
-                ss.pipeline_filter = None
+      if txt in ["Entrevista (Gerencia)", "Oferta", "Onboarding"]:
+        if st.button(txt, key=f"sb_{sec}_{txt.replace(' ', '_')}"): 
+            ss.section = "pipeline"
+            ss.pipeline_filter = target_stage
+      elif txt == "Pipeline de Candidatos":
+          if st.button(txt, key=f"sb_{sec}"): 
+            ss.section = sec
+            ss.pipeline_filter = None
+      else:
+        if st.button(txt, key=f"sb_{sec}"): 
+            ss.section = sec
+            ss.pipeline_filter = None
     
     # TAREAS
     st.markdown("#### TAREAS") 
@@ -720,14 +692,14 @@ def page_def_carga():
       nice_list = [s.strip() for s in (preset.get("nice",[]) or []) if s.strip()]
       score, exp = score_fit_by_skills(jd_text, must_list, nice_list, text)
       c = {"id": f"C{len(ss.candidates)+len(new_candidates)+1}-{int(datetime.now().timestamp())}", 
-            "Name": f.name, "Score": score, "Role": puesto, "Role_ID": id_puesto,
-            "_bytes": b, "_is_pdf": Path(f.name).suffix.lower()==".pdf", "_text": text,
-            "meta": extract_meta(text), "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(),
-            "_exp": exp, "source": "Carga Manual"}
+           "Name": f.name, "Score": score, "Role": puesto, "Role_ID": id_puesto,
+           "_bytes": b, "_is_pdf": Path(f.name).suffix.lower()==".pdf", "_text": text,
+           "meta": extract_meta(text), "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(),
+           "_exp": exp, "source": "Carga Manual"}
       new_candidates.append(c)
     for c in new_candidates:
-        if c["Score"] < 35: c["stage"] = "Descartado"
-        ss.candidates.append(c)
+      if c["Score"] < 35: c["stage"] = "Descartado"
+      ss.candidates.append(c)
     st.success(f"CVs cargados, analizados y {len(new_candidates)} enviados al Pipeline.")
     st.rerun()
 
@@ -746,13 +718,13 @@ def page_def_carga():
           nice_list = [s.strip() for s in (preset.get("nice",[]) or []) if s.strip()]
           score, exp = score_fit_by_skills(jd_text, must_list, nice_list, txt)
           c = {"id": f"C{len(ss.candidates)+len(new_candidates)+1}-{int(datetime.now().timestamp())}", 
-                "Name":f"{board}_Candidato_{i:02d}.pdf", "Score": score, "Role": puesto, "Role_ID": id_puesto,
-                "_bytes": txt.encode(), "_is_pdf": True, "_text": txt, "meta": extract_meta(txt),
-                "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(), "_exp": exp, "source": board}
+               "Name":f"{board}_Candidato_{i:02d}.pdf", "Score": score, "Role": puesto, "Role_ID": id_puesto,
+               "_bytes": DUMMY_PDF_BYTES, "_is_pdf": True, "_text": txt, "meta": extract_meta(txt), # (MODIFICADO) Usar PDF de ejemplo
+               "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(), "_exp": exp, "source": board}
           new_candidates.append(c)
       for c in new_candidates:
-          if c["Score"] < 35: c["stage"] = "Descartado"
-          ss.candidates.append(c)
+        if c["Score"] < 35: c["stage"] = "Descartado"
+        ss.candidates.append(c)
       st.success(f"Importados {len(new_candidates)} CVs de portales. Enviados al Pipeline.")
       st.rerun()
 
@@ -773,11 +745,11 @@ def page_puestos():
   if selected_pos:
     candidates_for_pos = [c for c in ss.candidates if c.get("Role") == selected_pos]
     if candidates_for_pos:
-        df_cand = pd.DataFrame(candidates_for_pos)
-        st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}), 
-                     use_container_width=True, hide_index=True)
+      df_cand = pd.DataFrame(candidates_for_pos)
+      st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}), 
+                   use_container_width=True, hide_index=True)
     else:
-        st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
+      st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
 # --------------------- EVALUACIÓN ---------------------
 def page_eval():
@@ -833,10 +805,11 @@ def page_eval():
                 if exp["extras"]: st.markdown("- **Extras:** " + ", ".join(exp["extras"]))
             with c2:
                 st.markdown("**CV (visor)**")
+                # (CORREGIDO) Esto ahora funciona porque _bytes tiene un PDF válido
                 if is_pdf and cv_bytes: 
                     pdf_viewer_embed(cv_bytes, height=420)
                 else: 
-                    st.text_area("Contenido (TXT)", cv_text, height=260)
+                    st.text_area("Contenido (TXT)", cv_text, height=420)
         else:
             st.error("No se encontraron los detalles del candidato en la sesión.")
     else:
@@ -887,24 +860,15 @@ def page_pipeline():
                             st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
                         elif new_stage == "Entrevista Telefónica":
                             st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
-                            # Crear tarea con adjunto del CV si existe
-                            create_task_from_flow(
-                                f"Programar entrevista - {card_name}",
-                                date.today()+timedelta(days=2),
-                                "Coordinar entrevista telefónica con el candidato.",
-                                assigned="Headhunter",
-                                status="Pendiente",
-                                priority="Alta" if c.get("Score",0) >= 70 else "Media",
-                                pdf_bytes=(c.get("_bytes") if c.get("_is_pdf") else None),
-                                pdf_name=c.get("Name","CV.pdf"),
-                                score=c.get("Score")
-                            )
+                            # Creamos una tarea específica
+                            create_task_from_flow(f"Programar entrevista - {card_name}", date.today()+timedelta(days=2),
+                                                  "Coordinar entrevista telefónica con el candidato.", assigned="Headhunter", status="Pendiente")
                         elif new_stage == "Contratado":
-                             st.balloons()
-                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
+                            st.balloons()
+                            st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
                         if filter_stage and new_stage != filter_stage:
-                             ss.pipeline_filter = None
-                             st.info("El filtro ha sido removido al mover el candidato de fase.")
+                            ss.pipeline_filter = None
+                            st.info("El filtro ha sido removido al mover el candidato de fase.")
                         st.rerun()
                 st.markdown("<br>", unsafe_allow_html=True) 
 
@@ -931,13 +895,13 @@ def _ensure_offer_record(cand_name: str):
 def page_offer():
   st.header("Oferta")
   st.write("Esta página ahora redirige al **Pipeline** con el filtro **Oferta**.")
-  st.info("Por favor, usa el **Pipeline** y el filtro del menú lateral para gestionar esta etapa.")
+  st.info("Por favor, usa el **Pipeline de Candidatos** y el filtro del menú lateral para gestionar esta etapa de forma visual.")
   ss.section = "pipeline"; ss.pipeline_filter = "Oferta"; st.rerun()
 
 def page_onboarding():
   st.header("Onboarding")
   st.write("Esta página ahora redirige al **Pipeline** con el filtro **Contratado**.")
-  st.info("Por favor, usa el **Pipeline** y el filtro del menú lateral para gestionar esta etapa.")
+  st.info("Por favor, usa el **Pipeline de Candidatos** y el filtro del menú lateral para gestionar esta etapa de forma visual.")
   ss.section = "pipeline"; ss.pipeline_filter = "Contratado"; st.rerun()
 
 def page_hh_tasks():
@@ -1075,12 +1039,12 @@ def page_agents():
     with c1:
       raw_img = ag.get("image") or ""
       safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
-                      else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+                  else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
       st.markdown(
         f"""
         <div style="text-align:center;margin:6px 0 12px">
           <img src="{safe_img}"
-              style="width:180px;height:180px;border-radius:999px;
+               style="width:180px;height:180px;border-radius:999px;
                       object-fit:cover;border:4px solid #F1F7FD;">
         </div>
         """, unsafe_allow_html=True
@@ -1100,16 +1064,16 @@ def page_agents():
     ag = ss.agents[ss.agent_edit_idx]
     st.markdown("### Editar agente")
     with st.form(f"agent_edit_{ss.agent_edit_idx}"):
-      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
-      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
-      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      objetivo   = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory  = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails = st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
       herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
-      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
-      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
-      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      llm_model    = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src      = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
-        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
-                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herreramientas if (herreramientas:=herramientas) else ag.get("herramientas",[]),
+                   "llm_model":llm_model,"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
 # ===================== FLUJOS =====================
@@ -1159,6 +1123,7 @@ def page_flows():
                 if st.button("✅ Aprobar"):
                   wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
                   save_workflows(ss.workflows); st.success("Aprobado.")
+                  # Al aprobar, crear (si no existe) una tarea de ejecución
                   create_task_from_flow(f"{wf['name']} (aprobado)", date.today()+timedelta(days=2), "Ejecutar flujo aprobado.", assigned="Coordinador RR.HH.", status="Pendiente")
                   st.rerun()
               with a2:
@@ -1209,20 +1174,23 @@ def page_flows():
         elif agent_idx < 0:      st.error("Debes asignar un agente.")
         else:
           wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
-                 "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
-                 "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
+                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
+                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
           if send_approval:
             wf["status"] = "Pendiente de aprobación"; st.success("Flujo enviado a aprobación.")
+            # Tarea de seguimiento de aprobación
             create_task_from_flow(f"{name} (aprobación)", date.today()+timedelta(days=2), "Dar seguimiento a aprobación del flujo.", assigned="Admin RR.HH.", status="Pendiente")
           if schedule:
             if puede_aprobar:
               wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success("Flujo programado.")
+              # Tarea de ejecución programada
               create_task_from_flow(f"{name} (programado)", run_date, f"Ejecutar flujo el {run_date} a las {run_time.strftime('%H:%M')}.", assigned="Coordinador RR.HH.", status="Pendiente")
             else:
               wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info("Pendiente de aprobación.")
               create_task_from_flow(f"{name} (pend. aprobación)", date.today()+timedelta(days=1), "Revisar y aprobar flujo programado.", assigned="Admin RR.HH.", status="Pendiente")
           if save_draft:
             st.success("Borrador guardado.")
+            # Opcional: tarea en proceso para completar diseño del flujo
             create_task_from_flow(f"{name} (borrador)", date.today()+timedelta(days=3), "Completar definición del flujo.", assigned="Coordinador RR.HH.", status="Pendiente")
           ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
 
@@ -1267,44 +1235,42 @@ def page_analytics():
       fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
       st.plotly_chart(fig_pie, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (sin crear rápida) =====================
+# ===================== TODAS LAS TAREAS (Acciones) =====================
+# (MODIFICADO)
 def page_create_task():
     st.header("Todas las Tareas")
-    st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
-
+    st.info("Muestra todas las tareas registradas en el sistema, incluyendo las asignadas manualmente y por flujos.")
     if not ss.tasks:
         st.write("No hay tareas registradas en el sistema.")
         return
 
-    df_tasks = pd.DataFrame(ss.tasks)
+    # --- Iterar sobre la lista de tareas (ss.tasks) ---
+    tasks_list = ss.tasks.copy() 
+    
+    # Obtener estados únicos de la lista de tareas
+    all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
+    # Agregar 'En Espera' si no está presente, para el filtro
+    if "En Espera" not in all_statuses_set: 
+        all_statuses_set.add("En Espera")
+    all_statuses = ["Todos"] + sorted(list(all_statuses_set))
+    
+    selected_status = st.selectbox("Filtrar por Estado", all_statuses, index=0)
+    
+    # Filtrar la lista de diccionarios
+    tasks_to_show = tasks_list if selected_status=="Todos" else [t for t in tasks_list if t.get("status") == selected_status]
 
-    # Filtro por Estado (opcional)
-    all_statuses = ["Todos"] + sorted(df_tasks["status"].unique())
-    selected_status = st.selectbox("Estado", all_statuses, index=0)
-    tasks_to_show = df_tasks if selected_status=="Todos" else df_tasks[df_tasks["status"] == selected_status]
+    if not tasks_to_show:
+        st.info(f"No hay tareas con el estado '{selected_status}'.")
+        return
 
-    # Cabecera tipo tabla (visual)
-    st.markdown("""
-    <table style="width:100%; border-spacing:0 8px;">
-      <thead>
-        <tr style="text-align:left; color:#1B2A3C;">
-          <th style="width:18%;">ID</th>
-          <th style="width:32%;">Título</th>
-          <th style="width:15%;">Asignado a</th>
-          <th style="width:15%;">Vencimiento</th>
-          <th style="width:10%;">Prioridad</th>
-          <th style="width:10%;">Acciones</th>
-        </tr>
-      </thead>
-    </table>
-    """, unsafe_allow_html=True)
-
-    # Render tipo tarjeta por fila
-    for _, row in tasks_to_show.iterrows():
-        task = dict(row)
-        st.markdown('<div class="k-card">', unsafe_allow_html=True)
+    # Render tipo “tarjeta” + acciones inline (sin cambiar estilos)
+    for task in tasks_to_show:
+        # 'task' es ahora una referencia al dict en ss.tasks
+        st.markdown('<div class="k-card" style="margin-bottom:8px;">', unsafe_allow_html=True) 
         render_task_row(task)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- (ELIMINADO) Formulario de "Crear Tarea Rápida" ---
 
 # =========================================================
 # ROUTER
@@ -1331,3 +1297,51 @@ ROUTES = {
 if require_auth():
   render_sidebar()
   ROUTES.get(ss.section, page_def_carga)()
+
+  # (NUEVO) LÓGICA DEL DIALOG (MODAL) PARA "VER DETALLE"
+  # Esto se ejecuta después de renderizar la página principal
+  if ss.expanded_task_id:
+      # Buscar la tarea en la lista de sesión
+      task_data = next((t for t in ss.tasks if t.get("id") == ss.expanded_task_id), None)
+      
+      if task_data:
+          with st.dialog("Detalle de Tarea", width="large"):
+              st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+              
+              c1, c2, c3 = st.columns(3)
+              with c1:
+                  st.markdown(f"**Asignado a:**")
+                  st.markdown(f"`{task_data.get('assigned_to', 'N/A')}`")
+              with c2:
+                  st.markdown(f"**Vencimiento:**")
+                  st.markdown(f"`{task_data.get('due', 'N/A')}`")
+              with c3:
+                  st.markdown(f"**Estado:**")
+                  st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+
+              st.markdown("---")
+              st.markdown("**Descripción:**")
+              st.markdown(task_data.get('desc', 'Sin descripción.'))
+              st.markdown("---")
+              
+              # Simulación de la interfaz de la imagen
+              st.markdown("**Actividad Reciente:**")
+              st.markdown(f"""
+              - Tarea creada el {task_data.get('created_at', 'N/A')}
+              - *No hay más actividad registrada.*
+              """)
+              
+              with st.form("comment_form"):
+                  st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
+                  submitted = st.form_submit_button("Enviar Comentario")
+                  if submitted:
+                      st.toast("Comentario (aún no) guardado.")
+                      # Aquí iría la lógica para guardar el comentario
+              
+              if st.button("Cerrar", key="close_dialog"):
+                  ss.expanded_task_id = None
+                  st.rerun()
+      else:
+          # Si la tarea no se encuentra (ej. fue eliminada), resetea el ID
+          ss.expanded_task_id = None
+          st.rerun()
