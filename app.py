@@ -527,8 +527,14 @@ def render_sidebar():
                 ss.section = sec
                 ss.pipeline_filter = None
     
+    user_role = ss.auth['role'] if ss.auth else 'Guest'
+    
     st.markdown("#### TAREAS") 
-    if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task" 
+    
+    # REGLA: "Todas las tareas" solo para Administrador
+    if user_role == 'Administrador':
+      if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task" 
+    
     if st.button("Asignado a mi", key="sb_task_hh"): ss.section = "hh_tasks" 
     if st.button("Asignado a mi equipo", key="sb_task_agente"): ss.section = "agent_tasks" 
     
@@ -851,7 +857,25 @@ def page_create_task():
       st.write("No hay tareas registradas en el sistema.")
   else:
       df_tasks = pd.DataFrame(ss.tasks)
-      st.dataframe(df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      
+      # Añadir columna de Acciones (simulada)
+      df_tasks['Acciones'] = [
+          f"""
+          <div style='display:flex; justify-content:center;'>
+            <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+            <button title="Asignar Tarea" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Asignar Tarea {i+1}")'>👤</button>
+            <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+            <button title="Eliminar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: red;' onclick='alert("Eliminar Tarea {i+1}")'>🗑️</button>
+          </div>
+          """ for i in range(len(df_tasks))
+      ]
+
+      df_display = df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+      
+      st.markdown(
+        df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+        unsafe_allow_html=True
+      )
 
   st.markdown("---")
   st.subheader("Crear Tarea Rápida")
@@ -1129,7 +1153,7 @@ def page_flows():
 
           ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
           
-          # 3. MANTENEMOS EN LA PESTAÑA: solo recargamos para actualizar la lista de flujos.
+          # 3. MANTENEMOS EN LA PESTAÑA: Recargamos para ver la lista de flujos actualizada.
           st.rerun()
 
 # ===================== ANALYTICS (Mejorado) =====================
@@ -1202,7 +1226,21 @@ def page_agent_tasks():
       team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
       
       if not team_tasks.empty:
-          st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
       else:
           st.info("No hay tareas pendientes asignadas directamente al equipo.")
 
@@ -1215,7 +1253,25 @@ def page_create_task():
       st.write("No hay tareas registradas en el sistema.")
   else:
       df_tasks = pd.DataFrame(ss.tasks)
-      st.dataframe(df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      
+      # Añadir columna de Acciones (simulada)
+      df_tasks['Acciones'] = [
+          f"""
+          <div style='display:flex; justify-content:space-around; width: 130px;'>
+            <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+            <button title="Asignar Tarea" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Asignar Tarea {i+1}")'>👤</button>
+            <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+            <button title="Eliminar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: red;' onclick='alert("Eliminar Tarea {i+1}")'>🗑️</button>
+          </div>
+          """ for i in range(len(df_tasks))
+      ]
+
+      df_display = df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+      
+      st.markdown(
+        df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+        unsafe_allow_html=True
+      )
 
   st.markdown("---")
   st.subheader("Crear Tarea Rápida")
