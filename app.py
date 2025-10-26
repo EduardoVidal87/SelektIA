@@ -163,16 +163,23 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
 /* Login */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
-.login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
+.login-card{{
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    padding:0;
+    width: min(450px, 92vw); /* Ancho contenido para el formulario */
+    text-align: center; /* Centra elementos de bloque en el contenedor */
+}}
 .login-logo-wrap{{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:14px}}
 .login-sub{{color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px}}
 .login-card [data-testid="stTextInput"] input {{
   background:#10283f !important; color:#E7F0FA !important; border:1.5px solid #1d3a57 !important;
   border-radius:24px !important; height:48px !important; padding:0 16px !important;
 }}
-/* Ajustes para centrar y reducir el ancho de los inputs de login */
+/* Aseguramos que los inputs tomen el ancho del contenedor de 450px */
 .login-card .stTextInput {{
-  max-width: 320px; /* Ancho máximo para los inputs */
+  max-width: 100%; 
   margin-left: auto;
   margin-right: auto;
 }}
@@ -180,7 +187,7 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   width:160px !important; border-radius:24px !important; 
   margin-left: auto;
   margin-right: auto;
-  display: block; /* Asegura que el botón se centre con margin auto */
+  display: block; 
 }}
 
 /* Status chip para pipeline */
@@ -468,26 +475,32 @@ def asset_logo_wayki():
 def login_screen():
   st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
   try:
+    # Contenido del logo y sub encabezado (centrado por .login-logo-wrap)
     st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
     st.image(asset_logo_wayki(), width=120)
+    st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
   except:
     pass
-  st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
+  
   with st.form("login_form", clear_on_submit=False):
-    # Usar st.columns para centrar los inputs visualmente en un ancho menor
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2: # Contenedor central para los inputs
-      u = st.text_input("Usuario")
-      p = st.text_input("Contraseña", type="password")
-      ok = st.form_submit_button("Ingresar")
-      if ok:
-        if u in USERS and USERS[u]["password"] == p:
-          st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
-          st.success("Bienvenido.")
-          st.rerun()
-        else:
-          st.error("Usuario o contraseña incorrectos.")
+    # Inputs (centrados por CSS)
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
+    
+    # Botón (centrado por CSS)
+    st.markdown('<div style="text-align: center;">', unsafe_allow_html=True)
+    ok = st.form_submit_button("Ingresar")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if ok:
+      if u in USERS and USERS[u]["password"] == p:
+        st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
+        st.success("Bienvenido.")
+        st.rerun()
+      else:
+        st.error("Usuario o contraseña incorrectos.")
+        
   st.markdown("</div></div>", unsafe_allow_html=True)
 
 
@@ -923,16 +936,6 @@ def page_create_task():
 
   st.markdown("---")
   # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
-  # st.subheader("Crear Tarea Rápida")
-  # with st.form("t_form"):
-  #   titulo = st.text_input("Título")
-  #   desc = st.text_area("Descripción", height=150)
-  #   due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
-  #   assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
-  #   ok = st.form_submit_button("Guardar")
-  #   if ok:
-  #     ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
-  #     st.success("Tarea creada.")
 
 # ===================== AGENTES (Corrección de NameError) =====================
 def page_agents():
@@ -1335,122 +1338,1752 @@ def page_create_task():
 
   st.markdown("---")
   # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
-  # st.subheader("Crear Tarea Rápida")
-  # with st.form("t_form"):
-  #   titulo = st.text_input("Título")
-  #   desc = st.text_area("Descripción", height=150)
-  #   due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
-  #   assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
-  #   ok = st.form_submit_button("Guardar")
-  #   if ok:
-  #     ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
-  #     st.success("Tarea creada.")
 
-# =========================================================
-# PIPELINE (Vista Kanban)
-# =========================================================
+# ===================== AGENTES (Corrección de NameError) =====================
+def page_agents():
+  st.header("Agentes")
 
-def page_pipeline():
-    filter_stage = ss.get("pipeline_filter")
-    
-    if filter_stage:
-        st.header(f"Pipeline: Candidatos en Fase '{filter_stage}'")
-        candidates_to_show = [c for c in ss.candidates if c.get("stage") == filter_stage]
+  st.subheader("Crear / Editar agente")
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      if ss.new_role_mode:
+        ss.agent_view_idx = None; ss.agent_edit_idx = None
+      st.rerun()
+
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
+
+  st.subheader("Tus agentes")
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+    return
+
+  cols_per_row = 5
+  agents_list = ss.agents if ss.agents is not None else []
+
+  for i in range(0, len(agents_list), cols_per_row):
+    row_agents = agents_list[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
+      idx = i + j
+      with cols[j]:
+        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """, unsafe_allow_html=True
+        )
+        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+          if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
+            ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
+            ss.agent_edit_idx = None
+            st.rerun()
+        with c2:
+          if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
+            ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
+            ss.agent_view_idx = None
+            st.rerun()
+        with c3:
+          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
+            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado.")
+            st.rerun()
+        with c4:
+          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
+            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado.")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_view_idx]
+
+    st.markdown("### Detalle del agente")
+    st.caption("Modelo LLM")
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+      raw_img = ag.get("image") or ""
+      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
+                   else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+      st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+              style="width:180px;height:180px;border-radius:999px;
+                     object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """, unsafe_allow_html=True
+      )
+      st.caption("Modelo LLM")
+      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    with c2:
+      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_edit_idx]
+    st.markdown("### Editar agente")
+    with st.form(f"agent_edit_{ss.agent_edit_idx}"):
+      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      if st.form_submit_button("Guardar cambios"):
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
+                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        save_agents(ss.agents); st.success("Agente actualizado.")
+        st.rerun()
+
+# ===================== FLUJOS (con redireccion) =====================
+def page_flows():
+  st.header("Flujos")
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor","Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+  with left:
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+      st.info("No hay flujos aún. Crea uno a la derecha.")
     else:
-        st.header("Pipeline de Candidatos (Vista Kanban)")
-        candidates_to_show = ss.candidates
-        
-    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
-    
-    if not candidates_to_show and filter_stage:
-         st.info(f"No hay candidatos en la fase **{filter_stage}**.")
-         return
-    elif not ss.candidates:
-         st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**.")
-         return
+      rows = []
+      for wf in ss.workflows:
+        ag_label = "—"; ai = wf.get("agent_idx",-1)
+        if 0 <= ai < len(ss.agents):
+          ag_label = ss.agents[ai].get("rol","Agente")
+        rows.append({"ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
+                      "Agente": ag_label, "Estado": wf.get("status","Borrador"),
+                      "Programado": wf.get("schedule_at","—")})
+      df = pd.DataFrame(rows)
+      st.dataframe(df, use_container_width=True, height=260)
+      if rows:
+        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
+                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        if wf:
+          c1,c2,c3 = st.columns(3)
+          with c1:
+            if st.button("🧬 Duplicar"):
+              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              st.rerun()
+          with c2:
+            if st.button("🗑 Eliminar"):
+              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
+              st.success("Flujo eliminado.")
+              st.rerun()
+          with c3:
+            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
+              a1,a2 = st.columns(2)
+              with a1:
+                if st.button("✅ Aprobar"):
+                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.success("Aprobado.")
+                  st.rerun()
+              with a2:
+                if st.button("❌ Rechazar"):
+                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.warning("Rechazado.")
+                  st.rerun()
 
-    candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
-    for c in candidates_to_show:
-        candidates_by_stage[c["stage"]].append(c)
+  with right:
+    st.subheader("Crear / Editar flujo")
+    with st.form("wf_form"):
+      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      name = st.text_input("Name*", value="Analizar CV")
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
+      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
+      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
 
-    cols = st.columns(len(PIPELINE_STAGES))
+      st.markdown("**Job Description (elige una opción)**")
+      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_from_file = ""
+      if jd_file is not None:
+        jd_from_file = extract_text_from_file(jd_file)
+        st.caption("Vista previa del JD extraído (solo texto):")
+        st.text_area("Preview", jd_from_file[:4000], height=160)
 
-    for i, stage in enumerate(PIPELINE_STAGES):
-        with cols[i]:
-            st.markdown(f"**{stage} ({len(candidates_by_stage[stage])})**", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            for c in candidates_by_stage[stage]:
-                card_name = c["Name"].split('_')[-1].replace('.pdf', '').replace('.txt', '')
-                
-                st.markdown(f"""
-                <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
-                    <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
-                    <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
-                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
-                    <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
-                    current_stage_index = PIPELINE_STAGES.index(stage)
-                    available_stages = [s for s in PIPELINE_STAGES if s != stage]
-                    
-                    try:
-                        default_index = available_stages.index(PIPELINE_STAGES[min(current_stage_index + 1, len(PIPELINE_STAGES) - 1)])
-                    except ValueError:
-                        default_index = 0
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      if ss.agents:
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_idx = int(agent_pick.split(" — ")[0])
+      else:
+        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+        agent_idx = -1
 
-                    new_stage = st.selectbox(
-                        "Mover a:", 
-                        available_stages, 
-                        key=f"select_move_{c['id']}",
-                        index=default_index,
-                        label_visibility="collapsed"
-                    )
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+      col_a, col_b, col_c = st.columns(3)
+      save_draft       = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
 
-                    if st.form_submit_button("Mover Candidato"):
-                        c["stage"] = new_stage
-                        
-                        if new_stage == "Descartado":
-                            st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
-                        elif new_stage == "Entrevista Telefónica":
-                            st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
-                        elif new_stage == "Contratado":
-                             st.balloons()
-                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
-                        
-                        if filter_stage and new_stage != filter_stage:
-                             ss.pipeline_filter = None
-                             st.info("El filtro ha sido removido al mover el candidato de fase.")
+      if save_draft or send_approval or schedule:
+        jd_final = jd_from_file if jd_from_file else jd_text
+        if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
+        elif agent_idx < 0:      st.error("Debes asignar un agente.")
+        else:
+          wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
+                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
+                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
+          
+          # LÓGICA DE CREACIÓN DE TAREA ASOCIADA AL FLUJO
+          agent_role = ss.agents[agent_idx].get("rol", "Agente de Análisis") if agent_idx >= 0 and agent_idx < len(ss.agents) else "Agente de Análisis"
+          task_title = f"Flujo '{name}': Revisar resultados de Scoring"
+          
+          ss.tasks.append({
+              "titulo": task_title,
+              "desc": f"El flujo '{name}' ha sido ejecutado/programado. Tarea: {desc[:50]}...",
+              "due": str(run_date),
+              "assigned_to": agent_role, 
+              "status": "Pendiente"
+          })
+          
+          # 2. Actualizar el estado del flujo y mostrar éxito
+          if send_approval: wf["status"] = "Pendiente de aprobación"; st.success(f"Flujo enviado a aprobación y tarea '{task_title}' creada.")
+          if schedule:
+            if puede_aprobar:
+              wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success(f"Flujo programado y tarea '{task_title}' creada.")
+            else:
+              wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info(f"Pendiente de aprobación. Tarea '{task_title}' creada.")
+          if save_draft: st.success("Borrador guardado.")
 
-                        st.rerun()
+          ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
+          
+          # 3. MANTENEMOS EN LA PESTAÑA: Recargamos para ver la lista de flujos actualizada.
+          st.rerun()
 
-                st.markdown("<br>", unsafe_allow_html=True)
+# ===================== ANALYTICS (Mejorado) =====================
+def page_analytics():
+  st.header("Analytics y KPIs Estratégicos")
+
+  analisis = calculate_analytics(ss.candidates)
+  
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = analisis["avg_fit"]
+  time_to_hire = analisis["time_to_hire"]
+  
+  # Diseño de la 1ra imagen (Métricas Top)
+  c1,c2,c3,c4 = st.columns(4)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en Pipeline", total_cvs)
+  c3.metric("Fit promedio (skills)", f"{avg_fit}%")
+  c4.metric("Tiempo a Contratar", time_to_hire, delta="12% mejor vs. benchmark")
+  
+  st.markdown("---")
+  
+  # Diseño de la 2da imagen (Gráficos)
+  col_fit, col_funnel = st.columns(2)
+  
+  with col_fit:
+      st.subheader("Distribución de Coincidencia (Fit)")
+      if total_cvs:
+        bins=[]
+        jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+        must, nice = preset.get("must",[]), preset.get("nice",[])
+        for c in ss.candidates:
+          txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+        df=pd.DataFrame({"Fit band":bins})
+        fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
+        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+        st.plotly_chart(fig, use_container_width=True)
+      else:
+        st.info("Carga CVs para ver la distribución de Fit.")
+  
+  with col_funnel:
+      st.subheader("Embudo de Conversión (Pipeline)")
+      df_funnel = analisis["funnel_data"]
+      df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
+      
+      fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Tasa de Conversión por Fase")
+      fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
+      st.plotly_chart(fig_funnel, use_container_width=True)
+      
+  st.markdown("---")
+  
+  st.subheader("Fuentes de Adquisición de Talento")
+  if analisis["source_counts"]:
+      df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
+      fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+      st.plotly_chart(fig_pie, use_container_width=True)
 
 
-# =========================================================
-# ROUTER
-# =========================================================
-ROUTES = {
-  "publicacion_sourcing": page_def_carga,
-  "puestos": page_puestos,
-  "eval": page_eval,
-  "pipeline": page_pipeline,
-  "interview": page_interview, 
-  "offer": page_offer,         
-  "onboarding": page_onboarding, 
-  "hh_tasks": page_hh_tasks,
-  "agents": page_agents,
-  "flows": page_flows,
-  "agent_tasks": page_agent_tasks,
-  "analytics": page_analytics,
-  "create_task": page_create_task,
-}
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
 
-# =========================================================
-# APP
-# =========================================================
-if require_auth():
-  render_sidebar()
-  ROUTES.get(ss.section, page_def_carga)()
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
+      else:
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
+  
+  if not ss.tasks:
+      st.write("No hay tareas registradas en el sistema.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      
+      # Generar la tabla con el selectbox simulado
+      rows = []
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
+      
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
+
+  st.markdown("---")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
+
+# ===================== AGENTES (Corrección de NameError) =====================
+def page_agents():
+  st.header("Agentes")
+
+  st.subheader("Crear / Editar agente")
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      if ss.new_role_mode:
+        ss.agent_view_idx = None; ss.agent_edit_idx = None
+      st.rerun()
+
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
+
+  st.subheader("Tus agentes")
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+    return
+
+  cols_per_row = 5
+  agents_list = ss.agents if ss.agents is not None else []
+
+  for i in range(0, len(agents_list), cols_per_row):
+    row_agents = agents_list[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
+      idx = i + j
+      with cols[j]:
+        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """, unsafe_allow_html=True
+        )
+        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+          if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
+            ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
+            ss.agent_edit_idx = None
+            st.rerun()
+        with c2:
+          if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
+            ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
+            ss.agent_view_idx = None
+            st.rerun()
+        with c3:
+          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
+            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado.")
+            st.rerun()
+        with c4:
+          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
+            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado.")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_view_idx]
+
+    st.markdown("### Detalle del agente")
+    st.caption("Modelo LLM")
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+      raw_img = ag.get("image") or ""
+      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
+                   else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+      st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+              style="width:180px;height:180px;border-radius:999px;
+                     object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """, unsafe_allow_html=True
+      )
+      st.caption("Modelo LLM")
+      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    with c2:
+      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_edit_idx]
+    st.markdown("### Editar agente")
+    with st.form(f"agent_edit_{ss.agent_edit_idx}"):
+      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      if st.form_submit_button("Guardar cambios"):
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
+                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        save_agents(ss.agents); st.success("Agente actualizado.")
+        st.rerun()
+
+# ===================== FLUJOS (con redireccion) =====================
+def page_flows():
+  st.header("Flujos")
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor","Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+  with left:
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+      st.info("No hay flujos aún. Crea uno a la derecha.")
+    else:
+      rows = []
+      for wf in ss.workflows:
+        ag_label = "—"; ai = wf.get("agent_idx",-1)
+        if 0 <= ai < len(ss.agents):
+          ag_label = ss.agents[ai].get("rol","Agente")
+        rows.append({"ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
+                      "Agente": ag_label, "Estado": wf.get("status","Borrador"),
+                      "Programado": wf.get("schedule_at","—")})
+      df = pd.DataFrame(rows)
+      st.dataframe(df, use_container_width=True, height=260)
+      if rows:
+        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
+                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        if wf:
+          c1,c2,c3 = st.columns(3)
+          with c1:
+            if st.button("🧬 Duplicar"):
+              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              st.rerun()
+          with c2:
+            if st.button("🗑 Eliminar"):
+              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
+              st.success("Flujo eliminado.")
+              st.rerun()
+          with c3:
+            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
+              a1,a2 = st.columns(2)
+              with a1:
+                if st.button("✅ Aprobar"):
+                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.success("Aprobado.")
+                  st.rerun()
+              with a2:
+                if st.button("❌ Rechazar"):
+                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.warning("Rechazado.")
+                  st.rerun()
+
+  with right:
+    st.subheader("Crear / Editar flujo")
+    with st.form("wf_form"):
+      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      name = st.text_input("Name*", value="Analizar CV")
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
+      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
+      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+
+      st.markdown("**Job Description (elige una opción)**")
+      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_from_file = ""
+      if jd_file is not None:
+        jd_from_file = extract_text_from_file(jd_file)
+        st.caption("Vista previa del JD extraído (solo texto):")
+        st.text_area("Preview", jd_from_file[:4000], height=160)
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      if ss.agents:
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_idx = int(agent_pick.split(" — ")[0])
+      else:
+        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+        agent_idx = -1
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+      col_a, col_b, col_c = st.columns(3)
+      save_draft       = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
+
+      if save_draft or send_approval or schedule:
+        jd_final = jd_from_file if jd_from_file else jd_text
+        if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
+        elif agent_idx < 0:      st.error("Debes asignar un agente.")
+        else:
+          wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
+                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
+                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
+          
+          # LÓGICA DE CREACIÓN DE TAREA ASOCIADA AL FLUJO
+          agent_role = ss.agents[agent_idx].get("rol", "Agente de Análisis") if agent_idx >= 0 and agent_idx < len(ss.agents) else "Agente de Análisis"
+          task_title = f"Flujo '{name}': Revisar resultados de Scoring"
+          
+          ss.tasks.append({
+              "titulo": task_title,
+              "desc": f"El flujo '{name}' ha sido ejecutado/programado. Tarea: {desc[:50]}...",
+              "due": str(run_date),
+              "assigned_to": agent_role, 
+              "status": "Pendiente"
+          })
+          
+          # 2. Actualizar el estado del flujo y mostrar éxito
+          if send_approval: wf["status"] = "Pendiente de aprobación"; st.success(f"Flujo enviado a aprobación y tarea '{task_title}' creada.")
+          if schedule:
+            if puede_aprobar:
+              wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success(f"Flujo programado y tarea '{task_title}' creada.")
+            else:
+              wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info(f"Pendiente de aprobación. Tarea '{task_title}' creada.")
+          if save_draft: st.success("Borrador guardado.")
+
+          ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
+          
+          # 3. MANTENEMOS EN LA PESTAÑA: Recargamos para ver la lista de flujos actualizada.
+          st.rerun()
+
+# ===================== ANALYTICS (Mejorado) =====================
+def page_analytics():
+  st.header("Analytics y KPIs Estratégicos")
+
+  analisis = calculate_analytics(ss.candidates)
+  
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = analisis["avg_fit"]
+  time_to_hire = analisis["time_to_hire"]
+  
+  # Diseño de la 1ra imagen (Métricas Top)
+  c1,c2,c3,c4 = st.columns(4)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en Pipeline", total_cvs)
+  c3.metric("Fit promedio (skills)", f"{avg_fit}%")
+  c4.metric("Tiempo a Contratar", time_to_hire, delta="12% mejor vs. benchmark")
+  
+  st.markdown("---")
+  
+  # Diseño de la 2da imagen (Gráficos)
+  col_fit, col_funnel = st.columns(2)
+  
+  with col_fit:
+      st.subheader("Distribución de Coincidencia (Fit)")
+      if total_cvs:
+        bins=[]
+        jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+        must, nice = preset.get("must",[]), preset.get("nice",[])
+        for c in ss.candidates:
+          txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+        df=pd.DataFrame({"Fit band":bins})
+        fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
+        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+        st.plotly_chart(fig, use_container_width=True)
+      else:
+        st.info("Carga CVs para ver la distribución de Fit.")
+  
+  with col_funnel:
+      st.subheader("Embudo de Conversión (Pipeline)")
+      df_funnel = analisis["funnel_data"]
+      df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
+      
+      fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Tasa de Conversión por Fase")
+      fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
+      st.plotly_chart(fig_funnel, use_container_width=True)
+      
+  st.markdown("---")
+  
+  st.subheader("Fuentes de Adquisición de Talento")
+  if analisis["source_counts"]:
+      df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
+      fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+      st.plotly_chart(fig_pie, use_container_width=True)
+
+
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
+      else:
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
+  
+  if not ss.tasks:
+      st.write("No hay tareas registradas en el sistema.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      
+      # Generar la tabla con el selectbox simulado
+      rows = []
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
+      
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
+
+  st.markdown("---")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
+
+# ===================== AGENTES (Corrección de NameError) =====================
+def page_agents():
+  st.header("Agentes")
+
+  st.subheader("Crear / Editar agente")
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      if ss.new_role_mode:
+        ss.agent_view_idx = None; ss.agent_edit_idx = None
+      st.rerun()
+
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
+
+  st.subheader("Tus agentes")
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+    return
+
+  cols_per_row = 5
+  agents_list = ss.agents if ss.agents is not None else []
+
+  for i in range(0, len(agents_list), cols_per_row):
+    row_agents = agents_list[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
+      idx = i + j
+      with cols[j]:
+        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """, unsafe_allow_html=True
+        )
+        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+          if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
+            ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
+            ss.agent_edit_idx = None
+            st.rerun()
+        with c2:
+          if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
+            ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
+            ss.agent_view_idx = None
+            st.rerun()
+        with c3:
+          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
+            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado.")
+            st.rerun()
+        with c4:
+          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
+            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado.")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_view_idx]
+
+    st.markdown("### Detalle del agente")
+    st.caption("Modelo LLM")
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+      raw_img = ag.get("image") or ""
+      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
+                   else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+      st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+              style="width:180px;height:180px;border-radius:999px;
+                     object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """, unsafe_allow_html=True
+      )
+      st.caption("Modelo LLM")
+      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    with c2:
+      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_edit_idx]
+    st.markdown("### Editar agente")
+    with st.form(f"agent_edit_{ss.agent_edit_idx}"):
+      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      if st.form_submit_button("Guardar cambios"):
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
+                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        save_agents(ss.agents); st.success("Agente actualizado.")
+        st.rerun()
+
+# ===================== FLUJOS (con redireccion) =====================
+def page_flows():
+  st.header("Flujos")
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor","Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+  with left:
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+      st.info("No hay flujos aún. Crea uno a la derecha.")
+    else:
+      rows = []
+      for wf in ss.workflows:
+        ag_label = "—"; ai = wf.get("agent_idx",-1)
+        if 0 <= ai < len(ss.agents):
+          ag_label = ss.agents[ai].get("rol","Agente")
+        rows.append({"ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
+                      "Agente": ag_label, "Estado": wf.get("status","Borrador"),
+                      "Programado": wf.get("schedule_at","—")})
+      df = pd.DataFrame(rows)
+      st.dataframe(df, use_container_width=True, height=260)
+      if rows:
+        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
+                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        if wf:
+          c1,c2,c3 = st.columns(3)
+          with c1:
+            if st.button("🧬 Duplicar"):
+              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              st.rerun()
+          with c2:
+            if st.button("🗑 Eliminar"):
+              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
+              st.success("Flujo eliminado.")
+              st.rerun()
+          with c3:
+            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
+              a1,a2 = st.columns(2)
+              with a1:
+                if st.button("✅ Aprobar"):
+                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.success("Aprobado.")
+                  st.rerun()
+              with a2:
+                if st.button("❌ Rechazar"):
+                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.warning("Rechazado.")
+                  st.rerun()
+
+  with right:
+    st.subheader("Crear / Editar flujo")
+    with st.form("wf_form"):
+      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      name = st.text_input("Name*", value="Analizar CV")
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
+      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
+      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+
+      st.markdown("**Job Description (elige una opción)**")
+      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_from_file = ""
+      if jd_file is not None:
+        jd_from_file = extract_text_from_file(jd_file)
+        st.caption("Vista previa del JD extraído (solo texto):")
+        st.text_area("Preview", jd_from_file[:4000], height=160)
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      if ss.agents:
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_idx = int(agent_pick.split(" — ")[0])
+      else:
+        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+        agent_idx = -1
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+      col_a, col_b, col_c = st.columns(3)
+      save_draft       = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
+
+      if save_draft or send_approval or schedule:
+        jd_final = jd_from_file if jd_from_file else jd_text
+        if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
+        elif agent_idx < 0:      st.error("Debes asignar un agente.")
+        else:
+          wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
+                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
+                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
+          
+          # LÓGICA DE CREACIÓN DE TAREA ASOCIADA AL FLUJO
+          agent_role = ss.agents[agent_idx].get("rol", "Agente de Análisis") if agent_idx >= 0 and agent_idx < len(ss.agents) else "Agente de Análisis"
+          task_title = f"Flujo '{name}': Revisar resultados de Scoring"
+          
+          ss.tasks.append({
+              "titulo": task_title,
+              "desc": f"El flujo '{name}' ha sido ejecutado/programado. Tarea: {desc[:50]}...",
+              "due": str(run_date),
+              "assigned_to": agent_role, 
+              "status": "Pendiente"
+          })
+          
+          # 2. Actualizar el estado del flujo y mostrar éxito
+          if send_approval: wf["status"] = "Pendiente de aprobación"; st.success(f"Flujo enviado a aprobación y tarea '{task_title}' creada.")
+          if schedule:
+            if puede_aprobar:
+              wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success(f"Flujo programado y tarea '{task_title}' creada.")
+            else:
+              wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info(f"Pendiente de aprobación. Tarea '{task_title}' creada.")
+          if save_draft: st.success("Borrador guardado.")
+
+          ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
+          
+          # 3. MANTENEMOS EN LA PESTAÑA: Recargamos para ver la lista de flujos actualizada.
+          st.rerun()
+
+# ===================== ANALYTICS (Mejorado) =====================
+def page_analytics():
+  st.header("Analytics y KPIs Estratégicos")
+
+  analisis = calculate_analytics(ss.candidates)
+  
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = analisis["avg_fit"]
+  time_to_hire = analisis["time_to_hire"]
+  
+  # Diseño de la 1ra imagen (Métricas Top)
+  c1,c2,c3,c4 = st.columns(4)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en Pipeline", total_cvs)
+  c3.metric("Fit promedio (skills)", f"{avg_fit}%")
+  c4.metric("Tiempo a Contratar", time_to_hire, delta="12% mejor vs. benchmark")
+  
+  st.markdown("---")
+  
+  # Diseño de la 2da imagen (Gráficos)
+  col_fit, col_funnel = st.columns(2)
+  
+  with col_fit:
+      st.subheader("Distribución de Coincidencia (Fit)")
+      if total_cvs:
+        bins=[]
+        jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+        must, nice = preset.get("must",[]), preset.get("nice",[])
+        for c in ss.candidates:
+          txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+        df=pd.DataFrame({"Fit band":bins})
+        fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
+        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+        st.plotly_chart(fig, use_container_width=True)
+      else:
+        st.info("Carga CVs para ver la distribución de Fit.")
+  
+  with col_funnel:
+      st.subheader("Embudo de Conversión (Pipeline)")
+      df_funnel = analisis["funnel_data"]
+      df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
+      
+      fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Tasa de Conversión por Fase")
+      fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
+      st.plotly_chart(fig_funnel, use_container_width=True)
+      
+  st.markdown("---")
+  
+  st.subheader("Fuentes de Adquisición de Talento")
+  if analisis["source_counts"]:
+      df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
+      fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+      st.plotly_chart(fig_pie, use_container_width=True)
+
+
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
+      else:
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
+  
+  if not ss.tasks:
+      st.write("No hay tareas registradas en el sistema.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      
+      # Generar la tabla con el selectbox simulado
+      rows = []
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
+      
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
+
+  st.markdown("---")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
+
+# ===================== AGENTES (Corrección de NameError) =====================
+def page_agents():
+  st.header("Agentes")
+
+  st.subheader("Crear / Editar agente")
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      if ss.new_role_mode:
+        ss.agent_view_idx = None; ss.agent_edit_idx = None
+      st.rerun()
+
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
+
+  st.subheader("Tus agentes")
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+    return
+
+  cols_per_row = 5
+  agents_list = ss.agents if ss.agents is not None else []
+
+  for i in range(0, len(agents_list), cols_per_row):
+    row_agents = agents_list[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
+      idx = i + j
+      with cols[j]:
+        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """, unsafe_allow_html=True
+        )
+        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+          if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
+            ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
+            ss.agent_edit_idx = None
+            st.rerun()
+        with c2:
+          if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
+            ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
+            ss.agent_view_idx = None
+            st.rerun()
+        with c3:
+          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
+            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado.")
+            st.rerun()
+        with c4:
+          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
+            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado.")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_view_idx]
+
+    st.markdown("### Detalle del agente")
+    st.caption("Modelo LLM")
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+      raw_img = ag.get("image") or ""
+      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
+                   else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+      st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+              style="width:180px;height:180px;border-radius:999px;
+                     object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """, unsafe_allow_html=True
+      )
+      st.caption("Modelo LLM")
+      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    with c2:
+      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_edit_idx]
+    st.markdown("### Editar agente")
+    with st.form(f"agent_edit_{ss.agent_edit_idx}"):
+      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      if st.form_submit_button("Guardar cambios"):
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
+                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        save_agents(ss.agents); st.success("Agente actualizado.")
+        st.rerun()
+
+# ===================== FLUJOS (con redireccion) =====================
+def page_flows():
+  st.header("Flujos")
+  vista_como = ss.auth["role"]
+  puede_aprobar = vista_como in ("Supervisor","Administrador")
+
+  left, right = st.columns([0.9, 1.1])
+  with left:
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+      st.info("No hay flujos aún. Crea uno a la derecha.")
+    else:
+      rows = []
+      for wf in ss.workflows:
+        ag_label = "—"; ai = wf.get("agent_idx",-1)
+        if 0 <= ai < len(ss.agents):
+          ag_label = ss.agents[ai].get("rol","Agente")
+        rows.append({"ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
+                      "Agente": ag_label, "Estado": wf.get("status","Borrador"),
+                      "Programado": wf.get("schedule_at","—")})
+      df = pd.DataFrame(rows)
+      st.dataframe(df, use_container_width=True, height=260)
+      if rows:
+        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
+                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        wf = next((w for w in ss.workflows if w["id"]==sel), None)
+        if wf:
+          c1,c2,c3 = st.columns(3)
+          with c1:
+            if st.button("🧬 Duplicar"):
+              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
+              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              st.rerun()
+          with c2:
+            if st.button("🗑 Eliminar"):
+              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
+              st.success("Flujo eliminado.")
+              st.rerun()
+          with c3:
+            st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
+              a1,a2 = st.columns(2)
+              with a1:
+                if st.button("✅ Aprobar"):
+                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.success("Aprobado.")
+                  st.rerun()
+              with a2:
+                if st.button("❌ Rechazar"):
+                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
+                  save_workflows(ss.workflows); st.warning("Rechazado.")
+                  st.rerun()
+
+  with right:
+    st.subheader("Crear / Editar flujo")
+    with st.form("wf_form"):
+      st.markdown("<div class='step'><div class='step-num'>1</div><div><b>Task</b><br><span style='opacity:.75'>Describe la tarea</span></div></div>", unsafe_allow_html=True)
+      name = st.text_input("Name*", value="Analizar CV")
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
+      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
+      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+
+      st.markdown("**Job Description (elige una opción)**")
+      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
+      jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_from_file = ""
+      if jd_file is not None:
+        jd_from_file = extract_text_from_file(jd_file)
+        st.caption("Vista previa del JD extraído (solo texto):")
+        st.text_area("Preview", jd_from_file[:4000], height=160)
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>2</div><div><b>Staff in charge</b><br><span style='opacity:.75'>Agente asignado</span></div></div>", unsafe_allow_html=True)
+      if ss.agents:
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_idx = int(agent_pick.split(" — ")[0])
+      else:
+        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+        agent_idx = -1
+
+      st.markdown("---")
+      st.markdown("<div class='step'><div class='step-num'>3</div><div><b>Guardar</b><br><span style='opacity:.75'>Aprobación y programación</span></div></div>", unsafe_allow_html=True)
+      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+      col_a, col_b, col_c = st.columns(3)
+      save_draft       = col_a.form_submit_button("💾 Guardar borrador")
+      send_approval  = col_b.form_submit_button("📝 Enviar a aprobación")
+      schedule       = col_c.form_submit_button("📅 Guardar y Programar")
+
+      if save_draft or send_approval or schedule:
+        jd_final = jd_from_file if jd_from_file else jd_text
+        if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
+        elif agent_idx < 0:      st.error("Debes asignar un agente.")
+        else:
+          wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
+                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
+                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
+          
+          # LÓGICA DE CREACIÓN DE TAREA ASOCIADA AL FLUJO
+          agent_role = ss.agents[agent_idx].get("rol", "Agente de Análisis") if agent_idx >= 0 and agent_idx < len(ss.agents) else "Agente de Análisis"
+          task_title = f"Flujo '{name}': Revisar resultados de Scoring"
+          
+          ss.tasks.append({
+              "titulo": task_title,
+              "desc": f"El flujo '{name}' ha sido ejecutado/programado. Tarea: {desc[:50]}...",
+              "due": str(run_date),
+              "assigned_to": agent_role, 
+              "status": "Pendiente"
+          })
+          
+          # 2. Actualizar el estado del flujo y mostrar éxito
+          if send_approval: wf["status"] = "Pendiente de aprobación"; st.success(f"Flujo enviado a aprobación y tarea '{task_title}' creada.")
+          if schedule:
+            if puede_aprobar:
+              wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success(f"Flujo programado y tarea '{task_title}' creada.")
+            else:
+              wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info(f"Pendiente de aprobación. Tarea '{task_title}' creada.")
+          if save_draft: st.success("Borrador guardado.")
+
+          ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
+          
+          # 3. MANTENEMOS EN LA PESTAÑA: Recargamos para ver la lista de flujos actualizada.
+          st.rerun()
+
+# ===================== ANALYTICS (Mejorado) =====================
+def page_analytics():
+  st.header("Analytics y KPIs Estratégicos")
+
+  analisis = calculate_analytics(ss.candidates)
+  
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = analisis["avg_fit"]
+  time_to_hire = analisis["time_to_hire"]
+  
+  # Diseño de la 1ra imagen (Métricas Top)
+  c1,c2,c3,c4 = st.columns(4)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en Pipeline", total_cvs)
+  c3.metric("Fit promedio (skills)", f"{avg_fit}%")
+  c4.metric("Tiempo a Contratar", time_to_hire, delta="12% mejor vs. benchmark")
+  
+  st.markdown("---")
+  
+  # Diseño de la 2da imagen (Gráficos)
+  col_fit, col_funnel = st.columns(2)
+  
+  with col_fit:
+      st.subheader("Distribución de Coincidencia (Fit)")
+      if total_cvs:
+        bins=[]
+        jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+        must, nice = preset.get("must",[]), preset.get("nice",[])
+        for c in ss.candidates:
+          txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+        df=pd.DataFrame({"Fit band":bins})
+        fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
+        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+        st.plotly_chart(fig, use_container_width=True)
+      else:
+        st.info("Carga CVs para ver la distribución de Fit.")
+  
+  with col_funnel:
+      st.subheader("Embudo de Conversión (Pipeline)")
+      df_funnel = analisis["funnel_data"]
+      df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
+      
+      fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Tasa de Conversión por Fase")
+      fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
+      st.plotly_chart(fig_funnel, use_container_width=True)
+      
+  st.markdown("---")
+  
+  st.subheader("Fuentes de Adquisición de Talento")
+  if analisis["source_counts"]:
+      df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
+      fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+      st.plotly_chart(fig_pie, use_container_width=True)
+
+
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
+      else:
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
+  
+  if not ss.tasks:
+      st.write("No hay tareas registradas en el sistema.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      
+      # Generar la tabla con el selectbox simulado
+      rows = []
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
+      
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
+
+  st.markdown("---")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
+
+# ===================== AGENTES (Corrección de NameError) =====================
+def page_agents():
+  st.header("Agentes")
+
+  st.subheader("Crear / Editar agente")
+  left, _ = st.columns([0.25, 0.75])
+  with left:
+    if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"):
+      ss.new_role_mode = not ss.new_role_mode
+      if ss.new_role_mode:
+        ss.agent_view_idx = None; ss.agent_edit_idx = None
+      st.rerun()
+
+  if ss.new_role_mode:
+    st.info("Completa el formulario para crear un nuevo rol/agente.")
+    with st.form("agent_new_form"):
+      c1, c2 = st.columns(2)
+      with c1:
+        role_name  = st.text_input("Rol*", value="")
+        objetivo   = st.text_input("Objetivo*", value="Identificar a los mejores profesionales para el cargo definido en el JD")
+        backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
+        guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
+      with c2:
+        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      saved = st.form_submit_button("Guardar/Actualizar Agente")
+      if saved:
+        rn = (role_name or "").strip()
+        if not rn:
+          st.error("El campo Rol* es obligatorio.")
+        else:
+          ss.agents.append({
+            "rol": rn, "objetivo": objetivo, "backstory": backstory,
+            "guardrails": guardrails, "herramientas": herramientas,
+            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "ts": datetime.utcnow().isoformat()
+          })
+          save_agents(ss.agents)
+          roles_new = sorted(list({*ss.roles, rn})); ss.roles = roles_new; save_roles(roles_new)
+          st.success("Agente creado.")
+          ss.new_role_mode = False
+          st.rerun()
+
+  st.subheader("Tus agentes")
+  if not ss.agents:
+    st.info("Aún no hay agentes. Crea el primero con **➕ Nuevo**.")
+    return
+
+  cols_per_row = 5
+  agents_list = ss.agents if ss.agents is not None else []
+
+  for i in range(0, len(agents_list), cols_per_row):
+    row_agents = agents_list[i:i+cols_per_row]
+    cols = st.columns(cols_per_row)
+    for j, ag in enumerate(row_agents):
+      idx = i + j
+      with cols[j]:
+        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+        st.markdown(
+          f"""
+          <div class="agent-card">
+            <img src="{img}">
+            <div class="agent-title">{ag.get('rol','—')}</div>
+            <div class="agent-sub">{ag.get('objetivo','—')}</div>
+          </div>
+          """, unsafe_allow_html=True
+        )
+        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+          if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
+            ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx)
+            ss.agent_edit_idx = None
+            st.rerun()
+        with c2:
+          if st.button("✏", key=f"ag_e_{idx}", help="Editar"):
+            ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx)
+            ss.agent_view_idx = None
+            st.rerun()
+        with c3:
+          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"):
+            clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"
+            ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado.")
+            st.rerun()
+        with c4:
+          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"):
+            ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado.")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_view_idx]
+
+    st.markdown("### Detalle del agente")
+    st.caption("Modelo LLM")
+    st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+      raw_img = ag.get("image") or ""
+      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip()
+                   else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+      st.markdown(
+        f"""
+        <div style="text-align:center;margin:6px 0 12px">
+          <img src="{safe_img}"
+              style="width:180px;height:180px;border-radius:999px;
+                     object-fit:cover;border:4px solid #F1F7FD;">
+        </div>
+        """, unsafe_allow_html=True
+      )
+      st.caption("Modelo LLM")
+      st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+    with c2:
+      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+  if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
+    ag = ss.agents[ss.agent_edit_idx]
+    st.markdown("### Editar agente")
+    with st.form(f"agent_edit_{ss.agent_edit_idx}"):
+      objetivo  = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+      backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+      guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
+      perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+      if st.form_submit_button("Guardar cambios"):
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas":herramientas,
+                  "llm_model":llm_model,"image":img_src,"perms":perms})
+        save_agents(ss.agents); st.success("Agente actualizado.")
+        st.rerun()
