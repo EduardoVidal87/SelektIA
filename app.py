@@ -40,9 +40,9 @@ USERS = {
 }
 
 AGENT_DEFAULT_IMAGES = {
-  "Headhunter":        "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto=format&fit=crop",
-  "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto=format&fit=crop",
-  "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto=format&fit=crop",
+  "Headhunter":        "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?q=80&w=512&auto-format&fit=crop",
+  "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto-format&fit=crop",
+  "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto-format&fit=crop",
 }
 LLM_MODELS = ["gpt-4o-mini","gpt-4.1","gpt-4o","claude-3.5-sonnet","claude-3-haiku","gemini-1.5-pro","mixtral-8x7b","llama-3.1-70b"]
 
@@ -85,6 +85,19 @@ ROLE_PRESETS = {
     "synth_skills": ["Atención al cliente","Registro","Caja","Facturación","SAP","HIS","Comunicación"]
   }
 }
+
+# (NUEVO) Bytes de un PDF de ejemplo mínimo para la previsualización
+DUMMY_PDF_BYTES = base64.b64decode(
+    "JVBERi0xLjEKJSAxIDAgb2JqPDwvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlIC9QYWdlcyAvS2lkcyBb"
+    "MyAwIFJdIC9Db3VudCAxPj4KZW5kb2JqCjMgMCBvYmoKPDwvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJveCBbMCAwIDMwMCAxNDBdIC9Db250"
+    "ZW50cyA0IDAgUiAvUmVzb3VyY2VzPDwvUHJvY1ZldCBbL1BERiAvVGV4dF0gL0ZvbnQ8PC9GMSA1IDAgUj4+Pj4+CmVuZG9iago0IDAgb2JqPDwvTGVuZ3Ro"
+    "IDc3Pj5zdHJlYW0KQVQKL1RleHQgYmVnaW4KL0YxIDEyIFRmCjEwIDExMCBUZAooQ1YgZGUgRXF1aXBbyApIFRqIAoxMCA5MCBUZChEb2N1bWVudG8gZGUg"
+    "cHJ1ZWJhKVRqIAplbmR0ZXh0CmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZl"
+    "dGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTAgMDAwMDAgbiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAw"
+    "MTEzIDAwMDAwIG4gCjAwMDAwMDAyOTggMDAwMDAgbiAKMDAwMDAwMDQzMiAwMDAwMCBuIAp0cmFpbGVyPDwvU2l6ZSA2IC9Sb290IDEgMCBSPj4Kc3RhcnR4"
+    "cmVmCjQ5NAolJUVPRgo="
+)
+
 
 # =========================================================
 # CSS (Original)
@@ -209,7 +222,7 @@ DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
-TASKS_FILE = DATA_DIR / "tasks.json" # NUEVO: Archivo para tareas
+TASKS_FILE = DATA_DIR / "tasks.json" # Archivo para tareas
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
@@ -240,7 +253,14 @@ def load_json(path: Path, default):
   if path.exists():
     try: return json.loads(path.read_text(encoding="utf-8"))
     except: return default
+  # Si no existe, crea el archivo con los datos por defecto
+  if default is not None:
+      try:
+          save_json(path, default)
+      except Exception as e:
+          print(f"Error creating default file {path}: {e}")
   return default
+
 
 def save_json(path: Path, data):
   path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -250,7 +270,7 @@ def save_agents(agents): save_json(AGENTS_FILE, agents)
 def load_workflows(): return load_json(WORKFLOWS_FILE, [])
 def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 
-# --- NUEVO: Funciones de carga y guardado de tareas ---
+# --- Funciones de carga y guardado de tareas ---
 def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
 def save_tasks(tasks): save_json(TASKS_FILE, tasks)
 
@@ -295,7 +315,7 @@ if "positions" not in ss:
   ])
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
 # Para acciones inline de tareas
-if "expanded_task_id" not in ss: ss.expanded_task_id = None
+if "expanded_task_id" not in ss: ss.expanded_task_id = None # (NUEVO) Controla el st.dialog
 if "show_assign_for" not in ss: ss.show_assign_for = None
 
 # =========================================================
@@ -437,10 +457,12 @@ def _status_pill(s: str)->str:
     "Pendiente": "#9AA6B2",
     "En Proceso": "#0072E3",
     "Completada": "#10B981",
+    "En Espera": "#FFB700" # (NUEVO) Estado
   }
   c = colors.get(s, "#9AA6B2")
   return f'<span class="badge" style="border-color:{c}33;background:{c}14;color:#0A2230">{s}</span>'
 
+# (MODIFICADO) render_task_row
 def render_task_row(task: dict):
   # 'task' es una referencia directa a un ítem en ss.tasks
   t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
@@ -458,57 +480,67 @@ def render_task_row(task: dict):
     accion = st.selectbox("Acciones", ["Selecciona…","Ver detalle","Asignar tarea","Tomar tarea","Eliminar"],
                           key=f"accion_{t_id}", label_visibility="collapsed")
     if accion == "Ver detalle":
-      ss.expanded_task_id = t_id
+      ss.expanded_task_id = t_id # (NUEVO) Esto ahora abre el st.dialog
       ss.show_assign_for = None
+      st.rerun() # Rerun para que el dialog se muestre
     elif accion == "Asignar tarea":
       ss.show_assign_for = t_id
       ss.expanded_task_id = None
+      st.rerun()
     elif accion == "Tomar tarea":
       current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
       task["assigned_to"] = current_user
       task["status"] = "En Proceso"
-      save_tasks(ss.tasks) # NUEVO: Guardar cambio
+      save_tasks(ss.tasks) # Guardar cambio
       ss.show_assign_for = None; ss.expanded_task_id = None
       st.toast("Tarea tomada.")
       st.rerun()
     elif accion == "Eliminar":
       ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
-      save_tasks(ss.tasks) # NUEVO: Guardar eliminación
+      save_tasks(ss.tasks) # Guardar eliminación
       ss.show_assign_for = None; ss.expanded_task_id = None
       st.warning("Tarea eliminada.")
       st.rerun()
 
-  # Asignación inline
+  # (MODIFICADO) Asignación inline
   if ss.show_assign_for == t_id:
     with st.container():
-      c1,c2,c3 = st.columns([2,2,1])
+      c1,c2,c3 = st.columns([1.5,1.5,1])
       with c1:
-        nuevo = st.selectbox("Responsable", ["Headhunter","Coordinador RR.HH.","Admin RR.HH.","Agente de Análisis","Colab","Sup","Admin"],
-                             index=1, key=f"assignee_{t_id}")
+        assign_type = st.selectbox("Tipo de Asignación", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
       with c2:
-        nuevo_st = st.selectbox("Estado", ["Pendiente","En Proceso","Completada"], index=0, key=f"state_{t_id}")
+        nuevo_assignee = ""
+        if assign_type == "En Espera":
+            nuevo_assignee = "En Espera"
+            st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
+        elif assign_type == "Equipo":
+            nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
+        elif assign_type == "Usuario":
+            nuevo_assignee = st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"val_us_{t_id}")
+      
       with c3:
         if st.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
-          task["assigned_to"] = nuevo
-          task["status"] = nuevo_st
-          save_tasks(ss.tasks) # NUEVO: Guardar cambio
-          ss.show_assign_for = None
-          st.success("Cambios guardados.")
-          st.rerun()
+          task["assigned_to"] = nuevo_assignee
+          if assign_type == "En Espera":
+              task["status"] = "En Espera"
+          else:
+              # Si estaba en espera, la saca de ahí
+              if task["status"] == "En Espera":
+                  task["status"] = "Pendiente"
 
-  # Detalle expandido
-  if ss.expanded_task_id == t_id:
-    with st.container():
-      st.markdown(
-        f"""
-        <div class="k-card" style="margin-top:8px;">
-          <div style="font-weight:700;color:{TITLE_DARK};">Detalle</div>
-          <div style="font-size:12px;opacity:.8;">Creado: {task.get('created_at','—')}</div>
-          <div style="margin-top:6px;">{task.get('desc','—')}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-      )
+          save_tasks(ss.tasks) # Guardar cambio
+          ss.show_assign_for = None
+          
+          if assign_type == "Equipo":
+              st.success("Asignado a Equipo. Redirigiendo...")
+              st.session_state.section = "agent_tasks" # Redirige
+              st.rerun()
+          else:
+              st.success("Cambios guardados.")
+              st.rerun()
+
+  # (ELIMINADO) El detalle expandido inline ya no se usa, se reemplaza por el st.dialog
+  # if ss.expanded_task_id == t_id: ...
 
 def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente"):
   t = {
@@ -521,10 +553,10 @@ def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coord
     "created_at": date.today().isoformat(),
   }
   ss.tasks.insert(0, t)
-  save_tasks(ss.tasks) # NUEVO: Guardar tarea creada
+  save_tasks(ss.tasks) # Guardar tarea creada
 
 # =========================================================
-# INICIALIZACIÓN DE CANDIDATOS
+# INICIALIZACIÓN DE CANDIDATOS (MODIFICADO)
 # =========================================================
 if "candidate_init" not in ss:
   initial_candidates = [
@@ -538,9 +570,10 @@ if "candidate_init" not in ss:
     c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
     c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
     c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
-    c["_bytes"] = "Contenido de CV simulado".encode()
+    # (MODIFICADO) Usar bytes de PDF válidos
+    c["_bytes"] = DUMMY_PDF_BYTES
     c["_is_pdf"] = True
-    c["_text"] = f"Simulación de CV. Experiencia 5 años. SQL, Power BI, Python, Excel. Candidato {c['Name']}."
+    c["_text"] = f"CV de {c['Name']}. Experiencia 5 años. Skills: SQL, Power BI, Python, Excel. Candidato {c['Name']}."
     c["meta"] = extract_meta(c["_text"]) 
     if c["stage"] == "Descartado": c["Score"] = random.randint(20, 34)
     if c["stage"] == "Contratado": c["Score"] = 95
@@ -695,7 +728,7 @@ def page_def_carga():
           score, exp = score_fit_by_skills(jd_text, must_list, nice_list, txt)
           c = {"id": f"C{len(ss.candidates)+len(new_candidates)+1}-{int(datetime.now().timestamp())}", 
                "Name":f"{board}_Candidato_{i:02d}.pdf", "Score": score, "Role": puesto, "Role_ID": id_puesto,
-               "_bytes": txt.encode(), "_is_pdf": True, "_text": txt, "meta": extract_meta(txt),
+               "_bytes": DUMMY_PDF_BYTES, "_is_pdf": True, "_text": txt, "meta": extract_meta(txt), # (MODIFICADO) Usar PDF de ejemplo
                "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(), "_exp": exp, "source": board}
           new_candidates.append(c)
       for c in new_candidates:
@@ -781,12 +814,8 @@ def page_eval():
                 if exp["extras"]: st.markdown("- **Extras:** " + ", ".join(exp["extras"]))
             with c2:
                 st.markdown("**CV (visor)**")
+                # (CORREGIDO) Esto ahora funciona porque _bytes tiene un PDF válido
                 if is_pdf and cv_bytes: 
-                    # --- CORRECCIÓN PENDIENTE: VISOR PDF ---
-                    # st.write("Visor PDF (en desarrollo)") 
-                    # Alojamos el binario en el estado de sesión para un hack de embebido
-                    # (Esto a veces falla en Streamlit Cloud por limitaciones de tamaño/estado)
-                    # La función pdf_viewer_embed DEBERÍA funcionar.
                     pdf_viewer_embed(cv_bytes, height=420)
                 else: 
                     st.text_area("Contenido (TXT)", cv_text, height=420)
@@ -1216,6 +1245,7 @@ def page_analytics():
       st.plotly_chart(fig_pie, use_container_width=True)
 
 # ===================== TODAS LAS TAREAS (Acciones) =====================
+# (MODIFICADO)
 def page_create_task():
     st.header("Todas las Tareas")
     st.info("Muestra todas las tareas registradas en el sistema, incluyendo las asignadas manualmente y por flujos.")
@@ -1223,7 +1253,7 @@ def page_create_task():
         st.write("No hay tareas registradas en el sistema.")
         return
 
-    # --- MODIFICADO: Iterar sobre la lista de tareas (ss.tasks) en lugar de un DataFrame ---
+    # --- Iterar sobre la lista de tareas (ss.tasks) ---
     tasks_list = ss.tasks.copy() 
     
     # Obtener estados únicos de la lista de tareas
@@ -1241,15 +1271,13 @@ def page_create_task():
 
     # Render tipo “tarjeta” + acciones inline (sin cambiar estilos)
     for task in tasks_to_show:
-        # 'task' es ahora una referencia al dict en ss.tasks
         st.markdown('<div class="k-card" style="margin-bottom:8px;">', unsafe_allow_html=True) 
+        # (MODIFICADO) render_task_row ahora maneja la lógica de 'Ver detalle' (dialog)
+        # y la asignación avanzada
         render_task_row(task)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ELIMINADO: Formulario de "Crear Tarea Rápida" ---
-    # st.markdown("---")
-    # st.subheader("Crear Tarea Rápida")
-    # ... (todo el st.form("t_form") ha sido eliminado) ...
+    # --- (ELIMINADO) Formulario de "Crear Tarea Rápida" ---
 
 # =========================================================
 # ROUTER
@@ -1276,3 +1304,51 @@ ROUTES = {
 if require_auth():
   render_sidebar()
   ROUTES.get(ss.section, page_def_carga)()
+
+  # (NUEVO) LÓGICA DEL DIALOG (MODAL) PARA "VER DETALLE"
+  # Esto se ejecuta después de renderizar la página principal
+  if ss.expanded_task_id:
+      # Buscar la tarea en la lista de sesión
+      task_data = next((t for t in ss.tasks if t.get("id") == ss.expanded_task_id), None)
+      
+      if task_data:
+          with st.dialog("Detalle de Tarea", width="large"):
+              st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+              
+              c1, c2, c3 = st.columns(3)
+              with c1:
+                  st.markdown(f"**Asignado a:**")
+                  st.markdown(f"`{task_data.get('assigned_to', 'N/A')}`")
+              with c2:
+                  st.markdown(f"**Vencimiento:**")
+                  st.markdown(f"`{task_data.get('due', 'N/A')}`")
+              with c3:
+                  st.markdown(f"**Estado:**")
+                  st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+
+              st.markdown("---")
+              st.markdown("**Descripción:**")
+              st.markdown(task_data.get('desc', 'Sin descripción.'))
+              st.markdown("---")
+              
+              # Simulación de la interfaz de la imagen
+              st.markdown("**Actividad Reciente:**")
+              st.markdown(f"""
+              - Tarea creada el {task_data.get('created_at', 'N/A')}
+              - *No hay más actividad registrada.*
+              """)
+              
+              with st.form("comment_form"):
+                  st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
+                  submitted = st.form_submit_button("Enviar Comentario")
+                  if submitted:
+                      st.toast("Comentario (aún no) guardado.")
+                      # Aquí iría la lógica para guardar el comentario
+              
+              if st.button("Cerrar", key="close_dialog"):
+                  ss.expanded_task_id = None
+                  st.rerun()
+      else:
+          # Si la tarea no se encuentra (ej. fue eliminada), resetea el ID
+          ss.expanded_task_id = None
+          st.rerun()
