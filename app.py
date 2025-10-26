@@ -164,13 +164,24 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 /* Login */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
 .login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
-.login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
+.login-logo-wrap{{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:14px}}
 .login-sub{{color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px}}
 .login-card [data-testid="stTextInput"] input {{
   background:#10283f !important; color:#E7F0FA !important; border:1.5px solid #1d3a57 !important;
   border-radius:24px !important; height:48px !important; padding:0 16px !important;
 }}
-.login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
+/* Ajustes para centrar y reducir el ancho de los inputs de login */
+.login-card .stTextInput {{
+  max-width: 320px; /* Ancho máximo para los inputs */
+  margin-left: auto;
+  margin-right: auto;
+}}
+.login-card .stButton>button{{ 
+  width:160px !important; border-radius:24px !important; 
+  margin-left: auto;
+  margin-right: auto;
+  display: block; /* Asegura que el botón se centre con margin auto */
+}}
 
 /* Status chip para pipeline */
 .status-Contratado {{ background-color: #E6FFF1 !important; color: {PRIMARY} !important; border-color: #98E8BF !important; }}
@@ -464,17 +475,21 @@ def login_screen():
     pass
   st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
   with st.form("login_form", clear_on_submit=False):
-    u = st.text_input("Usuario")
-    p = st.text_input("Contraseña", type="password")
-    ok = st.form_submit_button("Ingresar")
-    if ok:
-      if u in USERS and USERS[u]["password"] == p:
-        st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
-        st.success("Bienvenido.")
-        st.rerun()
-      else:
-        st.error("Usuario o contraseña incorrectos.")
+    # Usar st.columns para centrar los inputs visualmente en un ancho menor
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2: # Contenedor central para los inputs
+      u = st.text_input("Usuario")
+      p = st.text_input("Contraseña", type="password")
+      ok = st.form_submit_button("Ingresar")
+      if ok:
+        if u in USERS and USERS[u]["password"] == p:
+          st.session_state.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}
+          st.success("Bienvenido.")
+          st.rerun()
+        else:
+          st.error("Usuario o contraseña incorrectos.")
   st.markdown("</div></div>", unsafe_allow_html=True)
+
 
 def require_auth():
   if ss.auth is None:
@@ -844,7 +859,21 @@ def page_agent_tasks():
       team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
       
       if not team_tasks.empty:
-          st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+          # Añadir columna de Acciones (simulada)
+          team_tasks['Acciones'] = [
+              f"""
+              <div style='display:flex; justify-content:space-around; width: 100px;'>
+                <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
+                <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
+              </div>
+              """ for i in range(len(team_tasks))
+          ]
+          df_display = team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+          
+          st.markdown(
+            df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+          )
       else:
           st.info("No hay tareas pendientes asignadas directamente al equipo.")
 
@@ -858,60 +887,10 @@ def page_create_task():
   else:
       df_tasks = pd.DataFrame(ss.tasks)
       
-      # Generar IDs únicos para las acciones y mapear las opciones del dropdown
-      action_options = ["Ver Detalles", "Asignar Tarea", "Tomar Tarea", "Eliminar"]
-      
-      # Crear el selectbox simulado para cada fila
-      def generate_action_dropdown(task_index):
-          # Usamos un form interno para contener el selectbox y forzar su renderizado por fila
-          # Nota: Streamlit no permite que un selectbox dentro de un markdown/HTML manipule el estado de forma nativa.
-          # Usamos un selectbox de Streamlit con una clave única por fila.
-          key = f"task_action_{task_index}"
-          
-          # Simulamos la acción del dropdown en la tabla de todas las tareas.
-          # La opción seleccionada debe ser una de las 4.
-          selected_action = st.selectbox(
-              'Acción:',
-              ['Seleccionar'] + action_options,
-              index=0,
-              key=key,
-              label_visibility="collapsed"
-          )
-          
-          # Lógica para simular la acción elegida
-          if selected_action != 'Seleccionar':
-              if selected_action == "Eliminar":
-                  st.error(f"Simulando: Eliminando Tarea {task_index}")
-              else:
-                   st.info(f"Simulando: '{selected_action}' en Tarea {task_index}")
-          
-          # El selectbox debe devolver un valor, no HTML. Para mantener la tabla visualmente, usaremos HTML+JS alert.
-          # Para esta solución, mantendremos la tabla HTML anterior para la vista general, pero eliminaremos la sección de "Crear Tarea Rápida".
-          
-          # Retornamos el HTML del selectbox (esto requiere el truco de re-formatear la tabla si no usamos st.dataframe completo)
-          return f"""
-          <select onchange="alert(this.value + ' en Tarea {task_index}')" style="width: 100%; padding: 4px; border-radius: 4px; border: 1px solid #ccc;">
-            <option value='Seleccionar'>Acciones</option>
-            <option value='Ver Detalles'>Ver Detalles</option>
-            <option value='Asignar Tarea'>Asignar Tarea</option>
-            <option value='Tomar Tarea'>Tomar Tarea</option>
-            <option value='Eliminar'>Eliminar</option>
-          </select>
-          """
-
-      df_tasks['Acciones'] = [generate_action_dropdown(i) for i in range(len(df_tasks))]
-
-      df_display = df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
-      
-      # Dado que Streamlit no maneja selectboxes en HTML, usaremos un truco de visualización.
-      # Para cumplir con la solicitud de "menú desplegable en la columna de acciones" usamos un selectbox simulado en el HTML.
-      # NOTA: Usamos un HTML/JS simple ya que st.selectbox no puede ser puesto directamente en cada celda de markdown.
-      
-      html_table = df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a']].to_html(index=False)
-      
-      # Reconstruir la tabla para incluir la columna de acciones como selectbox
+      # Generar la tabla con el selectbox simulado
       rows = []
-      for i, row in df_display.iterrows():
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
           dropdown_html = f"""
           <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
                   onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
@@ -922,17 +901,17 @@ def page_create_task():
               <option value='Eliminar'>Eliminar</option>
           </select>
           """
-          rows.append(f"<tr><td>{row['Título']}</td><td>{row['Descripción']}</td><td>{row['Vencimiento']}</td><td>{row['Asignado a']}</td><td>{dropdown_html}</td></tr>")
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
       
       table_html = f"""
-      <table style="width: 100%; border-collapse: collapse;">
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
           <thead>
               <tr style="background:#F1F7FD; color:{TITLE_DARK};">
-                  <th>Título</th>
-                  <th>Descripción</th>
-                  <th>Vencimiento</th>
-                  <th>Asignado a</th>
-                  <th>Acciones</th>
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
               </tr>
           </thead>
           <tbody>
@@ -942,9 +921,8 @@ def page_create_task():
       """
       st.markdown(table_html, unsafe_allow_html=True)
 
-
-  # ELIMINAR CUADRO DE CREAR TAREA RÁPIDA (Comentamos la sección)
-  # st.markdown("---")
+  st.markdown("---")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
   # st.subheader("Crear Tarea Rápida")
   # with st.form("t_form"):
   #   titulo = st.text_input("Título")
