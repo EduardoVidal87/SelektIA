@@ -24,7 +24,7 @@ BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD    = "#33FFAC"
 
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
-PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"] # NUEVO
+PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"]
 
 EVAL_INSTRUCTION = (
   "Debes analizar los CVs de postulantes y calificarlos de 0% a 100% según el nivel de coincidencia con el JD. "
@@ -246,7 +246,7 @@ def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 # =========================================================
 ss = st.session_state
 if "auth" not in ss: ss.auth = None
-if "section" not in ss:  ss.section = "publicacion_sourcing" # CAMBIO: Nombre del boton
+if "section" not in ss:  ss.section = "publicacion_sourcing" 
 if "tasks" not in ss:    ss.tasks = []
 if "candidates" not in ss: ss.candidates = []
 if "offers" not in ss:  ss.offers = {}
@@ -276,33 +276,8 @@ if "positions" not in ss:
         "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": date.today() - timedelta(days=28)}
   ])
   
-# NUEVO: Inicializar filtro y candidatos (seguro)
+# NUEVO: Inicializar filtro del pipeline
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
-
-if "candidate_init" not in ss:
-  # Inicialización de candidatos simulados con todas las claves
-  initial_candidates = [
-    {"Name": "CV_AnaLopez.pdf", "Score": 85, "Role": "Business Analytics", "source": "LinkedIn Jobs"},
-    {"Name": "CV_LuisGomez.pdf", "Score": 42, "Role": "Business Analytics", "source": "Computrabajo"},
-    {"Name": "CV_MartaDiaz.pdf", "Score": 91, "Role": "Desarrollador/a Backend (Python)", "source": "Indeed"},
-    {"Name": "CV_JaviRuiz.pdf", "Score": 30, "Role": "Diseñador/a UX", "source": "laborum.pe"},
-  ]
-  
-  candidates_list = []
-  for i, c in enumerate(initial_candidates):
-    c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
-    c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
-    c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
-    c["_bytes"] = "Contenido de CV simulado".encode()
-    c["_is_pdf"] = True
-    c["_text"] = f"Simulación de CV. Experiencia 5 años. SQL, Power BI, Python, Excel. Candidato {c['Name']}."
-    c["meta"] = extract_meta(c["_text"]) 
-    if c["stage"] == "Descartado": c["Score"] = random.randint(20, 34)
-    if c["stage"] == "Contratado": c["Score"] = 95
-    candidates_list.append(c)
-
-  ss.candidates = candidates_list
-  ss.candidate_init = True
 
 # =========================================================
 # UTILS (Original + Añadidos)
@@ -372,7 +347,6 @@ def extract_text_from_file(uploaded_file) -> str:
     else:
       return file_bytes.decode("utf-8", errors="ignore")
   except Exception as e:
-    # st.error(f"Error al leer '{uploaded_file.name}': {e}")
     return ""
 
 def _max_years(t):
@@ -397,7 +371,6 @@ def simple_score(cv_text: str, jd: str, keywords: str) -> tuple[int, str]:
   base = max(0, min(100, base))
   return base, " — ".join(reasons)
 
-# NUEVA FUNCIÓN: Cálculo de métricas
 def calculate_analytics(candidates):
   if not candidates: return {"avg_fit": 0, "time_to_hire": "—", "source_counts": {}, "funnel_data": pd.DataFrame()}
 
@@ -441,6 +414,40 @@ def calculate_analytics(candidates):
 
 
 # =========================================================
+# INICIALIZACIÓN DE CANDIDATOS (MOVEMOS LA LÓGICA DE INICIALIZACIÓN AQUÍ)
+# =========================================================
+
+if "candidate_init" not in ss:
+  
+  initial_candidates = [
+    {"Name": "CV_AnaLopez.pdf", "Score": 85, "Role": "Business Analytics", "source": "LinkedIn Jobs"},
+    {"Name": "CV_LuisGomez.pdf", "Score": 42, "Role": "Business Analytics", "source": "Computrabajo"},
+    {"Name": "CV_MartaDiaz.pdf", "Score": 91, "Role": "Desarrollador/a Backend (Python)", "source": "Indeed"},
+    {"Name": "CV_JaviRuiz.pdf", "Score": 30, "Role": "Diseñador/a UX", "source": "laborum.pe"},
+  ]
+  
+  candidates_list = []
+  for i, c in enumerate(initial_candidates):
+    c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
+    c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
+    c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
+    c["_bytes"] = "Contenido de CV simulado".encode()
+    c["_is_pdf"] = True
+    c["_text"] = f"Simulación de CV. Experiencia 5 años. SQL, Power BI, Python, Excel. Candidato {c['Name']}."
+    
+    c["meta"] = extract_meta(c["_text"]) 
+    
+    if c["stage"] == "Descartado":
+        c["Score"] = random.randint(20, 34)
+    if c["stage"] == "Contratado":
+        c["Score"] = 95
+        
+    candidates_list.append(c)
+
+  ss.candidates = candidates_list
+  ss.candidate_init = True
+  
+# =========================================================
 # LOGIN + SIDEBAR
 # =========================================================
 def asset_logo_wayki():
@@ -456,7 +463,7 @@ def login_screen():
     st.markdown("</div>", unsafe_allow_html=True)
   except:
     pass
-  st.markdown('<div class="login-sub">Acceso a SelektIA — Demo</div>', unsafe_allow_html=True)
+  st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
   with st.form("login_form", clear_on_submit=False):
     u = st.text_input("Usuario")
     p = st.text_input("Contraseña", type="password")
@@ -491,19 +498,20 @@ def render_sidebar():
       ss.pipeline_filter = None
 
     st.markdown("#### ASISTENTE IA")
-    for txt, sec in [("Flujos","flows"), ("Agentes","agents"), ("Tareas de Agente","agent_tasks")]:
-      if st.button(txt, key=f"sb_{sec}"): 
-        ss.section = sec
-        ss.pipeline_filter = None
+    if st.button("Flujos", key="sb_flows"): 
+      ss.section = "flows"
+      ss.pipeline_filter = None
+    if st.button("Agentes", key="sb_agents"): 
+      ss.section = "agents"
+      ss.pipeline_filter = None
 
     st.markdown("#### PROCESO DE SELECCIÓN")
     for txt, sec, target_stage in [
-        ("Publicación & Sourcing","publicacion_sourcing", None), # CAMBIO: Nuevo nombre de botón
+        ("Publicación & Sourcing","publicacion_sourcing", None), 
         ("Puestos","puestos", None), 
         ("Evaluación de CVs","eval", None), 
         ("Pipeline de Candidatos","pipeline", None), 
         ("Entrevista (Gerencia)","pipeline", "Entrevista Gerencia"),
-        ("Tareas del Headhunter","hh_tasks", None), 
         ("Oferta","pipeline", "Oferta"), 
         ("Onboarding","pipeline", "Contratado")
     ]:
@@ -520,32 +528,30 @@ def render_sidebar():
                 ss.section = sec
                 ss.pipeline_filter = None
     
-    # CAMBIO: Nuevo título y botones de la 3ra imagen
+    # CAMBIO: TAREAS (NUEVOS BOTONES)
     st.markdown("#### TAREAS") 
-    if st.button("Crear tarea manual", key="sb_task_manual"): ss.section = "create_task"
-    if st.button("Tareas del Headhunter", key="sb_task_hh"): ss.section = "hh_tasks"
-    if st.button("Tareas de Agente", key="sb_task_agente"): ss.section = "agent_tasks"
+    if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task" # Redirige al módulo de tareas
+    if st.button("Asignado a mi", key="sb_task_hh"): ss.section = "hh_tasks" # Redirige al filtro del Headhunter
+    if st.button("Asignado a mi equipo", key="sb_task_agente"): ss.section = "agent_tasks" # Redirige al filtro de Tareas de Agente
     
     st.markdown("#### ACCIONES")
-    # if st.button("Crear tarea", key="sb_task"): ss.section = "create_task" # Se mueve arriba
-
     if st.button("Cerrar sesión", key="sb_logout"):
       ss.auth = None; st.rerun()
 
 # =========================================================
 # PÁGINAS
 # =========================================================
-def page_def_carga(): # Mantenemos el nombre de la función para el router, cambiamos el header.
-  st.header("Publicación & Sourcing") # CAMBIO: Título
+def page_def_carga(): 
+  st.header("Publicación & Sourcing") 
   role_names = list(ROLE_PRESETS.keys())
   
   st.subheader("1. Definición de la Vacante")
   col_puesto, col_id = st.columns(2)
   with col_puesto: puesto = st.selectbox("Puesto", role_names, index=0)
-  with col_id: id_puesto = st.text_input("ID de Puesto (simulado)", value=f"P-{random.randint(1000,9999)}")
+  with col_id: id_puesto = st.text_input("ID de Puesto", value=f"P-{random.randint(1000,9999)}")
   preset = ROLE_PRESETS[puesto]
   jd_text = st.text_area("Descripción / JD", height=180, value=preset["jd"])
-  kw_text = st.text_area("Palabras clave (coma separada)", height=100, value=preset["keywords"], help="Usadas por el Agente para Scoring.")
+  kw_text = st.text_area("Palabras clave (coma separada)", height=100, value=preset["keywords"], help="Usadas por el sistema para el Scoring.")
   
   ss["last_role"] = puesto; ss["last_jd_text"] = jd_text; ss["last_kw_text"] = kw_text
 
@@ -576,14 +582,14 @@ def page_def_carga(): # Mantenemos el nombre de la función para el router, camb
     st.success(f"CVs cargados, analizados y {len(new_candidates)} enviados al Pipeline.")
     st.rerun()
 
-  st.subheader("3. Sourcing desde Portales (Simulado)")
-  with st.expander("🔌 Simular integración con Portales de Empleo (Laborum, LinkedIn, etc.)"):
+  st.subheader("3. Sourcing desde Portales")
+  with st.expander("🔌 Integración con Portales de Empleo (Laborum, LinkedIn, etc.)"):
     srcs=st.multiselect("Portales", JOB_BOARDS, default=["laborum.pe"], key="portal_srcs")
     qty=st.number_input("Cantidad por portal",1,30,6, key="portal_qty")
     search_q=st.text_input("Búsqueda", value=puesto, key="portal_search_q")
     location=st.text_input("Ubicación", value="Lima, Perú", key="portal_location")
     
-    if st.button("Traer CVs (simulado y con Scoring)") :
+    if st.button("Traer CVs (con Scoring)"):
       new_candidates = []
       for board in srcs:
         for i in range(1,int(qty)+1):
@@ -607,7 +613,7 @@ def page_def_carga(): # Mantenemos el nombre de la función para el router, camb
           if c["Score"] < 35: c["stage"] = "Descartado"
           ss.candidates.append(c)
           
-      st.success(f"Importados {len(new_candidates)} CVs simulados de portales. Enviados al Pipeline.")
+      st.success(f"Importados {len(new_candidates)} CVs de portales. Enviados al Pipeline.")
       st.rerun()
 
 def page_puestos():
@@ -632,7 +638,7 @@ def page_puestos():
     candidates_for_pos = [c for c in ss.candidates if c.get("Role") == selected_pos]
     if candidates_for_pos:
         df_cand = pd.DataFrame(candidates_for_pos)
-        st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit IA", "stage":"Fase"}), 
+        st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}), 
                      use_container_width=True, hide_index=True)
     else:
         st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
@@ -641,7 +647,7 @@ def page_puestos():
 def page_eval():
   st.header("Resultados de evaluación")
   if not ss.candidates:
-    st.info("Carga CVs en **Publicación & Sourcing**."); return # CAMBIO: Nuevo nombre de botón
+    st.info("Carga CVs en **Publicación & Sourcing**."); return 
   jd_text = st.text_area("JD para matching por skills (opcional)", ss.get("last_jd_text",""), height=140)
   preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
   col1,col2 = st.columns(2)
@@ -654,7 +660,6 @@ def page_eval():
   for c in ss.candidates:
     cv=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
     fit,exp=score_fit_by_skills(jd_text,must,nice,cv or "")
-    # Aseguramos que existan las claves antes de acceder (para evitar el NameError)
     c["Score"] = fit
     c["_exp"] = exp
     
@@ -702,13 +707,13 @@ def page_pipeline():
         st.header("Pipeline de Candidatos (Vista Kanban)")
         candidates_to_show = ss.candidates
         
-    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso y disparar automatizaciones.")
+    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
     
     if not candidates_to_show and filter_stage:
          st.info(f"No hay candidatos en la fase **{filter_stage}**.")
          return
     elif not ss.candidates:
-         st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**.") # CAMBIO
+         st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**.")
          return
 
     candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
@@ -723,20 +728,17 @@ def page_pipeline():
             st.markdown("---")
             
             for c in candidates_by_stage[stage]:
-                # Nombre corto
                 card_name = c["Name"].split('_')[-1].replace('.pdf', '').replace('.txt', '')
                 
-                # Tarjeta de candidato (usando k-card original)
                 st.markdown(f"""
                 <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
                     <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
                     <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
-                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit IA: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
+                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
                     <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Botones de movimiento (usamos un form para agrupar)
                 with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
                     current_stage_index = PIPELINE_STAGES.index(stage)
                     available_stages = [s for s in PIPELINE_STAGES if s != stage]
@@ -758,9 +760,9 @@ def page_pipeline():
                         c["stage"] = new_stage
                         
                         if new_stage == "Descartado":
-                            st.success(f"📧 **Flujo IA:** Email de rechazo automático enviado a {card_name}.")
+                            st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
                         elif new_stage == "Entrevista Telefónica":
-                            st.info(f"📅 **Flujo IA:** Tarea de programación automática de entrevista generada para {card_name}.")
+                            st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
                         elif new_stage == "Contratado":
                              st.balloons()
                              st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
@@ -771,7 +773,7 @@ def page_pipeline():
 
                         st.rerun()
 
-                st.markdown("<br>", unsafe_allow_html=True) # Separador para que no se peguen los selectbox
+                st.markdown("<br>", unsafe_allow_html=True) 
 
 
 def page_interview():
@@ -813,24 +815,35 @@ def page_onboarding():
   st.rerun()
 
 def page_hh_tasks():
-  st.header("Tareas del Headhunter")
-  st.write("Esta página simula tareas y notas del Headhunter. Las acciones principales de flujo están en el **Pipeline**.")
-  cand = st.text_input("Candidata/o", ss.get("selected_cand",""))
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    st.checkbox("✅ Contacto hecho")
-  with col2:
-    st.checkbox("✅ Entrevista agendada")
-  with col3:
-    st.checkbox("✅ Feedback recibido")
-  st.text_area("Notas (3 fortalezas, 2 riesgos, pretensión, disponibilidad)", height=120)
-  st.file_uploader("Adjuntos (BLS/ACLS, colegiatura, etc.)", accept_multiple_files=True)
+  st.header("Tareas Asignadas a Mí")
+  st.write("Esta página lista las tareas pendientes asignadas a tu rol (Headhunter/Colaborador).")
+  
+  if not ss.tasks:
+      st.info("No tienes tareas asignadas.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      my_tasks = df_tasks[df_tasks["assigned_to"].isin(["Headhunter", "Colaborador", ss.auth["name"]])] # Filtro simple
+      
+      if not my_tasks.empty:
+          st.dataframe(my_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      else:
+          st.info("No tienes tareas pendientes asignadas directamente.")
 
-  c1, c2 = st.columns(2)
-  if c1.button("Guardar"):
-    st.success("Checklist y notas guardadas.")
-  if c2.button("Enviar a Comité"):
-    st.info("Bloqueo de edición del HH y acta breve generada.")
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      else:
+          st.info("No hay tareas pendientes asignadas al equipo.")
+
 
 # ===================== AGENTES =====================
 def page_agents():
@@ -856,7 +869,7 @@ def page_agents():
         guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
       with c2:
         herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
-        llm_model  = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=0)
+        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
         img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
         perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
       saved = st.form_submit_button("Guardar/Actualizar Agente")
@@ -924,7 +937,7 @@ def page_agents():
     ag = ss.agents[ss.agent_view_idx]
 
     st.markdown("### Detalle del agente")
-    st.caption("Modelo LLM (simulado)")
+    st.caption("Modelo LLM")
     st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
 
     c1, c2 = st.columns([0.42, 0.58])
@@ -941,7 +954,7 @@ def page_agents():
         </div>
         """, unsafe_allow_html=True
       )
-      st.caption("Modelo LLM (simulado)")
+      st.caption("Modelo LLM")
       st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
     with c2:
       st.text_input("Role*", value=ag.get("rol",""), disabled=True)
@@ -960,7 +973,7 @@ def page_agents():
       backstory = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
       guardrails= st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
       herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
-      llm_model   = st.selectbox("Modelo LLM (simulado)", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      llm_model   = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
       img_src     = st.text_input("URL de imagen", value=ag.get("image",""))
       perms       = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
@@ -1000,11 +1013,13 @@ def page_flows():
             if st.button("🧬 Duplicar"):
               clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
               clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""
-              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado."); st.rerun()
+              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              st.rerun()
           with c2:
             if st.button("🗑 Eliminar"):
               ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
-              st.success("Flujo eliminado."); st.rerun()
+              st.success("Flujo eliminado.")
+              st.rerun()
           with c3:
             st.markdown(f"<div class='status-chip'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
             if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
@@ -1012,11 +1027,13 @@ def page_flows():
               with a1:
                 if st.button("✅ Aprobar"):
                   wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.success("Aprobado."); st.rerun()
+                  save_workflows(ss.workflows); st.success("Aprobado.")
+                  st.rerun()
               with a2:
                 if st.button("❌ Rechazar"):
                   wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
+                  save_workflows(ss.workflows); st.warning("Rechazado.")
+                  st.rerun()
 
   with right:
     st.subheader("Crear / Editar flujo")
@@ -1083,7 +1100,7 @@ def page_analytics():
   avg_fit = analisis["avg_fit"]
   time_to_hire = analisis["time_to_hire"]
   
-  # CAMBIO: Diseño de la 1ra imagen (Métricas Top)
+  # Diseño de la 1ra imagen (Métricas Top)
   c1,c2,c3,c4 = st.columns(4)
   c1.metric("Puestos activos", total_puestos)
   c2.metric("CVs en Pipeline", total_cvs)
@@ -1092,18 +1109,19 @@ def page_analytics():
   
   st.markdown("---")
   
-  # CAMBIO: Diseño de la 2da imagen (Gráficos)
+  # Diseño de la 2da imagen (Gráficos)
   col_fit, col_funnel = st.columns(2)
   
   with col_fit:
-      st.subheader("Distribución de Coincidencia (Fit IA)")
+      st.subheader("Distribución de Coincidencia (Fit)")
       if total_cvs:
         bins=[]
         jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
         must, nice = preset.get("must",[]), preset.get("nice",[])
         for c in ss.candidates:
           txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
-          f,_=score_fit_by_skills(jd,must,nice,txt or ""); bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
         df=pd.DataFrame({"Fit band":bins})
         fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
         fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
@@ -1122,7 +1140,6 @@ def page_analytics():
       
   st.markdown("---")
   
-  # Gráfico de fuentes de adquisición
   st.subheader("Fuentes de Adquisición de Talento")
   if analisis["source_counts"]:
       df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
@@ -1132,34 +1149,132 @@ def page_analytics():
 
 
 def page_agent_tasks():
-  st.header("Tareas de Agente")
-  st.write("Bandeja de tareas generadas por los **Flujos de Automatización**.")
-  st.info("Estas tareas son para que los agentes realicen un análisis específico (ej: generar un resumen ejecutivo de un CV).")
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      else:
+          st.info("No hay tareas pendientes asignadas al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
   
   if not ss.tasks:
-      st.write("No hay tareas pendientes.")
+      st.write("No hay tareas registradas en el sistema.")
   else:
       df_tasks = pd.DataFrame(ss.tasks)
       st.dataframe(df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
 
-
-def page_create_task():
-  st.header("Crear Tarea Manual")
+  st.markdown("---")
+  st.subheader("Crear Tarea Rápida")
   with st.form("t_form"):
     titulo = st.text_input("Título")
     desc = st.text_area("Descripción", height=150)
-    due = st.date_input("Fecha límite", value=date.today())
+    due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
     assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
     ok = st.form_submit_button("Guardar")
     if ok:
       ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
       st.success("Tarea creada.")
 
+
+# =========================================================
+# PIPELINE (Vista Kanban)
+# =========================================================
+
+def page_pipeline():
+    filter_stage = ss.get("pipeline_filter")
+    
+    if filter_stage:
+        st.header(f"Pipeline: Candidatos en Fase '{filter_stage}'")
+        candidates_to_show = [c for c in ss.candidates if c.get("stage") == filter_stage]
+    else:
+        st.header("Pipeline de Candidatos (Vista Kanban)")
+        candidates_to_show = ss.candidates
+        
+    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
+    
+    if not candidates_to_show and filter_stage:
+         st.info(f"No hay candidatos en la fase **{filter_stage}**.")
+         return
+    elif not ss.candidates:
+         st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**.")
+         return
+
+    candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
+    for c in candidates_to_show:
+        candidates_by_stage[c["stage"]].append(c)
+
+    cols = st.columns(len(PIPELINE_STAGES))
+
+    for i, stage in enumerate(PIPELINE_STAGES):
+        with cols[i]:
+            st.markdown(f"**{stage} ({len(candidates_by_stage[stage])})**", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            for c in candidates_by_stage[stage]:
+                card_name = c["Name"].split('_')[-1].replace('.pdf', '').replace('.txt', '')
+                
+                st.markdown(f"""
+                <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
+                    <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
+                    <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
+                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
+                    <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
+                    current_stage_index = PIPELINE_STAGES.index(stage)
+                    available_stages = [s for s in PIPELINE_STAGES if s != stage]
+                    
+                    try:
+                        default_index = available_stages.index(PIPELINE_STAGES[min(current_stage_index + 1, len(PIPELINE_STAGES) - 1)])
+                    except ValueError:
+                        default_index = 0
+
+                    new_stage = st.selectbox(
+                        "Mover a:", 
+                        available_stages, 
+                        key=f"select_move_{c['id']}",
+                        index=default_index,
+                        label_visibility="collapsed"
+                    )
+
+                    if st.form_submit_button("Mover Candidato"):
+                        c["stage"] = new_stage
+                        
+                        if new_stage == "Descartado":
+                            st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
+                        elif new_stage == "Entrevista Telefónica":
+                            st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
+                        elif new_stage == "Contratado":
+                             st.balloons()
+                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
+                        
+                        if filter_stage and new_stage != filter_stage:
+                             ss.pipeline_filter = None
+                             st.info("El filtro ha sido removido al mover el candidato de fase.")
+
+                        st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+
 # =========================================================
 # ROUTER
 # =========================================================
 ROUTES = {
-  "publicacion_sourcing": page_def_carga, # CAMBIO: Nuevo key
+  "publicacion_sourcing": page_def_carga,
   "puestos": page_puestos,
   "eval": page_eval,
   "pipeline": page_pipeline,
