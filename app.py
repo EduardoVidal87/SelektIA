@@ -846,7 +846,7 @@ def page_agent_tasks():
       if not team_tasks.empty:
           st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
       else:
-          st.info("No hay tareas pendientes asignadas al equipo.")
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
 
 
 def page_create_task():
@@ -858,36 +858,103 @@ def page_create_task():
   else:
       df_tasks = pd.DataFrame(ss.tasks)
       
-      # Añadir columna de Acciones (simulada)
-      df_tasks['Acciones'] = [
-          f"""
-          <div style='display:flex; justify-content:center;'>
-            <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
-            <button title="Asignar Tarea" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Asignar Tarea {i+1}")'>👤</button>
-            <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
-            <button title="Eliminar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: red;' onclick='alert("Eliminar Tarea {i+1}")'>🗑️</button>
-          </div>
-          """ for i in range(len(df_tasks))
-      ]
+      # Generar IDs únicos para las acciones y mapear las opciones del dropdown
+      action_options = ["Ver Detalles", "Asignar Tarea", "Tomar Tarea", "Eliminar"]
+      
+      # Crear el selectbox simulado para cada fila
+      def generate_action_dropdown(task_index):
+          # Usamos un form interno para contener el selectbox y forzar su renderizado por fila
+          # Nota: Streamlit no permite que un selectbox dentro de un markdown/HTML manipule el estado de forma nativa.
+          # Usamos un selectbox de Streamlit con una clave única por fila.
+          key = f"task_action_{task_index}"
+          
+          # Simulamos la acción del dropdown en la tabla de todas las tareas.
+          # La opción seleccionada debe ser una de las 4.
+          selected_action = st.selectbox(
+              'Acción:',
+              ['Seleccionar'] + action_options,
+              index=0,
+              key=key,
+              label_visibility="collapsed"
+          )
+          
+          # Lógica para simular la acción elegida
+          if selected_action != 'Seleccionar':
+              if selected_action == "Eliminar":
+                  st.error(f"Simulando: Eliminando Tarea {task_index}")
+              else:
+                   st.info(f"Simulando: '{selected_action}' en Tarea {task_index}")
+          
+          # El selectbox debe devolver un valor, no HTML. Para mantener la tabla visualmente, usaremos HTML+JS alert.
+          # Para esta solución, mantendremos la tabla HTML anterior para la vista general, pero eliminaremos la sección de "Crear Tarea Rápida".
+          
+          # Retornamos el HTML del selectbox (esto requiere el truco de re-formatear la tabla si no usamos st.dataframe completo)
+          return f"""
+          <select onchange="alert(this.value + ' en Tarea {task_index}')" style="width: 100%; padding: 4px; border-radius: 4px; border: 1px solid #ccc;">
+            <option value='Seleccionar'>Acciones</option>
+            <option value='Ver Detalles'>Ver Detalles</option>
+            <option value='Asignar Tarea'>Asignar Tarea</option>
+            <option value='Tomar Tarea'>Tomar Tarea</option>
+            <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+
+      df_tasks['Acciones'] = [generate_action_dropdown(i) for i in range(len(df_tasks))]
 
       df_display = df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
       
-      st.markdown(
-        df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
-        unsafe_allow_html=True
-      )
+      # Dado que Streamlit no maneja selectboxes en HTML, usaremos un truco de visualización.
+      # Para cumplir con la solicitud de "menú desplegable en la columna de acciones" usamos un selectbox simulado en el HTML.
+      # NOTA: Usamos un HTML/JS simple ya que st.selectbox no puede ser puesto directamente en cada celda de markdown.
+      
+      html_table = df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a']].to_html(index=False)
+      
+      # Reconstruir la tabla para incluir la columna de acciones como selectbox
+      rows = []
+      for i, row in df_display.iterrows():
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['Título']}</td><td>{row['Descripción']}</td><td>{row['Vencimiento']}</td><td>{row['Asignado a']}</td><td>{dropdown_html}</td></tr>")
+      
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th>Título</th>
+                  <th>Descripción</th>
+                  <th>Vencimiento</th>
+                  <th>Asignado a</th>
+                  <th>Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
 
-  st.markdown("---")
-  st.subheader("Crear Tarea Rápida")
-  with st.form("t_form"):
-    titulo = st.text_input("Título")
-    desc = st.text_area("Descripción", height=150)
-    due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
-    assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
-    ok = st.form_submit_button("Guardar")
-    if ok:
-      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
-      st.success("Tarea creada.")
+
+  # ELIMINAR CUADRO DE CREAR TAREA RÁPIDA (Comentamos la sección)
+  # st.markdown("---")
+  # st.subheader("Crear Tarea Rápida")
+  # with st.form("t_form"):
+  #   titulo = st.text_input("Título")
+  #   desc = st.text_area("Descripción", height=150)
+  #   due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
+  #   assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
+  #   ok = st.form_submit_button("Guardar")
+  #   if ok:
+  #     ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
+  #     st.success("Tarea creada.")
 
 # ===================== AGENTES (Corrección de NameError) =====================
 def page_agents():
@@ -1254,36 +1321,52 @@ def page_create_task():
   else:
       df_tasks = pd.DataFrame(ss.tasks)
       
-      # Añadir columna de Acciones (simulada)
-      df_tasks['Acciones'] = [
-          f"""
-          <div style='display:flex; justify-content:space-around; width: 130px;'>
-            <button title="Ver Detalles" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Ver Detalles de la Tarea {i+1}")'>👁</button>
-            <button title="Asignar Tarea" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Asignar Tarea {i+1}")'>👤</button>
-            <button title="Completar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px;' onclick='alert("Marcar Tarea {i+1} como Completa")'>✅</button>
-            <button title="Eliminar" style='background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: red;' onclick='alert("Eliminar Tarea {i+1}")'>🗑️</button>
-          </div>
-          """ for i in range(len(df_tasks))
-      ]
-
-      df_display = df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"})
+      # Generar la tabla con el selectbox simulado
+      rows = []
+      for i, row in df_tasks.iterrows():
+          # Selectbox simulado en HTML
+          dropdown_html = f"""
+          <select style="width: 120px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;" 
+                  onchange="this.selectedIndex > 0 ? alert(this.options[this.selectedIndex].text + ' en Tarea {i+1}') : null">
+              <option value=''>Acciones...</option>
+              <option value='Ver Detalles'>Ver Detalles</option>
+              <option value='Asignar Tarea'>Asignar Tarea</option>
+              <option value='Tomar Tarea'>Tomar Tarea</option>
+              <option value='Eliminar'>Eliminar</option>
+          </select>
+          """
+          rows.append(f"<tr><td>{row['titulo']}</td><td>{row['desc']}</td><td>{row['due']}</td><td>{row['assigned_to']}</td><td>{dropdown_html}</td></tr>")
       
-      st.markdown(
-        df_display[['Título', 'Descripción', 'Vencimiento', 'Asignado a', 'Acciones']].to_html(escape=False, index=False), 
-        unsafe_allow_html=True
-      )
+      table_html = f"""
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+              <tr style="background:#F1F7FD; color:{TITLE_DARK};">
+                  <th style="padding: 8px;">Título</th>
+                  <th style="padding: 8px;">Descripción</th>
+                  <th style="padding: 8px;">Vencimiento</th>
+                  <th style="padding: 8px;">Asignado a</th>
+                  <th style="padding: 8px;">Acciones</th>
+              </tr>
+          </thead>
+          <tbody>
+              {''.join(rows)}
+          </tbody>
+      </table>
+      """
+      st.markdown(table_html, unsafe_allow_html=True)
 
   st.markdown("---")
-  st.subheader("Crear Tarea Rápida")
-  with st.form("t_form"):
-    titulo = st.text_input("Título")
-    desc = st.text_area("Descripción", height=150)
-    due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
-    assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
-    ok = st.form_submit_button("Guardar")
-    if ok:
-      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
-      st.success("Tarea creada.")
+  # ELIMINAMOS LA SECCIÓN DE CREAR TAREA RÁPIDA
+  # st.subheader("Crear Tarea Rápida")
+  # with st.form("t_form"):
+  #   titulo = st.text_input("Título")
+  #   desc = st.text_area("Descripción", height=150)
+  #   due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
+  #   assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
+  #   ok = st.form_submit_button("Guardar")
+  #   if ok:
+  #     ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
+  #     st.success("Tarea creada.")
 
 # =========================================================
 # PIPELINE (Vista Kanban)
