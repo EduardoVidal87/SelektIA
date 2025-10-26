@@ -430,7 +430,7 @@ if "candidate_init" not in ss:
     c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
     c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
     c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
-    c["_bytes"] = "Contenido de CV simulado".encode()
+    c["_bytes"] = "Contenido de CV".encode()
     c["_is_pdf"] = True
     c["_text"] = f"CV. Experiencia 5 años. SQL, Power BI, Python, Excel. Candidato {c['Name']}."
     
@@ -1118,7 +1118,7 @@ def page_flows():
               "status": "Pendiente"
           })
           
-          # 2. Actualizar el estado del flujo
+          # 2. Actualizar el estado del flujo y mostrar éxito
           if send_approval: wf["status"] = "Pendiente de aprobación"; st.success(f"Flujo enviado a aprobación y tarea '{task_title}' creada.")
           if schedule:
             if puede_aprobar:
@@ -1129,6 +1129,211 @@ def page_flows():
 
           ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
           
-          # **CAMBIO CLAVE: Quitamos la redirección**
-          # st.section = "create_task" 
-          # st.rerun()
+          # 3. MANTENEMOS EN LA PESTAÑA: solo recargamos para actualizar la lista de flujos.
+          st.rerun()
+
+# ===================== ANALYTICS (Mejorado) =====================
+def page_analytics():
+  st.header("Analytics y KPIs Estratégicos")
+
+  analisis = calculate_analytics(ss.candidates)
+  
+  total_puestos = len(ss.positions)
+  total_cvs = len(ss.candidates)
+  avg_fit = analisis["avg_fit"]
+  time_to_hire = analisis["time_to_hire"]
+  
+  # Diseño de la 1ra imagen (Métricas Top)
+  c1,c2,c3,c4 = st.columns(4)
+  c1.metric("Puestos activos", total_puestos)
+  c2.metric("CVs en Pipeline", total_cvs)
+  c3.metric("Fit promedio (skills)", f"{avg_fit}%")
+  c4.metric("Tiempo a Contratar", time_to_hire, delta="12% mejor vs. benchmark")
+  
+  st.markdown("---")
+  
+  # Diseño de la 2da imagen (Gráficos)
+  col_fit, col_funnel = st.columns(2)
+  
+  with col_fit:
+      st.subheader("Distribución de Coincidencia (Fit)")
+      if total_cvs:
+        bins=[]
+        jd = ss.get("last_jd_text",""); preset=ROLE_PRESETS.get(ss.get("last_role",""), {})
+        must, nice = preset.get("must",[]), preset.get("nice",[])
+        for c in ss.candidates:
+          txt=c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
+          f,_=score_fit_by_skills(jd,must,nice,txt or "")
+          bins.append("Alto (>=70)" if f>=70 else ("Medio (40-69)" if f>=40 else "Bajo (<40)"))
+        df=pd.DataFrame({"Fit band":bins})
+        fig=px.histogram(df, x="Fit band", title="Candidatos por banda de Fit")
+        fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+        st.plotly_chart(fig, use_container_width=True)
+      else:
+        st.info("Carga CVs para ver la distribución de Fit.")
+  
+  with col_funnel:
+      st.subheader("Embudo de Conversión (Pipeline)")
+      df_funnel = analisis["funnel_data"]
+      df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
+      
+      fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Tasa de Conversión por Fase")
+      fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
+      st.plotly_chart(fig_funnel, use_container_width=True)
+      
+  st.markdown("---")
+  
+  st.subheader("Fuentes de Adquisición de Talento")
+  if analisis["source_counts"]:
+      df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
+      fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+      st.plotly_chart(fig_pie, use_container_width=True)
+
+
+def page_agent_tasks():
+  st.header("Tareas Asignadas a mi Equipo")
+  st.write("Esta página lista las tareas generadas por Flujos y asignadas a roles de equipo.")
+
+  if not ss.tasks:
+      st.write("No hay tareas pendientes en el equipo.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      team_tasks = df_tasks[df_tasks["assigned_to"].isin(["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"])]
+      
+      if not team_tasks.empty:
+          st.dataframe(team_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+      else:
+          st.info("No hay tareas pendientes asignadas directamente al equipo.")
+
+
+def page_create_task():
+  st.header("Todas las Tareas")
+  st.info("Muestra todas las tareas pendientes creadas en el sistema, incluyendo las asignadas manualmente y por flujos.")
+  
+  if not ss.tasks:
+      st.write("No hay tareas registradas en el sistema.")
+  else:
+      df_tasks = pd.DataFrame(ss.tasks)
+      st.dataframe(df_tasks.rename(columns={"titulo":"Título", "desc":"Descripción", "due":"Vencimiento", "assigned_to": "Asignado a"}), use_container_width=True, hide_index=True)
+
+  st.markdown("---")
+  st.subheader("Crear Tarea Rápida")
+  with st.form("t_form"):
+    titulo = st.text_input("Título")
+    desc = st.text_area("Descripción", height=150)
+    due = st.date_input("Fecha límite", value=date.today() + timedelta(days=7))
+    assigned_to = st.selectbox("Asignar a", ["Headhunter", "Coordinador RR.HH.", "Rivers Brykson (HM)", "Agente de Análisis"])
+    ok = st.form_submit_button("Guardar")
+    if ok:
+      ss.tasks.append({"titulo":titulo,"desc":desc,"due":str(due), "assigned_to": assigned_to, "status": "Pendiente"})
+      st.success("Tarea creada.")
+
+# =========================================================
+# PIPELINE (Vista Kanban)
+# =========================================================
+
+def page_pipeline():
+    filter_stage = ss.get("pipeline_filter")
+    
+    if filter_stage:
+        st.header(f"Pipeline: Candidatos en Fase '{filter_stage}'")
+        candidates_to_show = [c for c in ss.candidates if c.get("stage") == filter_stage]
+    else:
+        st.header("Pipeline de Candidatos (Vista Kanban)")
+        candidates_to_show = ss.candidates
+        
+    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
+    
+    if not candidates_to_show and filter_stage:
+         st.info(f"No hay candidatos en la fase **{filter_stage}**.")
+         return
+    elif not ss.candidates:
+         st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**.")
+         return
+
+    candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
+    for c in candidates_to_show:
+        candidates_by_stage[c["stage"]].append(c)
+
+    cols = st.columns(len(PIPELINE_STAGES))
+
+    for i, stage in enumerate(PIPELINE_STAGES):
+        with cols[i]:
+            st.markdown(f"**{stage} ({len(candidates_by_stage[stage])})**", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            for c in candidates_by_stage[stage]:
+                card_name = c["Name"].split('_')[-1].replace('.pdf', '').replace('.txt', '')
+                
+                st.markdown(f"""
+                <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
+                    <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
+                    <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
+                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
+                    <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
+                    current_stage_index = PIPELINE_STAGES.index(stage)
+                    available_stages = [s for s in PIPELINE_STAGES if s != stage]
+                    
+                    try:
+                        default_index = available_stages.index(PIPELINE_STAGES[min(current_stage_index + 1, len(PIPELINE_STAGES) - 1)])
+                    except ValueError:
+                        default_index = 0
+
+                    new_stage = st.selectbox(
+                        "Mover a:", 
+                        available_stages, 
+                        key=f"select_move_{c['id']}",
+                        index=default_index,
+                        label_visibility="collapsed"
+                    )
+
+                    if st.form_submit_button("Mover Candidato"):
+                        c["stage"] = new_stage
+                        
+                        if new_stage == "Descartado":
+                            st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
+                        elif new_stage == "Entrevista Telefónica":
+                            st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
+                        elif new_stage == "Contratado":
+                             st.balloons()
+                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
+                        
+                        if filter_stage and new_stage != filter_stage:
+                             ss.pipeline_filter = None
+                             st.info("El filtro ha sido removido al mover el candidato de fase.")
+
+                        st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+
+# =========================================================
+# ROUTER
+# =========================================================
+ROUTES = {
+  "publicacion_sourcing": page_def_carga,
+  "puestos": page_puestos,
+  "eval": page_eval,
+  "pipeline": page_pipeline,
+  "interview": page_interview, 
+  "offer": page_offer,         
+  "onboarding": page_onboarding, 
+  "hh_tasks": page_hh_tasks,
+  "agents": page_agents,
+  "flows": page_flows,
+  "agent_tasks": page_agent_tasks,
+  "analytics": page_analytics,
+  "create_task": page_create_task,
+}
+
+# =========================================================
+# APP
+# =========================================================
+if require_auth():
+  render_sidebar()
+  ROUTES.get(ss.section, page_def_carga)()
