@@ -1,7 +1,8 @@
+
 # app.py
 # -*- coding: utf-8 -*-
 
-import io, base64, re, json, random, zipfile, uuid
+import io, base64, re, json, random, zipfile, uuid, tempfile, os
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
@@ -9,6 +10,23 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
+
+# ====== (Opcional) Paquetes de LLM para la nueva sección de 'Evaluación de CVs' ======
+# Se importan de forma segura; si no están instalados, la app no se rompe.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    load_dotenv = lambda: None
+
+try:
+    from langchain_core.output_parsers import JsonOutputParser
+    from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_openai import ChatOpenAI, AzureChatOpenAI
+    _LC_AVAILABLE = True
+except Exception:
+    _LC_AVAILABLE = False
 
 # =========================================================
 # PALETA / CONST
@@ -25,7 +43,6 @@ BAR_GOOD    = "#33FFAC"
 
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
 PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"]
-# Prioridades
 TASK_PRIORITIES = ["Alta", "Media", "Baja"]
 
 EVAL_INSTRUCTION = (
@@ -94,16 +111,10 @@ DUMMY_PDF_BYTES = base64.b64decode(
 )
 
 # =========================================================
-# CSS
+# CSS & CONFIG
 # =========================================================
 CSS = f"""
-:root {{
-  --green: {PRIMARY};
-  --sb-bg: {SIDEBAR_BG};
-  --sb-tx: {SIDEBAR_TX};
-  --body: {BODY_BG};
-  --sb-card: {CARD_BG};
-}}
+:root {{ --green: {PRIMARY}; --sb-bg: {SIDEBAR_BG}; --sb-tx: {SIDEBAR_TX}; --body: {BODY_BG}; --sb-card: {CARD_BG}; }}
 html, body, [data-testid="stAppViewContainer"] {{ background: var(--body) !important; }}
 .block-container {{ background: transparent !important; padding-top: 1.25rem !important; }}
 
@@ -119,29 +130,24 @@ header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; 
 .sidebar-brand .brand-title {{ color: var(--green) !important; font-weight:800 !important; font-size:55px !important; line-height:1.05 !important; }}
 .sidebar-brand .brand-sub {{ margin-top:4px !important; color: var(--green) !important; font-size:12px !important; opacity:.95 !important; }}
 
-/* Botón del sidebar */
 [data-testid="stSidebar"] .stButton>button {{
   width: 100% !important; display:flex !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important;
   gap:8px !important; background: var(--sb-card) !important; border:1px solid var(--sb-bg) !important; color:#fff !important;
   border-radius:12px !important; padding:9px 12px !important; margin:6px 8px !important; font-weight:600 !important;
 }}
 
-/* Botones del body */
 .block-container .stButton>button {{
   width:auto !important; display:flex !important; justify-content:center !important; align-items:center !important; text-align:center !important;
   background: var(--green) !important; color:#082017 !important; border-radius:10px !important; border:none !important; padding:.50rem .90rem !important; font-weight:700 !important;
 }}
 .block-container .stButton>button:hover {{ filter: brightness(.96); }}
 
-/* Botones de confirmación eliminación */
 .block-container .stButton>button.delete-confirm-btn {{ background: #D60000 !important; color: white !important; }}
 .block-container .stButton>button.cancel-btn {{ background: #e0e0e0 !important; color: #333 !important; }}
 
-/* Tipografía */
 h1, h2, h3 {{ color: {TITLE_DARK}; }}
 h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 
-/* Inputs */
 .block-container [data-testid="stSelectbox"]>div>div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
@@ -149,24 +155,20 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
 }}
 
-/* Tablas y tarjetas */
 .block-container table {{ background:#fff !important; border:1px solid #E3EDF6 !important; border-radius:8px !important; }}
 .block-container thead th {{ background:#F1F7FD !important; color:{TITLE_DARK} !important; }}
 .k-card {{ background:#fff;border:1px solid #E3EDF6;border-radius:12px;padding:14px; }}
 .badge {{ display:inline-flex;align-items:center;gap:6px;background:#F1F7FD;border:1px solid #E3EDF6;border-radius:24px;padding:4px 10px;font-size:12px;color:#1B2A3C; }}
 
-/* Prioridad */
 .priority-Alta {{ border-color: #FFA500 !important; background: #FFF5E6 !important; color: #E88E00 !important; font-weight: 600;}}
 .priority-Media {{ border-color: #B9C7DF !important; background: #F1F7FD !important; color: #0E192B !important; }}
 .priority-Baja {{ border-color: #D1D5DB !important; background: #F3F4F6 !important; color: #6B7280 !important; }}
 
-/* Tarjeta de agente */
 .agent-card{{background:#fff;border:1px solid #E3EDF6;border-radius:14px;padding:10px;text-align:center;min-height:178px}}
 .agent-card img{{width:84px;height:84px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD}}
 .agent-title{{font-weight:800;color:{TITLE_DARK};font-size:15px;margin-top:6px}}
 .agent-sub{{font-size:12px;opacity:.8;margin-top:4px;min-height:30px}}
 
-/* Toolbar en tarjeta */
 .toolbar{{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}}
 .toolbar .stButton>button{{
   background:#fff !important; color:#2b3b4d !important; border:1px solid #E3EDF6 !important;
@@ -174,10 +176,8 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 }}
 .toolbar .stButton>button:hover{{ background:#F7FBFF !important; }}
 
-/* Detalle/edición */
 .agent-detail{{background:#fff;border:2px solid #E3EDF6;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(14,25,43,.08)}}
 
-/* Login */
 .login-bg{{background:{SIDEBAR_BG};position:fixed;inset:0;display:flex;align-items:center;justify-content:center}}
 .login-card{{background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);}}
 .login-logo-wrap{{display:flex;align-items:center;justify-content:center;margin-bottom:14px}}
@@ -188,7 +188,6 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 }}
 .login-card .stButton>button{{ width:160px !important; border-radius:24px !important; }}
 
-/* Chips por estado en Pipeline */
 .status-Contratado {{ background-color: #E6FFF1 !important; color: {PRIMARY} !important; border-color: #98E8BF !important; }}
 .status-Descartado {{ background-color: #FFE6E6 !important; color: #D60000 !important; border-color: #FFB3B3 !important; }}
 .status-Oferta {{ background-color: #FFFDE6 !important; color: #E8B900 !important; border-color: #FFE066 !important; }}
@@ -225,11 +224,10 @@ DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
-TASKS_FILE = DATA_DIR / "tasks.json"  # Archivo para tareas
+TASKS_FILE = DATA_DIR / "tasks.json"
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
-# --- TAREAS PREDETERMINADAS (con Prioridad) ---
 DEFAULT_TASKS = [
     {"id": str(uuid.uuid4()), "titulo":"Revisar CVs top 5", "desc":"Analizar a los 5 candidatos con mayor fit para 'Business Analytics'.", "due":str(date.today() + timedelta(days=2)), "assigned_to": "Headhunter", "status": "Pendiente", "priority": "Alta", "created_at": (date.today() - timedelta(days=3)).isoformat()},
     {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "priority": "Media", "created_at": (date.today() - timedelta(days=8)).isoformat()},
@@ -449,7 +447,7 @@ def calculate_analytics(candidates):
   avg_fit = round(sum(fits) / len(fits), 1) if fits else 0
   time_to_hire = f"{round(sum(tths) / len(tths), 1)} días" if tths else "—"
   funnel_data = pd.DataFrame({"Fase": PIPELINE_STAGES, "Candidatos": [stage_counts.get(stage, 0) for stage in PIPELINE_STAGES]})
-  return {"avg_fit": avg_fit, "time_to_hire": time_to_hire, "source_counts": source_counts, "funnel_data": funnel_data}
+  return {"avg_fit": avg_fit, "time_to_hire": time_to_hire, "funnel_data": funnel_data, "source_counts": source_counts}
 
 # ====== Helpers de TAREAS ======
 def _status_pill(s: str)->str:
@@ -461,7 +459,6 @@ def _priority_pill(p: str) -> str:
     p_safe = p if p in TASK_PRIORITIES else "Media"
     return f'<span class="badge priority-{p_safe}">{p_safe}</span>'
 
-# Reutilizable: crear tarea desde flujos
 def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media"):
   t = {
     "id": str(uuid.uuid4()),
@@ -583,7 +580,6 @@ def render_sidebar():
             ss.section = sec
             ss.pipeline_filter = None
 
-    # TAREAS
     st.markdown("#### TAREAS")
     if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task"
     if st.button("Asignado a mi", key="sb_task_hh"): ss.section = "hh_tasks"
@@ -658,6 +654,120 @@ def page_def_carga():
       st.success(f"Importados {len(new_candidates)} CVs de portales. Enviados al Pipeline.")
       st.rerun()
 
+def _llm_setup_credentials():
+    """Coloca credenciales desde st.secrets si existen (no rompe si faltan)."""
+    try:
+        if "AZURE_OPENAI_API_KEY" not in os.environ and "llm" in st.secrets and "azure_openai_api_key" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_API_KEY"] = st.secrets["llm"]["azure_openai_api_key"]
+        if "AZURE_OPENAI_ENDPOINT" not in os.environ and "llm" in st.secrets and "azure_openai_endpoint" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_ENDPOINT"] = st.secrets["llm"]["azure_openai_endpoint"]
+    except Exception:
+        pass
+
+def _llm_prompt_for_resume(resume_content: str):
+    """Construye un prompt estructurado para extracción JSON."""
+    if not _LC_AVAILABLE:
+        return None
+    json_object_structure = """{{
+        "Name": "Full Name",
+        "Last_position": "The most recent position in which the candidate worked",
+        "Years_of_Experience": "Number (in years)",
+        "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+        "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+        "Certifications": ["Certification 1", "Certification 2"],
+        "Additional_Notes": "Optional details inferred or contextually relevant information.",
+        "Score": "0-100"
+    }}"""
+    system_template = f"""
+    ### Objective
+    Extract structured data from CV content (below) and compute a match percentage vs JD.
+    CV Content:
+    {resume_content}
+
+    Return a JSON with the structure:
+    {json_object_structure}
+    """
+    return ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("Job description:\n{job_description}")
+    ])
+
+def _extract_with_azure(job_description: str, resume_content: str) -> dict:
+    """Intenta usar AzureChatOpenAI; si falla, devuelve {} sin romper UI."""
+    if not _LC_AVAILABLE:
+        return {}
+    _llm_setup_credentials()
+    try:
+        llm = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
+            temperature=0
+        )
+        parser = JsonOutputParser()
+        prompt = _llm_prompt_for_resume(resume_content)
+        if prompt is None:
+            return {}
+        chain = prompt | llm | parser
+        out = chain.invoke({"job_description": job_description})
+        return out if isinstance(out, dict) else {}
+    except Exception as e:
+        st.warning(f"Azure LLM no disponible: {e}")
+        return {}
+
+def _extract_with_openai(job_description: str, resume_content: str) -> dict:
+    """Fallback con ChatOpenAI (OpenAI) si hay API Key en secrets."""
+    if not _LC_AVAILABLE:
+        return {}
+    try:
+        api_key = st.secrets["llm"]["openai_api_key"]
+    except Exception:
+        return {}
+    try:
+        chat = ChatOpenAI(temperature=0, model="gpt-4o-mini", openai_api_key=api_key)
+        json_object_structure = """{
+            "Name": "Full Name",
+            "Last_position": "The most recent position in which the candidate worked",
+            "Years_of_Experience": "Number (in years)",
+            "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+            "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+            "Certifications": ["Certification 1", "Certification 2"],
+            "Additional_Notes": "Optional details inferred or contextually relevant information.",
+            "Score": "0-100"
+        }"""
+        prompt = f"""
+        Extract structured JSON from the following CV and compute a 0-100 match vs the JD.
+
+        Job description:
+        {job_description}
+
+        CV Content:
+        {resume_content}
+
+        Return JSON with this structure:
+        {json_object_structure}
+        """
+        resp = chat.invoke(prompt)
+        txt = resp.content.strip().replace('```json','').replace('```','')
+        return json.loads(txt)
+    except Exception as e:
+        st.warning(f"OpenAI LLM no disponible: {e}")
+        return {}
+
+def _create_llm_bar(df: pd.DataFrame):
+    fig = px.bar(df, x='file_name', y='Score', text='Score', title='Comparativa de Puntajes (LLM)')
+    for _, row in df.iterrows():
+        fig.add_annotation(x=row['file_name'], y=row['Score'], text=row.get('Name',''), showarrow=True, arrowhead=1, ax=0, ay=-20)
+    return fig
+
+def _results_to_df(results: list) -> pd.DataFrame:
+    if not results: return pd.DataFrame()
+    df = pd.DataFrame(results).copy()
+    if "Score" in df.columns:
+        try: df["Score"] = df["Score"].astype(int)
+        except: pass
+        df = df.sort_values(by="Score", ascending=False)
+    return df
+
 def page_puestos():
   st.header("Puestos")
   df_pos = ss.positions.copy()
@@ -685,6 +795,8 @@ def page_eval():
     st.header("Resultados de evaluación")
     if not ss.candidates:
         st.info("Carga CVs en **Publicación & Sourcing**."); return
+
+    # === Bloque original (matching por skills manual) ===
     jd_text = st.text_area("JD para matching por skills (opcional)", ss.get("last_jd_text",""), height=140)
     preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
     col1,col2 = st.columns(2)
@@ -699,9 +811,7 @@ def page_eval():
         fit, exp = score_fit_by_skills(jd_text, must, nice, cv or "")
         c["Score"] = fit; c["_exp"] = exp
         enriched.append({
-            "id": c["id"],
-            "Name": c["Name"],
-            "Fit": fit,
+            "id": c["id"], "Name": c["Name"], "Fit": fit,
             "Must (ok/total)":f"{len(exp['matched_must'])}/{exp['must_total']}",
             "Nice (ok/total)":f"{len(exp['matched_nice'])}/{exp['nice_total']}",
             "Extras":", ".join(exp["extras"])[:60]
@@ -742,6 +852,54 @@ def page_eval():
             st.error("No se encontraron los detalles del candidato en la sesión.")
     else:
         st.info("No hay candidatos para mostrar detalles.")
+
+    # === NUEVO: Bloque LLM integrado (opcional) ===
+    st.markdown("---")
+    with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI) — opcional", expanded=False):
+        jd_llm = st.text_area("Job Description para el LLM", ss.get("last_jd_text",""), height=120, key="jd_llm")
+        up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
+        run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
+        if run_llm and up:
+            if not _LC_AVAILABLE:
+                st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
+            results = []
+            for f in up:
+                # Cargar y extraer texto con PyPDFLoader si existe, si no con PyPDF2
+                text = ""
+                try:
+                    if _LC_AVAILABLE:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                            tmp.write(f.read())
+                            tmp.flush()
+                            loader = PyPDFLoader(tmp.name)
+                            pages = loader.load()
+                            text = "\n".join([p.page_content for p in pages])
+                    else:
+                        reader = PdfReader(io.BytesIO(f.read()))
+                        for p in reader.pages:
+                            text += (p.extract_text() or "") + "\n"
+                except Exception:
+                    try:
+                        reader = PdfReader(io.BytesIO(f.read()))
+                        for p in reader.pages:
+                            text += (p.extract_text() or "") + "\n"
+                    except Exception as e:
+                        st.error(f"No se pudo leer {f.name}: {e}")
+                        continue
+
+                meta = _extract_with_azure(jd_llm, text) or _extract_with_openai(jd_llm, text)
+                if not meta:
+                    meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
+                meta["file_name"] = f.name
+                results.append(meta)
+
+            df_llm = _results_to_df(results)
+            if not df_llm.empty:
+                st.subheader("Resultados LLM")
+                st.dataframe(df_llm, use_container_width=True, hide_index=True)
+                st.plotly_chart(_create_llm_bar(df_llm), use_container_width=True)
+            else:
+                st.info("Sin resultados para mostrar.")
 
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
@@ -1123,7 +1281,7 @@ def page_analytics():
       fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
       st.plotly_chart(fig_pie, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Tabla estilo captura) =====================
+# ===================== TODAS LAS TAREAS =====================
 def page_create_task():
     st.header("Todas las Tareas")
     st.info("Muestra todas las tareas registradas en el sistema.")
@@ -1137,33 +1295,19 @@ def page_create_task():
         return
 
     tasks_list = ss.tasks
-
-    # Estados disponibles
     all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
     if "En Espera" not in all_statuses_set:
         all_statuses_set.add("En Espera")
     all_statuses = ["Todos"] + sorted(list(all_statuses_set))
-
-    # Filtro por defecto: Pendiente > En Proceso > En Espera
     prefer_order = ["Pendiente", "En Proceso", "En Espera"]
     preferred = next((s for s in prefer_order if s in all_statuses), "Todos")
-    selected_status = st.selectbox(
-        "Filtrar por Estado",
-        options=all_statuses,
-        index=all_statuses.index(preferred)
-    )
+    selected_status = st.selectbox("Filtrar por Estado", options=all_statuses, index=all_statuses.index(preferred))
 
-    # Aplicar filtro
-    if selected_status == "Todos":
-        tasks_to_show = tasks_list
-    else:
-        tasks_to_show = [t for t in tasks_list if t.get("status") == selected_status]
-
+    tasks_to_show = tasks_list if selected_status == "Todos" else [t for t in tasks_list if t.get("status") == selected_status]
     if not tasks_to_show:
         st.info(f"No hay tareas con el estado '{selected_status}'.")
         return
 
-    # ----- Encabezado de tabla (como la captura) -----
     col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
     h_id, h_nom, h_desc, h_asg, h_cre, h_due, h_pri, h_est, h_acc = st.columns(col_w)
     with h_id:   st.markdown("**Id**")
@@ -1175,52 +1319,29 @@ def page_create_task():
     with h_pri:  st.markdown("**Prioridad**")
     with h_est:  st.markdown("**Estado**")
     with h_acc:  st.markdown("**Acciones**")
-
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
-    # ----- Filas -----
     for task in tasks_to_show:
         t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
-
         c_id, c_nom, c_desc, c_asg, c_cre, c_due, c_pri, c_est, c_acc = st.columns(col_w)
-
         with c_id:
             short = (t_id[:5] + "…") if len(t_id) > 6 else t_id
             st.caption(short)
+        with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
+        with c_desc: st.caption(task.get("desc","—"))
+        with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
+        with c_cre: st.markdown(task.get("created_at","—"))
+        with c_due: st.markdown(task.get("due","—"))
+        with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
+        with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
 
-        with c_nom:
-            st.markdown(f"**{task.get('titulo','—')}**")
-
-        with c_desc:
-            st.caption(task.get("desc","—"))
-
-        with c_asg:
-            st.markdown(f"`{task.get('assigned_to','—')}`")
-
-        with c_cre:
-            st.markdown(task.get("created_at","—"))
-
-        with c_due:
-            st.markdown(task.get("due","—"))
-
-        with c_pri:
-            st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
-
-        with c_est:
-            st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
-
-        # Acciones y callbacks (coherente con el resto de la app)
         def _handle_action_change(task_id):
             selectbox_key = f"accion_{task_id}"
             if selectbox_key not in ss: return
             action = ss[selectbox_key]
             task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
             if not task_to_update: return
-
-            ss.confirm_delete_id = None
-            ss.show_assign_for = None
-            ss.expanded_task_id = None
-
+            ss.confirm_delete_id = None; ss.show_assign_for = None; ss.expanded_task_id = None
             if action == "Ver detalle":
                 ss.expanded_task_id = task_id
             elif action == "Asignar tarea":
@@ -1229,9 +1350,7 @@ def page_create_task():
                 current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
                 task_to_update["assigned_to"] = current_user
                 task_to_update["status"] = "En Proceso"
-                save_tasks(ss.tasks)
-                st.toast("Tarea tomada.")
-                st.rerun()
+                save_tasks(ss.tasks); st.toast("Tarea tomada."); st.rerun()
             elif action == "Eliminar":
                 ss.confirm_delete_id = task_id
 
@@ -1240,36 +1359,28 @@ def page_create_task():
             st.selectbox(
                 "Acciones",
                 ["Selecciona…", "Ver detalle", "Asignar tarea", "Tomar tarea", "Eliminar"],
-                key=selectbox_key,
-                label_visibility="collapsed",
-                on_change=_handle_action_change,
-                args=(t_id,)
+                key=selectbox_key, label_visibility="collapsed",
+                on_change=_handle_action_change, args=(t_id,)
             )
 
-        # Confirmación de borrado (fila completa)
         if ss.get("confirm_delete_id") == t_id:
             b1, b2, _ = st.columns([1.0, 1.0, 7.8])
             with b1:
                 if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
                     ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
-                    save_tasks(ss.tasks)
-                    ss.confirm_delete_id = None
-                    st.warning("Tarea eliminada permanentemente.")
-                    st.rerun()
+                    save_tasks(ss.tasks); ss.confirm_delete_id = None
+                    st.warning("Tarea eliminada permanentemente."); st.rerun()
             with b2:
                 if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
-                    ss.confirm_delete_id = None
-                    st.rerun()
+                    ss.confirm_delete_id = None; st.rerun()
 
-        # Asignación inline
         if ss.show_assign_for == t_id:
             a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0])
             with a1:
                 assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
             with a2:
                 if assign_type == "En Espera":
-                    nuevo_assignee = "En Espera"
-                    st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
+                    nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
                 elif assign_type == "Equipo":
                     nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
                 else:
@@ -1289,10 +1400,8 @@ def page_create_task():
                         else:
                             if task_to_update["status"] == "En Espera":
                                 task_to_update["status"] = "Pendiente"
-                        save_tasks(ss.tasks)
-                        ss.show_assign_for = None
-                        st.success("Cambios guardados.")
-                        st.rerun()
+                        save_tasks(ss.tasks); ss.show_assign_for = None
+                        st.success("Cambios guardados."); st.rerun()
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
@@ -1318,57 +1427,36 @@ ROUTES = {
 # =========================================================
 # APP
 # =========================================================
-if require_auth():
-    render_sidebar()
-
-    task_id_for_dialog = ss.get("expanded_task_id")
-
-    ROUTES.get(ss.section, page_def_carga)()
-
-    # Diálogo de detalle de tarea
-    if task_id_for_dialog:
-        task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
-        if task_data:
-            try:
-                with st.dialog("Detalle de Tarea", width="large"):
-                    st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                    c1, c2, c3, c4 = st.columns(4)
-                    with c1:
-                        st.markdown("**Asignado a:**")
-                        st.markdown(f"`{task_data.get('assigned_to', 'N/A')}`")
-                    with c2:
-                        st.markdown("**Vencimiento:**")
-                        st.markdown(f"`{task_data.get('due', 'N/A')}`")
-                    with c3:
-                        st.markdown("**Estado:**")
-                        st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                    with c4:
-                        st.markdown("**Prioridad:**")
-                        st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-
-                    st.markdown("---")
-                    st.markdown("**Descripción:**")
-                    st.markdown(task_data.get('desc', 'Sin descripción.'))
-                    st.markdown("---")
-
-                    st.markdown("**Actividad Reciente:**")
-                    st.markdown(f"- Tarea creada el {task_data.get('created_at', 'N/A')}")
-                    st.markdown("- *No hay más actividad registrada.*")
-
-                    with st.form("comment_form"):
-                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
-                        submitted = st.form_submit_button("Enviar Comentario")
-                        if submitted:
-                            st.toast("Comentario (aún no) guardado.")
-
-                    if st.button("Cerrar", key="close_dialog"):
+if __name__ == "__main__":
+    if require_auth():
+        render_sidebar()
+        task_id_for_dialog = ss.get("expanded_task_id")
+        ROUTES.get(ss.section, page_def_carga)()
+        if task_id_for_dialog:
+            task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+            if task_data:
+                try:
+                    with st.dialog("Detalle de Tarea", width="large"):
+                        st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            st.markdown("**Asignado a:**"); st.markdown(f"`{task_data.get('assigned_to', 'N/A')}`")
+                        with c2:
+                            st.markdown("**Vencimiento:**"); st.markdown(f"`{task_data.get('due', 'N/A')}`")
+                        with c3:
+                            st.markdown("**Estado:**"); st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                        with c4:
+                            st.markdown("**Prioridad:**"); st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+                        st.markdown("---")
+                        st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+                        st.markdown("---")
+                        st.markdown("**Actividad Reciente:**"); st.markdown(f"- Tarea creada el {task_data.get('created_at', 'N/A')}"); st.markdown("- *No hay más actividad registrada.*")
+                        with st.form("comment_form"):
+                            st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
+                            submitted = st.form_submit_button("Enviar Comentario")
+                            if submitted: st.toast("Comentario (aún no) guardado.")
+                        if st.button("Cerrar", key="close_dialog"): ss.expanded_task_id = None; st.rerun()
+                except Exception as e:
+                    st.error(f"Error al mostrar detalles de la tarea: {e}")
+                    if ss.get("expanded_task_id") == task_id_for_dialog:
                         ss.expanded_task_id = None
-                        st.rerun()
-            except Exception as e:
-                st.error(f"Error al mostrar detalles de la tarea: {e}")
-                if ss.get("expanded_task_id") == task_id_for_dialog:
-                    ss.expanded_task_id = None
-                    st.rerun()
-        else:
-            if ss.get("expanded_task_id") == task_id_for_dialog:
-               ss.expanded_task_id = None
