@@ -1356,19 +1356,22 @@ def page_create_task():
 
     tasks_list = ss.tasks
 
-    all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
-    if "En Espera" not in all_statuses_set: all_statuses_set.add("En Espera")
+        all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
+    if "En Espera" not in all_statuses_set:
+        all_statuses_set.add("En Espera")
     all_statuses = ["Todos"] + sorted(list(all_statuses_set))
 
-    # Preferir mostrar por defecto Pendiente > En Proceso > En Espera; si no existen, 'Todos'
-prefer_order = ["Pendiente", "En Proceso", "En Espera"]
-preferred = next((s for s in prefer_order if s in all_statuses), "Todos")
-selected_status = st.selectbox(
-    "Filtrar por Estado",
-    all_statuses,
-    index=all_statuses.index(preferred)
-)
-    # Resultado filtrado (evita mezclar tabs/espacios y ternarios largos)
+    # Preferir por defecto: Pendiente > En Proceso > En Espera; si no existen, 'Todos'
+    prefer_order = ["Pendiente", "En Proceso", "En Espera"]
+    preferred = next((s for s in prefer_order if s in all_statuses), "Todos")
+    selected_status = st.selectbox(
+        "Filtrar por Estado",
+        options=all_statuses,
+        index=all_statuses.index(preferred),
+        key="all_tasks_filter"
+    )
+
+    # Resultado filtrado (sin ternarios y sin tabs)
     if selected_status == "Todos":
         tasks_to_show = tasks_list
     else:
@@ -1377,6 +1380,7 @@ selected_status = st.selectbox(
     if not tasks_to_show:
         st.info(f"No hay tareas con el estado '{selected_status}'.")
         return
+
 
     # ----- Encabezado de tabla -----
     col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
