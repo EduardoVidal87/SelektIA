@@ -513,7 +513,15 @@ def run_workflow(wf: dict) -> dict:
 
     analyzed_sorted = sorted(analyzed, key=lambda x: x["fit"], reverse=True)
     top = analyzed_sorted[:3]
-    resumen = f"Se analizaron {len(analyzed)} CVs para '{role}'. Top 3: " + ", ".join([f\"{t['name']} ({t['fit']}%)\" for t in top]) if analyzed else "No se encontraron CVs para el rol."
+    analyzed_sorted = sorted(analyzed, key=lambda x: x["fit"], reverse=True)
+top = analyzed_sorted[:3]
+
+if analyzed:
+    top_str = ", ".join([f"{t['name']} ({t['fit']}%)" for t in top])
+    resumen = f"Se analizaron {len(analyzed)} CVs para '{role}'. Top 3: {top_str}"
+else:
+    resumen = "No se encontraron CVs para el rol."
+
 
     result = {
         "workflow_id": wf.get("id"),
@@ -1209,7 +1217,7 @@ def page_analytics():
       st.plotly_chart(fig_funnel, use_container_width=True)
   st.markdown("---")
   st.subheader("Fuentes de Adquisición de Talento")
-  if analisis["source_counts"]]:
+  if analisis["source_counts"]:
       df_sources = pd.DataFrame(list(analisis["source_counts"].items()), columns=["Fuente", "Candidatos"])
       fig_pie = px.pie(df_sources, values='Candidatos', names='Fuente', title='Distribución de Candidatos por Fuente')
       fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
@@ -1352,7 +1360,15 @@ def page_create_task():
     if "En Espera" not in all_statuses_set: all_statuses_set.add("En Espera")
     all_statuses = ["Todos"] + sorted(list(all_statuses_set))
 
-    selected_status = st.selectbox("Filtrar por Estado", all_statuses, index=0)
+    # Preferir mostrar por defecto Pendiente > En Proceso > En Espera; si no existen, 'Todos'
+prefer_order = ["Pendiente", "En Proceso", "En Espera"]
+preferred = next((s for s in prefer_order if s in all_statuses), "Todos")
+selected_status = st.selectbox(
+    "Filtrar por Estado",
+    all_statuses,
+    index=all_statuses.index(preferred)
+)
+
     tasks_to_show = tasks_list if selected_status=="Todos" else [t for t in tasks_list if t.get("status") == selected_status]
 
     if not tasks_to_show:
