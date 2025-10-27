@@ -1368,8 +1368,7 @@ selected_status = st.selectbox(
     all_statuses,
     index=all_statuses.index(preferred)
 )
-
-        # Resultado filtrado (evita mezclar tabs/espacios y ternarios largos)
+    # Resultado filtrado (evita mezclar tabs/espacios y ternarios largos)
     if selected_status == "Todos":
         tasks_to_show = tasks_list
     else:
@@ -1378,7 +1377,6 @@ selected_status = st.selectbox(
     if not tasks_to_show:
         st.info(f"No hay tareas con el estado '{selected_status}'.")
         return
-
 
     # ----- Encabezado de tabla -----
     col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
