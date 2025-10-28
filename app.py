@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
 
-# ====== (Opcional) Paquetes de LLM para la nueva sección de 'Evaluación de CVs' ======
+# ====== Paquetes de LLM para la sección de 'Evaluación de CVs' ======
 # Se importan de forma segura; si no están instalados, la app no se rompe.
 try:
     from dotenv import load_dotenv
@@ -40,7 +40,7 @@ TITLE_DARK = "#142433"
 BAR_DEFAULT = "#E9F3FF"
 BAR_GOOD    = "#33FFAC"
 
-# Nueva secuencia de colores para Plotly (Req. 6)
+# Secuencia de colores para Plotly
 PLOTLY_GREEN_SEQUENCE = ["#00CD78", "#00B468", "#33FFAC", "#007F46", "#66FFC2"]
 
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
@@ -65,7 +65,9 @@ AGENT_DEFAULT_IMAGES = {
   "Coordinador RR.HH.":"https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=512&auto-format&fit=crop",
   "Admin RR.HH.":      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?q=80&w=512&auto-format&fit=crop",
 }
-LLM_MODELS = ["gpt-4o-mini","gpt-4.1","gpt-4o","claude-3.5-sonnet","claude-3-haiku","gemini-1.5-pro","mixtral-8x7b","llama-3.1-70b"]
+# Lista de LLMs eliminada (Req. 1)
+# LLM_MODELS = ["gpt-4o-mini","gpt-4.1","gpt-4o","claude-3.5-sonnet","claude-3-haiku","gemini-1.5-pro","mixtral-8x7b","llama-3.1-70b"]
+LLM_IN_USE = "gpt-4o-mini" # Modelo real usado en las funciones _extract
 
 # ===== Presets de puestos =====
 ROLE_PRESETS = {
@@ -153,8 +155,13 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .block-container [data-testid="stSelectbox"]>div>div,
 .block-container [data-baseweb="select"],
 .block-container [data-testid="stTextInput"] input,
+.block-container [data-testid="stDateInput"] input,
 .block-container [data-testid="stTextArea"] textarea {{
   background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
+}}
+.block-container [data-testid="stTextInput"] input[disabled] {{
+  background: #E9F3FF !important;
+  color: #555 !important;
 }}
 
 .block-container table {{ background:#fff !important; border:1px solid #E3EDF6 !important; border-radius:8px !important; }}
@@ -232,9 +239,9 @@ DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
 DEFAULT_TASKS = [
     {"id": str(uuid.uuid4()), "titulo":"Revisar CVs top 5", "desc":"Analizar a los 5 candidatos con mayor fit para 'Business Analytics'.", "due":str(date.today() + timedelta(days=2)), "assigned_to": "Headhunter", "status": "Pendiente", "priority": "Alta", "created_at": (date.today() - timedelta(days=3)).isoformat()},
-    {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "priority": "Media", "created_at": (date.today() - timedelta(days=8)).isoformat()},
+    {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "priority": "Media", "created_at": (date.today() - timedelta(days=8)).isoformat(), "context": {"candidate_name": "Rivers Brykson", "role": "VP de Marketing"}},
     {"id": str(uuid.uuid4()), "titulo":"Crear workflow de Onboarding", "desc":"Definir pasos en 'Flujos' para Contratado.", "due":str(date.today() - timedelta(days=1)), "assigned_to": "Admin RR.HH.", "status": "Completada", "priority": "Baja", "created_at": (date.today() - timedelta(days=15)).isoformat()},
-    {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "priority": "Media", "created_at": date.today().isoformat()}
+    {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "priority": "Media", "created_at": date.today().isoformat(), "context": {"candidate_name": "MartaDiaz.pdf", "role": "Desarrollador/a Backend (Python)"}}
 ]
 
 def load_roles():
@@ -327,6 +334,10 @@ if "pipeline_filter" not in ss: ss.pipeline_filter = None
 if "expanded_task_id" not in ss: ss.expanded_task_id = None
 if "show_assign_for" not in ss: ss.show_assign_for = None
 if "confirm_delete_id" not in ss: ss.confirm_delete_id = None
+
+# Nuevos estados para edición de flujos y resultados de LLM
+if "editing_flow_id" not in ss: ss.editing_flow_id = None
+if "llm_eval_results" not in ss: ss.llm_eval_results = [] # (Req. 5)
 
 # =========================================================
 # UTILS
@@ -461,7 +472,8 @@ def _priority_pill(p: str) -> str:
     p_safe = p if p in TASK_PRIORITIES else "Media"
     return f'<span class="badge priority-{p_safe}">{p_safe}</span>'
 
-def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media"):
+# (Req 7.2) Modificado para aceptar contexto
+def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media", context:dict=None):
   t = {
     "id": str(uuid.uuid4()),
     "titulo": f"Ejecutar flujo: {name}",
@@ -471,10 +483,28 @@ def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coord
     "status": status,
     "priority": priority if priority in TASK_PRIORITIES else "Media",
     "created_at": date.today().isoformat(),
+    "context": context or {} # Añadido
   }
   if not isinstance(ss.tasks, list): ss.tasks = []
   ss.tasks.insert(0, t)
   save_tasks(ss.tasks)
+
+# (Req 3) Helper para crear tarea manual
+def create_manual_task(title, desc, due_date, assigned_to, priority):
+    t = {
+        "id": str(uuid.uuid4()),
+        "titulo": title,
+        "desc": desc,
+        "due": due_date.isoformat(),
+        "assigned_to": assigned_to,
+        "status": "Pendiente",
+        "priority": priority,
+        "created_at": date.today().isoformat(),
+        "context": {"source": "Manual"}
+    }
+    if not isinstance(ss.tasks, list): ss.tasks = []
+    ss.tasks.insert(0, t)
+    save_tasks(ss.tasks)
 
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
@@ -555,6 +585,7 @@ def render_sidebar():
     if st.button("Flujos", key="sb_flows"):
       ss.section = "flows"
       ss.pipeline_filter = None
+      ss.editing_flow_id = None # Limpiar edición al cambiar
     if st.button("Agentes", key="sb_agents"):
       ss.section = "agents"
       ss.pipeline_filter = None
@@ -589,7 +620,10 @@ def render_sidebar():
 
     st.markdown("#### ACCIONES")
     if st.button("Cerrar sesión", key="sb_logout"):
-      ss.auth = None; st.rerun()
+      ss.auth = None
+      ss.editing_flow_id = None
+      ss.llm_eval_results = []
+      st.rerun()
 
 # =========================================================
 # PÁGINAS
@@ -725,7 +759,7 @@ def _extract_with_openai(job_description: str, resume_content: str) -> dict:
     except Exception:
         return {}
     try:
-        chat = ChatOpenAI(temperature=0, model="gpt-4o-mini", openai_api_key=api_key)
+        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key) # (Req 1) Usa la const
         json_object_structure = """{
             "Name": "Full Name",
             "Last_position": "The most recent position in which the candidate worked",
@@ -756,11 +790,12 @@ def _extract_with_openai(job_description: str, resume_content: str) -> dict:
         return {}
 
 def _create_llm_bar(df: pd.DataFrame):
-    # Aplicando color (Req. 6)
+    # Aplicando color
     fig = px.bar(df, x='file_name', y='Score', text='Score', title='Comparativa de Puntajes (LLM)',
                  color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
     for _, row in df.iterrows():
         fig.add_annotation(x=row['file_name'], y=row['Score'], text=row.get('Name',''), showarrow=True, arrowhead=1, ax=0, ay=-20)
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
     return fig
 
 def _results_to_df(results: list) -> pd.DataFrame:
@@ -798,35 +833,35 @@ def page_puestos():
 def page_eval():
     st.header("Resultados de evaluación")
 
-    # === NUEVO: Bloque LLM (Movido y modificado - Req 1, 6, 7) ===
+    # === Bloque LLM (Req. 5 - Modificado para guardar bytes) ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
         jd_llm = st.text_area("Job Description para el LLM", ss.get("last_jd_text",""), height=120, key="jd_llm")
         up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
         run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
+        
         if run_llm and up:
             if not _LC_AVAILABLE:
                 st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
-            results = []
+                ss.llm_eval_results = []
+            
+            results_with_bytes = []
             for f in up:
-                # Cargar y extraer texto con PyPDFLoader si existe, si no con PyPDF2
+                f_bytes = f.read(); f.seek(0) # Leer bytes para guardar (Req. 5)
                 text = ""
                 try:
                     if _LC_AVAILABLE:
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                            tmp.write(f.read())
-                            tmp.flush()
+                            tmp.write(f_bytes); tmp.flush()
                             loader = PyPDFLoader(tmp.name)
                             pages = loader.load()
                             text = "\n".join([p.page_content for p in pages])
                     else:
-                        reader = PdfReader(io.BytesIO(f.read()))
-                        for p in reader.pages:
-                            text += (p.extract_text() or "") + "\n"
+                        reader = PdfReader(io.BytesIO(f_bytes))
+                        for p in reader.pages: text += (p.extract_text() or "") + "\n"
                 except Exception:
                     try:
-                        reader = PdfReader(io.BytesIO(f.read()))
-                        for p in reader.pages:
-                            text += (p.extract_text() or "") + "\n"
+                        reader = PdfReader(io.BytesIO(f_bytes))
+                        for p in reader.pages: text += (p.extract_text() or "") + "\n"
                     except Exception as e:
                         st.error(f"No se pudo leer {f.name}: {e}")
                         continue
@@ -835,21 +870,40 @@ def page_eval():
                 if not meta:
                     meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
                 meta["file_name"] = f.name
-                results.append(meta)
+                
+                # Guardar meta y bytes (Req. 5)
+                results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
 
-            df_llm = _results_to_df(results)
+            ss.llm_eval_results = results_with_bytes # Guardar en session_state
+
+        # Mostrar resultados si existen en session_state
+        if ss.llm_eval_results:
+            df_llm = _results_to_df([r["meta"] for r in ss.llm_eval_results])
             if not df_llm.empty:
                 st.subheader("Resultados LLM")
                 st.dataframe(df_llm, use_container_width=True, hide_index=True)
                 st.plotly_chart(_create_llm_bar(df_llm), use_container_width=True)
             else:
                 st.info("Sin resultados para mostrar.")
-
-    # === Bloque original (matching por skills manual) ===
-    # Eliminado según Req. 2
-
-    # === Detalle y explicación ===
-    # Eliminado según Req. 2
+        else:
+            st.info("Sube archivos y ejecuta la evaluación para ver resultados.")
+            
+    # === Visualizador de CV (Req. 5) ===
+    if ss.llm_eval_results:
+        st.markdown("---")
+        st.subheader("Visualizar CV Evaluado")
+        
+        # Crear lista de nombres de archivo para el selectbox
+        file_names = [r["meta"]["file_name"] for r in ss.llm_eval_results]
+        selected_file_name = st.selectbox("Selecciona un CV para visualizar", file_names)
+        
+        if selected_file_name:
+            # Encontrar los bytes correspondientes
+            selected_file_data = next((r for r in ss.llm_eval_results if r["meta"]["file_name"] == selected_file_name), None)
+            if selected_file_data and selected_file_data.get("_bytes"):
+                pdf_viewer_embed(selected_file_data["_bytes"], height=500)
+            else:
+                st.error("No se encontró el archivo PDF correspondiente para la visualización.")
 
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
@@ -896,8 +950,11 @@ def page_pipeline():
                             st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
                         elif new_stage == "Entrevista Telefónica":
                             st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
+                            # (Req 7.2) Pasa el contexto a la tarea
+                            task_context = {"candidate_name": card_name, "candidate_id": c["id"], "role": c.get("Role", "N/A")}
                             create_task_from_flow(f"Programar entrevista - {card_name}", date.today()+timedelta(days=2),
-                                                  "Coordinar entrevista telefónica con el candidato.", assigned="Headhunter", status="Pendiente")
+                                                  "Coordinar entrevista telefónica con el candidato.", 
+                                                  assigned="Headhunter", status="Pendiente", context=task_context)
                         elif new_stage == "Contratado":
                             st.balloons()
                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
@@ -976,7 +1033,7 @@ def page_agent_tasks():
     else:
         st.info(f"No hay tareas en el estado '{selected_status}' asignadas al equipo.")
 
-# ===================== AGENTES =====================
+# ===================== AGENTES (Modificado Req. 1) =====================
 def page_agents():
   st.header("Agentes")
   st.subheader("Crear / Editar agente")
@@ -998,10 +1055,12 @@ def page_agents():
         backstory  = st.text_area("Backstory*", value="Eres un analista de RR.HH. con experiencia en análisis de documentos, CV y currículums.", height=120)
         guardrails = st.text_area("Guardrails", value="No compartas datos sensibles. Cita la fuente (CV o JD) al argumentar.", height=90)
       with c2:
-        herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
-        llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
+        # (Req. 1) Eliminado 'herramientas'
+        # (Req. 1) Reemplazado selectbox de LLM con texto deshabilitado
+        st.text_input("Modelo LLM (Evaluación)", value=LLM_IN_USE, disabled=True)
         img_src    = st.text_input("URL de imagen", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
         perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
+      
       saved = st.form_submit_button("Guardar/Actualizar Agente")
       if saved:
         rn = (role_name or "").strip()
@@ -1010,8 +1069,9 @@ def page_agents():
         else:
           ss.agents.append({
             "rol": rn, "objetivo": objetivo, "backstory": backstory,
-            "guardrails": guardrails, "herramientas": herramientas,
-            "llm_model": llm_model, "image": img_src, "perms": perms,
+            "guardrails": guardrails, "herramientas": [], # (Req. 1) Guardar vacío
+            "llm_model": LLM_IN_USE, # (Req. 1) Guardar modelo fijo
+            "image": img_src, "perms": perms,
             "ts": datetime.utcnow().isoformat()
           })
           save_agents(ss.agents)
@@ -1048,20 +1108,21 @@ def page_agents():
 
   if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
     ag = ss.agents[ss.agent_view_idx]
-    st.markdown("### Detalle del agente"); st.caption("Modelo LLM")
+    st.markdown("### Detalle del agente");
     st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
       raw_img = ag.get("image") or ""
       safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip() else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
       st.markdown(f'<div style="text-align:center;margin:6px 0 12px"><img src="{safe_img}" style="width:180px;height:180px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD;"></div>', unsafe_allow_html=True)
-      st.caption("Modelo LLM"); st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model','gpt-4o-mini')}</div>", unsafe_allow_html=True)
+      st.caption("Modelo LLM"); st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model',LLM_IN_USE)}</div>", unsafe_allow_html=True)
     with c2:
       st.text_input("Role*", value=ag.get("rol",""), disabled=True)
       st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
       st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
       st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
-      st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
+      # (Req. 1) Ocultado 'herramientas'
+      # st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
       st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1072,16 +1133,17 @@ def page_agents():
       objetivo   = st.text_input("Objetivo*", value=ag.get("objetivo",""))
       backstory  = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
       guardrails = st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
-      herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
-      llm_model    = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
+      # (Req. 1) Eliminado 'herramientas'
+      # (Req. 1) Reemplazado selectbox de LLM
+      st.text_input("Modelo LLM (Evaluación)", value=ag.get('llm_model', LLM_IN_USE), disabled=True)
       img_src      = st.text_input("URL de imagen", value=ag.get("image",""))
       perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
-        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas": herramientas,
-                   "llm_model":llm_model,"image":img_src,"perms":perms})
+        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,
+                   "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-# ===================== FLUJOS =====================
+# ===================== FLUJOS (Modificado Req. 4) =====================
 def page_flows():
   st.header("Flujos")
   vista_como = ss.auth["role"]
@@ -1103,9 +1165,29 @@ def page_flows():
                      "Programado": wf.get("schedule_at","—")})
       df = pd.DataFrame(rows)
       st.dataframe(df, use_container_width=True, height=260)
+      
       if rows:
-        sel = st.selectbox("Selecciona un flujo", [r["ID"] for r in rows],
-                           format_func=lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x))
+        # (Req. 4) Selector para editar
+        sel_options = [r["ID"] for r in rows]
+        sel_format_func = lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x)
+        
+        # Settear índice basado en ss.editing_flow_id
+        try:
+            sel_index = sel_options.index(ss.editing_flow_id)
+        except ValueError:
+            sel_index = 0
+            if ss.editing_flow_id is not None:
+                ss.editing_flow_id = None # Limpiar si el ID ya no existe
+
+        sel = st.selectbox("Selecciona un flujo para ver o editar", sel_options,
+                           index=sel_index, format_func=sel_format_func, key="flow_selector")
+
+        # Botón para cargar el flujo seleccionado para edición
+        if st.button("Cargar Flujo para Editar", key="load_flow_edit"):
+            ss.editing_flow_id = sel
+            st.rerun()
+
+        # Obtener el flujo seleccionado (no necesariamente el de edición)
         wf = next((w for w in ss.workflows if w["id"]==sel), None)
         if wf:
           c1,c2,c3 = st.columns(3)
@@ -1114,11 +1196,13 @@ def page_flows():
               clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
               clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""; clone["schedule_at"]=""
               ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
+              ss.editing_flow_id = None
               st.rerun()
           with c2:
             if st.button("🗑 Eliminar"):
               ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
               st.success("Flujo eliminado.")
+              if ss.editing_flow_id == wf["id"]: ss.editing_flow_id = None
               st.rerun()
           with c3:
             st.markdown(f"<div class='badge'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
@@ -1135,17 +1219,44 @@ def page_flows():
                   save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
 
   with right:
-    st.subheader("Crear / Editar flujo")
+    # (Req. 4) Cargar datos del flujo en edición
+    editing_wf = None
+    if ss.editing_flow_id:
+        editing_wf = next((w for w in ss.workflows if w["id"] == ss.editing_flow_id), None)
+    
+    st.subheader("Crear Flujo" if not editing_wf else f"Editando Flujo: {editing_wf.get('name')}")
+    
+    if editing_wf:
+        if st.button("✖ Cancelar Edición"):
+            ss.editing_flow_id = None
+            st.rerun()
+
+    # Settear valores default del formulario
+    default_name = editing_wf.get("name", "Analizar CV") if editing_wf else "Analizar CV"
+    default_role = editing_wf.get("role", "Diseñador/a UX") if editing_wf else "Diseñador/a UX"
+    try:
+        role_index = list(ROLE_PRESETS.keys()).index(default_role)
+    except ValueError:
+        role_index = 2 # Fallback
+    default_desc = editing_wf.get("description", EVAL_INSTRUCTION) if editing_wf else EVAL_INSTRUCTION
+    default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
+    default_jd_text = editing_wf.get("jd_text", ROLE_PRESETS[default_role]["jd"]) if editing_wf else ROLE_PRESETS[default_role]["jd"]
+    default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
+    
+    # Asegurarse que el índice del agente es válido
+    if not (0 <= default_agent_idx < len(ss.agents)):
+        default_agent_idx = 0
+
     with st.form("wf_form"):
       st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
-      name = st.text_input("Name*", value="Analizar CV")
-      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=2)
-      desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
-      expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
+      name = st.text_input("Name*", value=default_name)
+      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index)
+      desc = st.text_area("Description*", value=default_desc, height=110)
+      expected = st.text_area("Expected output*", value=default_expected, height=80)
 
       st.markdown("**Job Description (elige una opción)**")
-      jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
-      jd_file = st.file_uploader("...o sube JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
+      jd_text = st.text_area("JD en texto", value=default_jd_text, height=140)
+      jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
       jd_from_file = ""
       if jd_file is not None:
         jd_from_file = extract_text_from_file(jd_file)
@@ -1155,8 +1266,8 @@ def page_flows():
       st.markdown("---")
       st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
       if ss.agents:
-        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model','model')})" for i,a in enumerate(ss.agents)]
-        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=0)
+        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model',LLM_IN_USE)})" for i,a in enumerate(ss.agents)]
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx)
         agent_idx = int(agent_pick.split(" — ")[0])
       else:
         st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
@@ -1166,38 +1277,64 @@ def page_flows():
       st.markdown("<div class='badge'>Guardar · Aprobación y programación</div>", unsafe_allow_html=True)
       run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
       run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
-      col_a, col_b, col_c = st.columns(3)
-      save_draft    = col_a.form_submit_button("💾 Guardar borrador")
-      send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
-      schedule      = col_c.form_submit_button("📅 Guardar y Programar")
+      
+      # (Req. 4) Lógica de botones separada
+      if editing_wf:
+          update_flow = st.form_submit_button("💾 Actualizar Flujo")
+          save_draft = False; send_approval = False; schedule = False
+      else:
+          update_flow = False
+          col_a, col_b, col_c = st.columns(3)
+          save_draft    = col_a.form_submit_button("💾 Guardar borrador")
+          send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
+          schedule      = col_c.form_submit_button("📅 Guardar y Programar")
 
-      if save_draft or send_approval or schedule:
-        jd_final = jd_from_file if jd_from_file else jd_text
+      if save_draft or send_approval or schedule or update_flow:
+        jd_final = jd_from_file if jd_from_file.strip() else jd_text
         if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
         elif agent_idx < 0:      st.error("Debes asignar un agente.")
         else:
-          wf = {"id": f"WF-{int(datetime.now().timestamp())}","name": name,"role": role,"description": desc,"expected_output": expected,
-                "jd_text": jd_final[:200000],"agent_idx": agent_idx,"created_at": datetime.now().isoformat(),
-                "status": "Borrador","approved_by": "","approved_at": "","schedule_at": ""}
-          if send_approval:
-            wf["status"] = "Pendiente de aprobación"; st.success("Flujo enviado a aprobación.")
-          if schedule:
-            if puede_aprobar:
-              wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success("Flujo programado.")
-            else:
-              wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info("Pendiente de aprobación.")
-          if save_draft:
-            st.success("Borrador guardado.")
-          ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
+          wf_data = {
+              "name": name, "role": role, "description": desc, "expected_output": expected,
+              "jd_text": jd_final[:200000], "agent_idx": agent_idx
+          }
 
-# ===================== ANALYTICS (MODIFICADO - Req 3 y 6) =====================
+          if update_flow:
+              # (Req. 4) Actualizar flujo existente
+              editing_wf.update(wf_data)
+              editing_wf["status"] = "Borrador" # Resetear estado al editar
+              save_workflows(ss.workflows)
+              st.success("Flujo actualizado.")
+              ss.editing_flow_id = None
+              st.rerun()
+          else:
+              # Lógica de creación (como antes)
+              wf = wf_data.copy()
+              wf.update({
+                  "id": f"WF-{int(datetime.now().timestamp())}",
+                  "created_at": datetime.now().isoformat(),
+                  "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""
+              })
+              
+              if send_approval:
+                wf["status"] = "Pendiente de aprobación"; st.success("Flujo enviado a aprobación.")
+              if schedule:
+                if puede_aprobar:
+                  wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success("Flujo programado.")
+                else:
+                  wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info("Pendiente de aprobación.")
+              if save_draft:
+                st.success("Borrador guardado.")
+              
+              ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
+
+# ===================== ANALYTICS =====================
 def page_analytics():
     st.header("Analytics y KPIs Estratégicos")
 
-    # --- Fila 1: KPIs Principales (Reutilizando st.metric) ---
+    # --- Fila 1: KPIs Principales ---
     st.subheader("Visión General del Proceso")
     c1, c2, c3, c4 = st.columns(4)
-    # Dummy data para KPIs
     c1.metric("Costo por Hire (Promedio)", "S/ 4,250", "-8% vs Q2")
     c2.metric("Time to Hire (P50)", "28 días", "+2 días")
     c3.metric("Conversión (Oferta > Contratado)", "81%", "+3%")
@@ -1205,26 +1342,23 @@ def page_analytics():
 
     st.markdown("---")
 
-    # --- Fila 2: Gráficos de Embudo y Tiempos (Reutilizando st.columns y Plotly) ---
+    # --- Fila 2: Gráficos de Embudo y Tiempos ---
     col_funnel, col_time = st.columns(2)
 
     with col_funnel:
         st.subheader("Embudo de Conversión")
-        # Dummy data para el embudo
         df_funnel = pd.DataFrame({
             "Fase": ["Recibido", "Screening RRHH", "Entrevista Gerencia", "Oferta", "Contratado"],
             "Candidatos": [1200, 350, 80, 25, 20]
         })
         df_funnel = df_funnel[df_funnel["Candidatos"] > 0]
         fig_funnel = px.funnel(df_funnel, x='Candidatos', y='Fase', title="Conversión Total por Fase")
-        # Aplicando color (Req. 6)
         fig_funnel.update_traces(marker=dict(color=PRIMARY)) 
         fig_funnel.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
         st.plotly_chart(fig_funnel, use_container_width=True)
 
     with col_time:
         st.subheader("Tiempos del Proceso (P50 / P90)")
-        # Dummy data para tiempos
         df_times = pd.DataFrame({
             "Métrica": ["Time to Interview", "Time to Offer", "Time to Hire"],
             "P50 (Días)": [12, 22, 28],
@@ -1233,18 +1367,17 @@ def page_analytics():
         df_times_melted = df_times.melt(id_vars="Métrica", var_name="Percentil", value_name="Días")
         fig_time = px.bar(df_times_melted, x="Métrica", y="Días", color="Percentil", 
                           barmode="group", title="Tiempos Clave del Ciclo (P50 vs P90)",
-                          color_discrete_sequence=PLOTLY_GREEN_SEQUENCE) # Aplicando color (Req. 6)
+                          color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
         fig_time.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title="Días")
         st.plotly_chart(fig_time, use_container_width=True)
 
     st.markdown("---")
 
-    # --- Fila 3: Productividad y Exactitud (Reutilizando st.columns y Plotly) ---
+    # --- Fila 3: Productividad y Exactitud ---
     col_prod, col_cost_ia = st.columns(2)
 
     with col_prod:
         st.subheader("Productividad del Reclutador")
-        # Dummy data para productividad
         df_prod = pd.DataFrame({
             "Reclutador": ["Admin", "Sup", "Colab", "Headhunter"],
             "Contratados (Últ. 90d)": [8, 5, 12, 9],
@@ -1252,13 +1385,12 @@ def page_analytics():
         })
         fig_prod = px.bar(df_prod, x="Reclutador", y="Contratados (Últ. 90d)", 
                           title="Contrataciones por Reclutador",
-                          color_discrete_sequence=PLOTLY_GREEN_SEQUENCE) # Aplicando color (Req. 6)
+                          color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
         fig_prod.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_prod, use_container_width=True)
 
     with col_cost_ia:
         st.subheader("Exactitud de IA")
-        # Dummy data para exactitud IA
         df_ia = pd.DataFrame({
             "Puesto": ["Business Analytics", "Diseñador/a UX", "Ingeniero/a", "Enfermera/o"],
             "Candidatos": [120, 85, 200, 310],
@@ -1266,13 +1398,38 @@ def page_analytics():
         })
         fig_ia = px.scatter(df_ia, x="Candidatos", y="Fit Promedio IA", size="Candidatos", color="Puesto",
                             title="Fit Promedio (IA) por Volumen de Puesto",
-                            color_discrete_sequence=PLOTLY_GREEN_SEQUENCE) # Aplicando color (Req. 6)
+                            color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS =====================
+# ===================== TODAS LAS TAREAS (Modificado Req. 3, 7) =====================
 def page_create_task():
     st.header("Todas las Tareas")
+    
+    # (Req. 3) Expander para creación manual de tareas
+    with st.expander("➕ Crear Tarea Manual"):
+        with st.form("manual_task_form", clear_on_submit=True):
+            st.markdown("**Nueva Tarea**")
+            new_title = st.text_input("Título de la Tarea*")
+            new_desc = st.text_area("Descripción")
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                new_due = st.date_input("Vencimiento", date.today() + timedelta(days=7))
+            with c2:
+                all_assignees = list(USERS.keys()) + DEFAULT_ROLES
+                new_assignee = st.selectbox("Asignar a", sorted(list(set(all_assignees))), index=0)
+            with c3:
+                new_prio = st.selectbox("Prioridad", TASK_PRIORITIES, index=1)
+                
+            if st.form_submit_button("Guardar Tarea"):
+                if new_title.strip():
+                    create_manual_task(new_title, new_desc, new_due, new_assignee, new_prio)
+                    st.success(f"Tarea '{new_title}' creada y asignada a {new_assignee}.")
+                    st.rerun()
+                else:
+                    st.error("El Título de la Tarea es obligatorio.")
+
     st.info("Muestra todas las tareas registradas.")
     if not isinstance(ss.tasks, list):
         st.error("Error interno: La lista de tareas no es válida.")
@@ -1394,6 +1551,57 @@ def page_create_task():
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
+    # (Req. 7) Lógica del diálogo movida aquí para corregir el error
+    task_id_for_dialog = ss.get("expanded_task_id")
+    if task_id_for_dialog:
+        task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+        if task_data:
+            try:
+                with st.dialog("Detalle de Tarea", width="large"):
+                    st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                    
+                    # (Req. 7.2 / Foto 3) Layout de detalles mejorado
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Información Principal**")
+                        st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                        st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                        st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    with c2:
+                        st.markdown("**Estado y Prioridad**")
+                        st.markdown(f"**Estado:**"); st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                        st.markdown(f"**Prioridad:**"); st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+
+                    # (Req 7.2 / Foto 3) Mostrar contexto del postulante si existe
+                    context = task_data.get("context")
+                    if context and ("candidate_name" in context or "role" in context):
+                        st.markdown("---")
+                        st.markdown("**Contexto del Flujo**")
+                        if "candidate_name" in context:
+                            st.markdown(f"**Postulante:** {context['candidate_name']}")
+                        if "role" in context:
+                            st.markdown(f"**Puesto:** {context['role']}")
+                    
+                    st.markdown("---")
+                    st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+                    st.markdown("---")
+                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
+                    
+                    with st.form("comment_form"):
+                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
+                        submitted = st.form_submit_button("Enviar Comentario")
+                        if submitted: st.toast("Comentario (aún no) guardado.")
+                    
+                    if st.button("Cerrar", key="close_dialog"):
+                        ss.expanded_task_id = None
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Error al mostrar detalles de la tarea: {e}")
+                if ss.get("expanded_task_id") == task_id_for_dialog:
+                    ss.expanded_task_id = None
+        else:
+             ss.expanded_task_id = None # Limpiar si la tarea ya no existe
+
 # =========================================================
 # ROUTER
 # =========================================================
@@ -1419,33 +1627,7 @@ ROUTES = {
 if __name__ == "__main__":
     if require_auth():
         render_sidebar()
-        task_id_for_dialog = ss.get("expanded_task_id")
+        # (Req. 7) Lógica del diálogo movida a 'page_create_task'
+        # task_id_for_dialog = ss.get("expanded_task_id") 
         ROUTES.get(ss.section, page_def_carga)()
-        if task_id_for_dialog:
-            task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
-            if task_data:
-                try:
-                    with st.dialog("Detalle de Tarea", width="large"):
-                        st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                        c1, c2, c3, c4 = st.columns(4)
-                        with c1:
-                            st.markdown("**Asignado a:**"); st.markdown(f"`{task_data.get('assigned_to', 'N/A')}`")
-                        with c2:
-                            st.markdown("**Vencimiento:**"); st.markdown(f"`{task_data.get('due', 'N/A')}`")
-                        with c3:
-                            st.markdown("**Estado:**"); st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                        with c4:
-                            st.markdown("**Prioridad:**"); st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-                        st.markdown("---")
-                        st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
-                        st.markdown("---")
-                        st.markdown("**Actividad Reciente:**"); st.markdown(f"- Tarea creada el {task_data.get('created_at', 'N/A')}"); st.markdown("- *No hay más actividad registrada.*")
-                        with st.form("comment_form"):
-                            st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
-                            submitted = st.form_submit_button("Enviar Comentario")
-                            if submitted: st.toast("Comentario (aún no) guardado.")
-                        if st.button("Cerrar", key="close_dialog"): ss.expanded_task_id = None; st.rerun()
-                except Exception as e:
-                    st.error(f"Error al mostrar detalles de la tarea: {e}")
-                    if ss.get("expanded_task_id") == task_id_for_dialog:
-                        ss.expanded_task_id = None
+        # (Req. 7) Lógica del diálogo movida a 'page_create_task'
