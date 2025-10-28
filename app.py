@@ -658,8 +658,8 @@ def render_sidebar():
             ss.pipeline_filter = None
       else:
         if st.button(txt, key=f"sb_{sec}"):
-            ss.section = sec
-            ss.pipeline_filter = None
+          ss.section = sec
+          ss.pipeline_filter = None
 
     st.markdown("#### TAREAS")
     if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task"
@@ -1000,9 +1000,9 @@ def page_pipeline():
         candidates_to_show = ss.candidates
     st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
     if not candidates_to_show and filter_stage:
-          st.info(f"No hay candidatos en la fase **{filter_stage}**."); return
+            st.info(f"No hay candidatos en la fase **{filter_stage}**."); return
     elif not ss.candidates:
-          st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**."); return
+            st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**."); return
     candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
     for c in candidates_to_show:
         candidates_by_stage[c["stage"]].append(c)
@@ -1486,7 +1486,7 @@ def page_flows():
                     
                     if st.button("Cerrar", key="close_flow_dialog"):
                         ss.viewing_flow_id = None
-                        st.rerun()
+                        # st.rerun() # <--- ¡FIXED! Esta línea se eliminó.
                         
             except Exception as e:
                 st.error(f"Error al mostrar detalles del flujo: {e}")
@@ -1762,7 +1762,8 @@ def page_create_task():
                     
                     if st.button("Cerrar", key="close_dialog"):
                         ss.expanded_task_id = None
-                        st.rerun()
+                        # st.rerun() # <--- ¡FIXED! Esta línea se eliminó.
+                        
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
                 if ss.get("expanded_task_id") == task_id_for_dialog:
@@ -1796,4 +1797,3 @@ if __name__ == "__main__":
     if require_auth():
         render_sidebar()
         ROUTES.get(ss.section, page_def_carga)()
-
