@@ -46,6 +46,8 @@ JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
 PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"]
 TASK_PRIORITIES = ["Alta", "Media", "Baja"]
 FLOW_STATUSES = ["Borrador", "Pendiente de aprobación", "Aprobado", "Rechazado", "Programado"]
+# (Req 3) Estados para Puestos
+POSITION_STATUSES = ["Abierto", "Pausado", "Cerrado"]
 
 EVAL_INSTRUCTION = (
   "Debes analizar los CVs de postulantes y calificarlos de 0% a 100% según el nivel de coincidencia con el JD. "
@@ -86,7 +88,7 @@ ROLE_PRESETS = {
   "Diseñador/a UX": {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
-    "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
+    "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
     "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
@@ -200,6 +202,12 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .status-Contratado {{ background-color: #E6FFF1 !important; color: {PRIMARY} !important; border-color: #98E8BF !important; }}
 .status-Descartado {{ background-color: #FFE6E6 !important; color: #D60000 !important; border-color: #FFB3B3 !important; }}
 .status-Oferta {{ background-color: #FFFDE6 !important; color: #E8B900 !important; border-color: #FFE066 !important; }}
+
+/* (Req 3) Estilos para Puestos (similar a Flujos) */
+.pos-badge {{ border:1px solid #E3EDF6; background:#F7FBFF; border-radius:8px; padding:4px 8px; font-size:12px; color:#333; }}
+.pos-badge-Abierto {{ border-color: {PRIMARY}; background: #E6FFF1; color: {PRIMARY}; font-weight: 600; }}
+.pos-badge-Pausado {{ border-color: #FFB700; background: #FFFDE6; color: #E8B900; }}
+.pos-badge-Cerrado {{ border-color: #D1D5DB; background: #F3F4F6; color: #6B7280; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -227,13 +235,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# Persistencia (Agentes / Flujos / Roles / Tareas)
+# Persistencia (Agentes / Flujos / Roles / Tareas / Puestos)
 # =========================================================
 DATA_DIR = Path("data"); DATA_DIR.mkdir(exist_ok=True)
 AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
 TASKS_FILE = DATA_DIR / "tasks.json"
+POSITIONS_FILE = DATA_DIR / "positions.json" # (Req 3)
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
@@ -242,6 +251,22 @@ DEFAULT_TASKS = [
     {"id": str(uuid.uuid4()), "titulo":"Coordinar entrevista de Rivers Brykson", "desc":"Agendar la 2da entrevista (Gerencia) para el puesto de VP de Marketing.", "due":str(date.today() + timedelta(days=5)), "assigned_to": "Coordinador RR.HH.", "status": "En Proceso", "priority": "Media", "created_at": (date.today() - timedelta(days=8)).isoformat(), "context": {"candidate_name": "Rivers Brykson", "role": "VP de Marketing"}},
     {"id": str(uuid.uuid4()), "titulo":"Crear workflow de Onboarding", "desc":"Definir pasos en 'Flujos' para Contratado.", "due":str(date.today() - timedelta(days=1)), "assigned_to": "Admin RR.HH.", "status": "Completada", "priority": "Baja", "created_at": (date.today() - timedelta(days=15)).isoformat()},
     {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "priority": "Media", "created_at": date.today().isoformat(), "context": {"candidate_name": "MartaDiaz.pdf", "role": "Desarrollador/a Backend (Python)"}}
+]
+
+# (Req 3) Datos por defecto para Puestos
+DEFAULT_POSITIONS = [
+    {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
+     "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
+     "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
+     "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=3)).isoformat()},
+    {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
+     "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
+     "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
+     "Hiring Manager":"Angela Cruz","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=28)).isoformat()},
+    {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
+     "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
+     "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
+     "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=28)).isoformat()}
 ]
 
 def load_roles():
@@ -271,23 +296,25 @@ def load_json(path: Path, default):
             print(f"Error saving default JSON to {path}: {e_save}")
             return default if isinstance(default, (list, dict)) else []
   if default is not None:
-      try: save_json(path, default)
-      except Exception as e: print(f"Error creating default file {path}: {e}")
+    try: save_json(path, default)
+    except Exception as e: print(f"Error creating default file {path}: {e}")
   return default if isinstance(default, (list, dict)) else []
 
 def save_json(path: Path, data):
   try:
-      path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
   except Exception as e:
-      print(f"Error saving JSON to {path}: {e}")
+    print(f"Error saving JSON to {path}: {e}")
 
 def load_agents(): return load_json(AGENTS_FILE, [])
 def save_agents(agents): save_json(AGENTS_FILE, agents)
 def load_workflows(): return load_json(WORKFLOWS_FILE, [])
 def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
-
 def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
 def save_tasks(tasks): save_json(TASKS_FILE, tasks)
+# (Req 3) Funciones para Puestos
+def load_positions(): return load_json(POSITIONS_FILE, DEFAULT_POSITIONS)
+def save_positions(positions): save_json(POSITIONS_FILE, positions)
 
 # =========================================================
 # ESTADO
@@ -315,21 +342,15 @@ if "agent_view_idx" not in ss: ss.agent_view_idx = None
 if "agent_edit_idx" not in ss: ss.agent_edit_idx = None
 if "new_role_mode" not in ss: ss.new_role_mode = False
 if "roles" not in ss: ss.roles = load_roles()
-if "positions" not in ss:
-  ss.positions = pd.DataFrame([
-      {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
-       "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
-       "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
-       "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": date.today() - timedelta(days=3)},
-      {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
-       "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
-       "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
-       "Hiring Manager":"Angela Cruz","Estado":"Abierto","Fecha Inicio": date.today() - timedelta(days=28)},
-      {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
-       "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
-       "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
-       "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": date.today() - timedelta(days=28)}
-  ])
+
+# (Req 3) Reemplazo de inicialización de 'positions'
+if "positions_loaded" not in ss:
+    ss.positions = load_positions()
+    if not isinstance(ss.positions, list):
+        ss.positions = DEFAULT_POSITIONS
+        save_positions(ss.positions)
+    ss.positions_loaded = True
+
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
 if "expanded_task_id" not in ss: ss.expanded_task_id = None
 if "show_assign_for" not in ss: ss.show_assign_for = None
@@ -344,6 +365,11 @@ if "show_flow_form" not in ss: ss.show_flow_form = False
 if "viewing_flow_id" not in ss: ss.viewing_flow_id = None
 if "confirm_delete_flow_id" not in ss: ss.confirm_delete_flow_id = None
 # (FIN DE MODIFICACIÓN)
+
+# (Req 3) Nuevos estados para Puestos
+if "show_position_form" not in ss: ss.show_position_form = False
+if "editing_position_id" not in ss: ss.editing_position_id = None
+if "confirm_delete_position_id" not in ss: ss.confirm_delete_position_id = None
 
 # =========================================================
 # UTILS
@@ -491,6 +517,12 @@ def _flow_status_pill(s: str)->str:
   c = colors.get(s, "#9AA6B2")
   return f'<span class="badge" style="border-color:{c}33;background:{c}14;color:#0A2230">{s}</span>'
 
+# (Req 3) Helper para estados de Puestos
+def _position_status_pill(s: str) -> str:
+    """Devuelve un badge HTML coloreado para los estados de Puesto."""
+    s_safe = s if s in POSITION_STATUSES else "Abierto"
+    return f'<span class="pos-badge pos-badge-{s_safe}">{s_safe}</span>'
+
 # Modificado para aceptar contexto
 def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media", context:dict=None):
   t = {
@@ -549,8 +581,27 @@ def _handle_flow_action_change(wf_id):
 
     # Resetear el selectbox para permitir una nueva selección
     ss[action_key] = "Selecciona..."
-    st.rerun() # Forzar rerun para mostrar el formulario/confirmación
+    # (Req 1) st.rerun() eliminado de callback
 
+# (Req 3) Helper para acciones de Puestos
+def _handle_position_action_change(pos_id):
+    """Manejador para el selectbox de acciones de la tabla de puestos."""
+    action_key = f"pos_action_{pos_id}"
+    if action_key not in ss: return
+    action = ss[action_key]
+
+    ss.editing_position_id = None
+    ss.confirm_delete_position_id = None
+    ss.show_position_form = False
+
+    if action == "Editar":
+        ss.editing_position_id = pos_id
+        ss.show_position_form = True
+    elif action == "Eliminar":
+        ss.confirm_delete_position_id = pos_id
+
+    ss[action_key] = "Selecciona..."
+    # (Req 1) st.rerun() eliminado de callback
 
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
@@ -855,28 +906,205 @@ def _results_to_df(results: list) -> pd.DataFrame:
         df = df.sort_values(by="Score", ascending=False)
     return df
 
-def page_puestos():
-  st.header("Puestos")
-  df_pos = ss.positions.copy()
-  df_pos["Time to Hire (promedio)"] = df_pos["Días Abierto"].apply(lambda d: f"{d+random.randint(10, 40)} días" if d < 30 else f"{d} días")
-  st.dataframe(
-    df_pos[
-      ["Puesto","Días Abierto","Time to Hire (promedio)","Leads","Nuevos","Recruiter Screen","HM Screen",
-       "Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]
-    ].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]),
-    use_container_width=True, height=380, hide_index=True
-  )
-  st.subheader("Candidatos por Puesto")
-  pos_list = df_pos["Puesto"].tolist()
-  selected_pos = st.selectbox("Selecciona un puesto para ver el Pipeline asociado", pos_list)
-  if selected_pos:
-    candidates_for_pos = [c for c in ss.candidates if c.get("Role") == selected_pos]
-    if candidates_for_pos:
-      df_cand = pd.DataFrame(candidates_for_pos)
-      st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}),
-                   use_container_width=True, hide_index=True)
+# ===================== PUESTOS (Req 3 - Modificado) =====================
+def render_position_form():
+    """Renderiza el formulario de creación/edición de Puestos."""
+    is_edit_mode = bool(ss.get("editing_position_id"))
+    editing_pos_data = None
+    
+    if is_edit_mode:
+        editing_pos_id = ss.get("editing_position_id")
+        editing_pos_data = next((p for p in ss.positions if p["ID"] == editing_pos_id), None)
+        if editing_pos_data:
+            st.subheader(f"Editando Puesto: {editing_pos_data.get('Puesto')}")
+        else:
+            st.error("Error: No se encontró el puesto a editar.")
+            ss.editing_position_id = None
+            return
     else:
-      st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
+        st.subheader("Crear Nuevo Puesto")
+        editing_pos_data = {} # Vacío para modo creación
+
+    with st.form("position_form"):
+        default_puesto = editing_pos_data.get("Puesto", "")
+        default_ubicacion = editing_pos_data.get("Ubicación", "Lima, Perú")
+        default_hm = editing_pos_data.get("Hiring Manager", "")
+        
+        default_estado = editing_pos_data.get("Estado", "Abierto")
+        try:
+            estado_index = POSITION_STATUSES.index(default_estado)
+        except ValueError:
+            estado_index = 0
+            
+        try:
+            default_fecha_inicio = date.fromisoformat(editing_pos_data.get("Fecha Inicio", date.today().isoformat()))
+        except:
+            default_fecha_inicio = date.today()
+
+        puesto = st.text_input("Nombre del Puesto*", value=default_puesto)
+        c1, c2 = st.columns(2)
+        with c1:
+            ubicacion = st.text_input("Ubicación*", value=default_ubicacion)
+        with c2:
+            hm = st.text_input("Hiring Manager*", value=default_hm)
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            estado = st.selectbox("Estado", POSITION_STATUSES, index=estado_index)
+        with c4:
+            fecha_inicio = st.date_input("Fecha de Inicio", value=default_fecha_inicio)
+            
+        st.markdown("---")
+        
+        submitted = st.form_submit_button("Guardar Puesto" if is_edit_mode else "Crear Puesto")
+        
+        if submitted:
+            if not puesto.strip() or not ubicacion.strip() or not hm.strip():
+                st.error("Por favor, completa todos los campos obligatorios (*).")
+            else:
+                if is_edit_mode:
+                    # Actualizar datos existentes
+                    pos_to_update = next((p for p in ss.positions if p["ID"] == ss.editing_position_id), None)
+                    if pos_to_update:
+                        pos_to_update["Puesto"] = puesto
+                        pos_to_update["Ubicación"] = ubicacion
+                        pos_to_update["Hiring Manager"] = hm
+                        pos_to_update["Estado"] = estado
+                        pos_to_update["Fecha Inicio"] = fecha_inicio.isoformat()
+                        # Los campos analíticos (Leads, Nuevos, etc.) se preservan
+                    st.success("Puesto actualizado.")
+                else:
+                    # Crear nuevo puesto
+                    new_pos = {
+                        "ID": f"P-{int(datetime.now().timestamp())}", # ID único
+                        "Puesto": puesto,
+                        "Ubicación": ubicacion,
+                        "Hiring Manager": hm,
+                        "Estado": estado,
+                        "Fecha Inicio": fecha_inicio.isoformat(),
+                        # Campos analíticos por defecto
+                        "Días Abierto": 0,
+                        "Leads": 0, "Nuevos": 0, "Recruiter Screen": 0, "HM Screen": 0,
+                        "Entrevista Telefónica": 0, "Entrevista Presencial": 0
+                    }
+                    ss.positions.insert(0, new_pos)
+                    st.success("Puesto creado.")
+                
+                save_positions(ss.positions)
+                ss.editing_position_id = None
+                ss.show_position_form = False
+                st.rerun()
+
+def page_puestos():
+    st.header("Puestos")
+
+    # 1. Botón para mostrar/ocultar el formulario
+    if st.button("➕ Nuevo Puesto" if not ss.show_position_form else "✖ Ocultar Formulario", key="toggle_pos_form"):
+        ss.show_position_form = not ss.show_position_form
+        if not ss.show_position_form:
+            ss.editing_position_id = None # Limpiar modo edición si se cierra
+        st.rerun()
+
+    # 2. Renderizar el formulario (si está activado)
+    if ss.show_position_form:
+        render_position_form()
+
+    # 3. Renderizar la tabla de Puestos (solo si el formulario no está abierto)
+    if not ss.show_position_form:
+        st.subheader("Mis Puestos")
+        
+        if not ss.positions:
+            st.info("No hay puestos definidos. Crea uno con **➕ Nuevo Puesto**.")
+            return
+
+        # Calcular totales de candidatos para la cabecera
+        all_candidates_df = pd.DataFrame(ss.candidates) if ss.candidates else pd.DataFrame(columns=["Role", "stage"])
+
+        # Definir columnas de la tabla
+        col_w = [2.5, 2.0, 1.0, 1.0, 1.0, 1.5]
+        h_puesto, h_hm, h_dias, h_leads, h_estado, h_acc = st.columns(col_w)
+        with h_puesto: st.markdown("**Puesto / Ubicación**")
+        with h_hm: st.markdown("**Hiring Manager**")
+        with h_dias: st.markdown("**Días Abierto**")
+        with h_leads: st.markdown("**Leads (Nuevos)**")
+        with h_estado: st.markdown("**Estado**")
+        with h_acc: st.markdown("**Acciones**")
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+
+        positions_list = ss.positions.copy()
+        
+        for pos in positions_list:
+            pos_id = pos.get("ID")
+            if not pos_id: # Asegurar ID
+                pos["ID"] = str(uuid.uuid4())
+                pos_id = pos["ID"]
+
+            c_puesto, c_hm, c_dias, c_leads, c_estado, c_acc = st.columns(col_w)
+
+            with c_puesto:
+                st.markdown(f"**{pos.get('Puesto', '—')}**")
+                st.caption(f"{pos.get('Ubicación', '—')}")
+            with c_hm:
+                st.markdown(f"`{pos.get('Hiring Manager', '—')}`")
+            with c_dias:
+                try:
+                    load_date = date.fromisoformat(pos.get("Fecha Inicio", date.today().isoformat()))
+                    dias_abierto = (date.today() - load_date).days
+                    st.markdown(f"**{dias_abierto}**")
+                except Exception:
+                    st.markdown("—")
+            with c_leads:
+                pos_puesto_name = pos.get("Puesto")
+                cands_for_pos = all_candidates_df[all_candidates_df["Role"] == pos_puesto_name] if pos_puesto_name else pd.DataFrame()
+                
+                leads_count = len(cands_for_pos)
+                nuevos_count = 0
+                if not cands_for_pos.empty:
+                    nuevos_count = len(cands_for_pos[cands_for_pos["stage"].isin(["Recibido", "Screening RRHH"])])
+                
+                st.markdown(f"**{leads_count}** ({nuevos_count})")
+            with c_estado:
+                st.markdown(_position_status_pill(pos.get('Estado', 'Abierto')), unsafe_allow_html=True)
+            with c_acc:
+                st.selectbox(
+                    "Acciones",
+                    ["Selecciona...", "Editar", "Eliminar"],
+                    key=f"pos_action_{pos_id}",
+                    label_visibility="collapsed",
+                    on_change=_handle_position_action_change,
+                    args=(pos_id,)
+                )
+
+            # Lógica de confirmación de eliminación
+            if ss.get("confirm_delete_position_id") == pos_id:
+                st.error(f"¿Seguro que quieres eliminar el puesto **{pos.get('Puesto')}**?")
+                b1, b2, _ = st.columns([1, 1, 5])
+                with b1:
+                    if st.button("Sí, Eliminar", key=f"pos_del_confirm_{pos_id}", type="primary", use_container_width=True, help="Esto eliminará el puesto permanentemente"):
+                        ss.positions = [p for p in ss.positions if p.get("ID") != pos_id]
+                        save_positions(ss.positions)
+                        ss.confirm_delete_position_id = None
+                        st.warning(f"Puesto '{pos.get('Puesto')}' eliminado."); st.rerun()
+                with b2:
+                    if st.button("Cancelar", key=f"pos_del_cancel_{pos_id}", use_container_width=True):
+                        ss.confirm_delete_position_id = None; st.rerun()
+
+            st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.subheader("Candidatos por Puesto")
+        # (Req 3) Actualizado para leer de la lista de dicts
+        pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+        selected_pos = st.selectbox("Selecciona un puesto para ver el Pipeline asociado", pos_list)
+        
+        if selected_pos:
+            candidates_for_pos = [c for c in ss.candidates if c.get("Role") == selected_pos]
+            if candidates_for_pos:
+                df_cand = pd.DataFrame(candidates_for_pos)
+                st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}),
+                             use_container_width=True, hide_index=True)
+            else:
+                st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
 # ===================== EVALUACIÓN (CON MODIFICACIÓN ANTERIOR) =====================
 def page_eval():
@@ -1038,8 +1266,8 @@ def page_pipeline():
                             # (Req 7.2) Pasa el contexto a la tarea
                             task_context = {"candidate_name": card_name, "candidate_id": c["id"], "role": c.get("Role", "N/A")}
                             create_task_from_flow(f"Programar entrevista - {card_name}", date.today()+timedelta(days=2),
-                                                "Coordinar entrevista telefónica con el candidato.",
-                                                assigned="Headhunter", status="Pendiente", context=task_context)
+                                                  "Coordinar entrevista telefónica con el candidato.",
+                                                  assigned="Headhunter", status="Pendiente", context=task_context)
                         elif new_stage == "Contratado":
                             st.balloons()
                             st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
@@ -1228,6 +1456,7 @@ def page_agents():
                    "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
+# ===================== FLUJOS (Req 2 - Modificado) =====================
 # Función para renderizar el formulario de Flujos (Crear/Editar/Ver)
 def render_flow_form():
     """Renderiza el formulario de creación/edición/vista de flujos."""
@@ -1298,13 +1527,15 @@ def render_flow_form():
 
         st.markdown("**Job Description (elige una opción)**")
         jd_text = st.text_area("JD en texto", value=default_jd_text, height=140, disabled=is_disabled)
-        jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file", disabled=is_disabled)
-
+        
+        # (Req 2) Ocultar el file_uploader y la preview si estamos en modo VISTA
         jd_from_file = ""
-        if jd_file is not None:
-            jd_from_file = extract_text_from_file(jd_file)
-            st.caption("Vista previa del JD extraído:")
-            st.text_area("Preview", jd_from_file[:4000], height=160, disabled=True) # Preview siempre deshabilitado
+        if not is_view_mode:
+            jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file", disabled=is_disabled)
+            if jd_file is not None:
+                jd_from_file = extract_text_from_file(jd_file)
+                st.caption("Vista previa del JD extraído:")
+                st.text_area("Preview", jd_from_file[:4000], height=160, disabled=True) # Preview siempre deshabilitado
 
         st.markdown("---")
         st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
@@ -1324,10 +1555,10 @@ def render_flow_form():
         # Lógica de botones separada por modo
         save_draft = False; send_approval = False; schedule = False; update_flow = False
 
+        # (Req 2) Modificado: No mostrar NINGÚN botón de submit en modo vista
         if is_view_mode:
             st.caption("Estás en modo de solo lectura.")
-            # No se añade botón de submit explícito, el form existe pero no tendrá acción
-            submitted = st.form_submit_button("Cerrar Vista", disabled=True) # Botón deshabilitado como placeholder
+            # Se omite el st.form_submit_button()
         elif is_edit_mode:
             update_flow = st.form_submit_button("💾 Actualizar Flujo")
         else: # Modo Creación
@@ -1337,7 +1568,7 @@ def render_flow_form():
             schedule      = col_c.form_submit_button("📅 Guardar y Programar")
 
         if save_draft or send_approval or schedule or update_flow:
-            # Solo procesar si no estamos en modo vista
+            # Solo procesar si no estamos en modo vista (esta condición ya estaba implícita y sigue funcionando)
             if not is_view_mode:
                 jd_final = jd_from_file if jd_from_file.strip() else jd_text
                 if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
@@ -1461,10 +1692,12 @@ def page_flows():
                         ss.workflows = [w for w in ss.workflows if w.get("id") != wf_id]
                         save_workflows(ss.workflows)
                         ss.confirm_delete_flow_id = None
-                        st.warning(f"Flujo '{wf.get('name')}' eliminado."); st.rerun()
+                        st.warning(f"Flujo '{wf.get('name')}' eliminado.")
+                        # (Req 1) st.rerun() eliminado
                 with b2:
                     if st.button("Cancelar", key=f"flow_del_cancel_{wf_id}", use_container_width=True):
-                        ss.confirm_delete_flow_id = None; st.rerun()
+                        ss.confirm_delete_flow_id = None
+                        # (Req 1) st.rerun() eliminado
 
             st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
@@ -1546,7 +1779,7 @@ def page_analytics():
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Modificado Req. 3, 7) =====================
+# ===================== TODAS LAS TAREAS (Req 1 - Modificado) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
@@ -1640,9 +1873,13 @@ def page_create_task():
                 current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
                 task_to_update["assigned_to"] = current_user
                 task_to_update["status"] = "En Proceso"
-                save_tasks(ss.tasks); st.toast("Tarea tomada."); st.rerun()
+                save_tasks(ss.tasks); st.toast("Tarea tomada.")
+                # (Req 1) st.rerun() eliminado
             elif action == "Eliminar":
                 ss.confirm_delete_id = task_id
+            
+            # (Req 1) Resetear selectbox
+            ss[selectbox_key] = "Selecciona…"
 
         with c_acc:
             selectbox_key = f"accion_{t_id}"
@@ -1659,10 +1896,12 @@ def page_create_task():
                 if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
                     ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
                     save_tasks(ss.tasks); ss.confirm_delete_id = None
-                    st.warning("Tarea eliminada permanentemente."); st.rerun()
+                    st.warning("Tarea eliminada permanentemente.")
+                    # (Req 1) st.rerun() eliminado
             with b2:
                 if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
-                    ss.confirm_delete_id = None; st.rerun()
+                    ss.confirm_delete_id = None
+                    # (Req 1) st.rerun() eliminado
 
         if ss.show_assign_for == t_id:
             a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0])
@@ -1691,7 +1930,8 @@ def page_create_task():
                             if task_to_update["status"] == "En Espera":
                                 task_to_update["status"] = "Pendiente"
                         save_tasks(ss.tasks); ss.show_assign_for = None
-                        st.success("Cambios guardados."); st.rerun()
+                        st.success("Cambios guardados.")
+                        # (Req 1) st.rerun() eliminado
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
