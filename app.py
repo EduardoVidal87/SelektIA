@@ -87,7 +87,7 @@ ROLE_PRESETS = {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
     "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
-    "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
+    "synth_skills":["Figma","UX Research","Protototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
     "jd":"Planificar, ejecutar y controlar proyectos de ingeniería...",
@@ -1451,42 +1451,48 @@ def page_flows():
         wf_data = next((w for w in ss.workflows if w.get("id") == flow_id_for_dialog), None)
         if wf_data:
             try:
-                with st.dialog("Detalle de Flujo", width="large"):
-                    st.markdown(f"### {wf_data.get('name', 'Sin Título')}")
-                    st.markdown(f"**ID:** `{wf_data.get('id')}`")
-                    st.markdown("---")
+                # (INICIO DE CORRECCIÓN) 
+                # 'st.dialog' no es un context manager ('with'), es una función que devuelve un objeto.
+                # Todos los elementos de UI dentro del diálogo deben llamarse desde el objeto 'dialog'.
+                dialog = st.dialog("Detalle de Flujo", width="large")
+                
+                dialog.markdown(f"### {wf_data.get('name', 'Sin Título')}")
+                dialog.markdown(f"**ID:** `{wf_data.get('id')}`")
+                dialog.markdown("---")
+                
+                c1, c2 = dialog.columns(2)
+                with c1:
+                    dialog.markdown("**Información Principal**")
+                    dialog.markdown(f"**Puesto Objetivo:** {wf_data.get('role', 'N/A')}")
+                    dialog.markdown(f"**Creado por:** {wf_data.get('created_by', 'N/A')}")
+                    agente_idx = wf_data.get('agent_idx', -1)
+                    agente_nombre = "N/A"
+                    if 0 <= agente_idx < len(ss.agents):
+                        agente_nombre = ss.agents[agente_idx].get("rol", "Agente Desconocido")
+                    dialog.markdown(f"**Agente Asignado:** {agente_nombre}")
                     
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown("**Información Principal**")
-                        st.markdown(f"**Puesto Objetivo:** {wf_data.get('role', 'N/A')}")
-                        st.markdown(f"**Creado por:** {wf_data.get('created_by', 'N/A')}")
-                        agente_idx = wf_data.get('agent_idx', -1)
-                        agente_nombre = "N/A"
-                        if 0 <= agente_idx < len(ss.agents):
-                            agente_nombre = ss.agents[agente_idx].get("rol", "Agente Desconocido")
-                        st.markdown(f"**Agente Asignado:** {agente_nombre}")
-                        
-                    with c2:
-                        st.markdown("**Estado y Creación**")
-                        st.markdown(f"**Estado:**"); st.markdown(_flow_status_pill(wf_data.get('status', 'Borrador')), unsafe_allow_html=True)
-                        try:
-                            creado_dt = datetime.fromisoformat(wf_data.get('created_at', ''))
-                            st.markdown(f"**Creado el:** {creado_dt.strftime('%Y-%m-%d %H:%M')}")
-                        except:
-                            st.markdown("**Creado el:** N/A")
-                        
-                    st.markdown("---")
-                    st.markdown("**Descripción:**")
-                    st.markdown(wf_data.get('description', 'Sin descripción.'))
+                with c2:
+                    dialog.markdown("**Estado y Creación**")
+                    dialog.markdown(f"**Estado:**"); dialog.markdown(_flow_status_pill(wf_data.get('status', 'Borrador')), unsafe_allow_html=True)
+                    try:
+                        creado_dt = datetime.fromisoformat(wf_data.get('created_at', ''))
+                        dialog.markdown(f"**Creado el:** {creado_dt.strftime('%Y-%m-%d %H:%M')}")
+                    except:
+                        dialog.markdown("**Creado el:** N/A")
                     
-                    st.markdown("---")
-                    st.markdown("**Job Description (JD) Asociado:**")
-                    st.text_area("JD", value=wf_data.get('jd_text', 'Sin JD.'), height=200, disabled=True)
-                    
-                    if st.button("Cerrar", key="close_flow_dialog"):
-                        ss.viewing_flow_id = None
-                        # st.rerun() # <--- ¡FIXED! Esta línea se eliminó.
+                dialog.markdown("---")
+                dialog.markdown("**Descripción:**")
+                dialog.markdown(wf_data.get('description', 'Sin descripción.'))
+                
+                dialog.markdown("---")
+                dialog.markdown("**Job Description (JD) Asociado:**")
+                # Se añade una 'key' única para el widget dentro del diálogo
+                dialog.text_area("JD", value=wf_data.get('jd_text', 'Sin JD.'), height=200, disabled=True, key=f"dialog_jd_flow_{wf_data.get('id')}")
+                
+                if dialog.button("Cerrar", key="close_flow_dialog"):
+                    ss.viewing_flow_id = None
+                    dialog.close()
+                # (FIN DE CORRECCIÓN)
                         
             except Exception as e:
                 st.error(f"Error al mostrar detalles del flujo: {e}")
@@ -1725,44 +1731,49 @@ def page_create_task():
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                with st.dialog("Detalle de Tarea", width="large"):
-                    st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                    
-                    # (Req. 7.2 / Foto 3) Layout de detalles mejorado
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown("**Información Principal**")
-                        st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                        st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                        st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                    with c2:
-                        st.markdown("**Estado y Prioridad**")
-                        st.markdown(f"**Estado:**"); st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                        st.markdown(f"**Prioridad:**"); st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+                # (INICIO DE CORRECCIÓN)
+                # 'st.dialog' no es un context manager ('with'), es una función que devuelve un objeto.
+                # Todos los elementos de UI dentro del diálogo deben llamarse desde el objeto 'dialog'.
+                dialog = st.dialog("Detalle de Tarea", width="large")
 
-                    # (Req 7.2 / Foto 3) Mostrar contexto del postulante si existe
-                    context = task_data.get("context")
-                    if context and ("candidate_name" in context or "role" in context):
-                        st.markdown("---")
-                        st.markdown("**Contexto del Flujo**")
-                        if "candidate_name" in context:
-                            st.markdown(f"**Postulante:** {context['candidate_name']}")
-                        if "role" in context:
-                            st.markdown(f"**Puesto:** {context['role']}")
-                    
-                    st.markdown("---")
-                    st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
-                    st.markdown("---")
-                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
-                    
-                    with st.form("comment_form"):
-                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
-                        submitted = st.form_submit_button("Enviar Comentario")
-                        if submitted: st.toast("Comentario (aún no) guardado.")
-                    
-                    if st.button("Cerrar", key="close_dialog"):
-                        ss.expanded_task_id = None
-                        # st.rerun() # <--- ¡FIXED! Esta línea se eliminó.
+                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                
+                c1, c2 = dialog.columns(2)
+                with c1:
+                    dialog.markdown("**Información Principal**")
+                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                with c2:
+                    dialog.markdown("**Estado y Prioridad**")
+                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+
+                context = task_data.get("context")
+                if context and ("candidate_name" in context or "role" in context):
+                    dialog.markdown("---")
+                    dialog.markdown("**Contexto del Flujo**")
+                    if "candidate_name" in context:
+                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
+                    if "role" in context:
+                        dialog.markdown(f"**Puesto:** {context['role']}")
+                
+                dialog.markdown("---")
+                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
+                dialog.markdown("---")
+                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
+                
+                # 'with dialog.form' es mejor para formularios dentro de diálogos
+                with dialog.form("comment_form_dialog"):
+                    # Se añade una 'key' única para el widget dentro del diálogo
+                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
+                    submitted = st.form_submit_button("Enviar Comentario")
+                    if submitted: st.toast("Comentario (aún no) guardado.")
+                
+                if dialog.button("Cerrar", key="close_dialog"):
+                    ss.expanded_task_id = None
+                    dialog.close()
+                # (FIN DE CORRECCIÓN)
                         
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
