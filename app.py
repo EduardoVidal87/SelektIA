@@ -45,6 +45,7 @@ PLOTLY_GREEN_SEQUENCE = ["#00CD78", "#00B468", "#33FFAC", "#007F46", "#66FFC2"]
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
 PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"]
 TASK_PRIORITIES = ["Alta", "Media", "Baja"]
+FLOW_STATUSES = ["Borrador", "Pendiente de aprobación", "Aprobado", "Rechazado", "Programado"]
 
 EVAL_INSTRUCTION = (
   "Debes analizar los CVs de postulantes y calificarlos de 0% a 100% según el nivel de coincidencia con el JD. "
@@ -85,7 +86,7 @@ ROLE_PRESETS = {
   "Diseñador/a UX": {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
-    "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
+    "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
     "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
@@ -338,6 +339,12 @@ if "confirm_delete_id" not in ss: ss.confirm_delete_id = None
 if "editing_flow_id" not in ss: ss.editing_flow_id = None
 if "llm_eval_results" not in ss: ss.llm_eval_results = [] # (Req. 5)
 
+# (INICIO DE MODIFICACIÓN) Nuevos estados para Flujos
+if "show_flow_form" not in ss: ss.show_flow_form = False
+if "viewing_flow_id" not in ss: ss.viewing_flow_id = None
+if "confirm_delete_flow_id" not in ss: ss.confirm_delete_flow_id = None
+# (FIN DE MODIFICACIÓN)
+
 # =========================================================
 # UTILS
 # =========================================================
@@ -471,6 +478,20 @@ def _priority_pill(p: str) -> str:
     p_safe = p if p in TASK_PRIORITIES else "Media"
     return f'<span class="badge priority-{p_safe}">{p_safe}</span>'
 
+# (INICIO DE MODIFICACIÓN) Helper para estados de Flujo
+def _flow_status_pill(s: str)->str:
+  """Devuelve un badge HTML coloreado para los estados de Flujo."""
+  colors = {
+      "Borrador": "#9AA6B2",
+      "Pendiente de aprobación": "#FFB700",
+      "Aprobado": "#10B981",
+      "Rechazado": "#D60000",
+      "Programado": "#0072E3"
+  }
+  c = colors.get(s, "#9AA6B2")
+  return f'<span class="badge" style="border-color:{c}33;background:{c}14;color:#0A2230">{s}</span>'
+# (FIN DE MODIFICACIÓN)
+
 # (Req 7.2) Modificado para aceptar contexto
 def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media", context:dict=None):
   t = {
@@ -504,6 +525,34 @@ def create_manual_task(title, desc, due_date, assigned_to, priority):
     if not isinstance(ss.tasks, list): ss.tasks = []
     ss.tasks.insert(0, t)
     save_tasks(ss.tasks)
+
+# (INICIO DE MODIFICACIÓN) Helper para acciones de Flujo
+def _handle_flow_action_change(wf_id):
+    """Manejador para el selectbox de acciones de la tabla de flujos."""
+    action_key = f"flow_action_{wf_id}"
+    if action_key not in ss: return
+    action = ss[action_key]
+    
+    # Resetear todos los estados modales/popups
+    ss.viewing_flow_id = None
+    ss.confirm_delete_flow_id = None
+    # No cerramos el formulario si ya está abierto, pero limpiamos el ID de edición
+    # a menos que la acción sea "Editar".
+    if action != "Editar":
+        ss.editing_flow_id = None 
+
+    if action == "Ver detalles":
+        ss.viewing_flow_id = wf_id
+    elif action == "Editar":
+        ss.editing_flow_id = wf_id
+        ss.show_flow_form = True # Abrir el formulario en modo edición
+    elif action == "Eliminar":
+        ss.confirm_delete_flow_id = wf_id
+    
+    # Resetear el selectbox para permitir una nueva selección
+    ss[action_key] = "Selecciona..."
+    st.rerun() # Forzar rerun para mostrar el diálogo/confirmación/formulario
+# (FIN DE MODIFICACIÓN)
 
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
@@ -829,21 +878,18 @@ def page_puestos():
     else:
       st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
-# ===================== EVALUACIÓN (CON LA MODIFICACIÓN SOLICITADA) =====================
+# ===================== EVALUACIÓN (CON MODIFICACIÓN ANTERIOR) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
     # === Bloque LLM (Req. 5 - Modificado para guardar bytes) ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
         
-        # (INICIO DE MODIFICACIÓN)
         # 1. Definir nombres de roles y obtener el último usado (de Sourcing)
         role_names = list(ROLE_PRESETS.keys())
         last_role_from_sourcing = ss.get("last_role", role_names[0] if role_names else "")
         
         # 2. Determinar el índice inicial
-        # Si ya hemos seleccionado algo en ESTA página (eval_llm_role_select), usar eso.
-        # Si no, usar el de Sourcing (last_role).
         if "eval_llm_role_select" in ss:
             try:
                 initial_index = role_names.index(ss.eval_llm_role_select)
@@ -863,7 +909,7 @@ def page_eval():
             key="eval_llm_role_select" # Clave para guardar el estado
         )
         
-        # 4. Leer el valor actual del selectbox (que se actualiza automáticamente)
+        # 4. Leer el valor actual del selectbox
         current_role_key = ss.get("eval_llm_role_select", role_names[initial_index] if role_names else "")
         default_jd_text = ROLE_PRESETS.get(current_role_key, {}).get("jd", "")
 
@@ -874,7 +920,6 @@ def page_eval():
             height=120,
             key="jd_llm"
         )
-        # (FIN DE MODIFICACIÓN)
         
         up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
         run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
@@ -944,8 +989,6 @@ def page_eval():
                 pdf_viewer_embed(selected_file_data["_bytes"], height=500)
             else:
                 st.error("No se encontró el archivo PDF correspondiente para la visualización.")
-
-# ===================== FIN DE MODIFICACIÓN =====================
 
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
@@ -1185,92 +1228,23 @@ def page_agents():
                    "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-# ===================== FLUJOS (Modificado Req. 4) =====================
-def page_flows():
-  st.header("Flujos")
-  vista_como = ss.auth["role"]
-  puede_aprobar = vista_como in ("Supervisor","Administrador")
+# (INICIO DE MODIFICACIÓN) Nueva función para renderizar el formulario de Flujos
+def render_flow_form():
+    """Renderiza el formulario de creación/edición de flujos."""
+    vista_como = ss.auth.get("role", "Colaborador")
+    puede_aprobar = vista_como in ("Supervisor", "Administrador")
 
-  left, right = st.columns([0.9, 1.1])
-  with left:
-    st.subheader("Mis flujos")
-    if not ss.workflows:
-      st.info("No hay flujos aún. Crea uno a la derecha.")
-    else:
-      rows = []
-      for wf in ss.workflows:
-        ag_label = "—"; ai = wf.get("agent_idx",-1)
-        if 0 <= ai < len(ss.agents):
-          ag_label = ss.agents[ai].get("rol","Agente")
-        rows.append({"ID": wf["id"], "Nombre": wf["name"], "Puesto": wf.get("role","—"),
-                     "Agente": ag_label, "Estado": wf.get("status","Borrador"),
-                     "Programado": wf.get("schedule_at","—")})
-      df = pd.DataFrame(rows)
-      st.dataframe(df, use_container_width=True, height=260)
-      
-      if rows:
-        # (Req. 4) Selector para editar
-        sel_options = [r["ID"] for r in rows]
-        sel_format_func = lambda x: next((r["Nombre"] for r in rows if r["ID"]==x), x)
-        
-        # Settear índice basado en ss.editing_flow_id
-        try:
-            sel_index = sel_options.index(ss.editing_flow_id)
-        except ValueError:
-            sel_index = 0
-            if ss.editing_flow_id is not None:
-                ss.editing_flow_id = None # Limpiar si el ID ya no existe
-
-        sel = st.selectbox("Selecciona un flujo para ver o editar", sel_options,
-                           index=sel_index, format_func=sel_format_func, key="flow_selector")
-
-        # Botón para cargar el flujo seleccionado para edición
-        if st.button("Cargar Flujo para Editar", key="load_flow_edit"):
-            ss.editing_flow_id = sel
-            st.rerun()
-
-        # Obtener el flujo seleccionado (no necesariamente el de edición)
-        wf = next((w for w in ss.workflows if w["id"]==sel), None)
-        if wf:
-          c1,c2,c3 = st.columns(3)
-          with c1:
-            if st.button("🧬 Duplicar"):
-              clone = dict(wf); clone["id"] = f"WF-{int(datetime.now().timestamp())}"
-              clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""; clone["schedule_at"]=""
-              ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
-              ss.editing_flow_id = None
-              st.rerun()
-          with c2:
-            if st.button("🗑 Eliminar"):
-              ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
-              st.success("Flujo eliminado.")
-              if ss.editing_flow_id == wf["id"]: ss.editing_flow_id = None
-              st.rerun()
-          with c3:
-            st.markdown(f"<div class='badge'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
-            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
-              a1,a2 = st.columns(2)
-              with a1:
-                if st.button("✅ Aprobar"):
-                  wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.success("Aprobado.")
-                  st.rerun()
-              with a2:
-                if st.button("❌ Rechazar"):
-                  wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat()
-                  save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
-
-  with right:
-    # (Req. 4) Cargar datos del flujo en edición
     editing_wf = None
     if ss.editing_flow_id:
         editing_wf = next((w for w in ss.workflows if w["id"] == ss.editing_flow_id), None)
-    
+
     st.subheader("Crear Flujo" if not editing_wf else f"Editando Flujo: {editing_wf.get('name')}")
     
     if editing_wf:
+        # Botón para cancelar la edición y cerrar el formulario
         if st.button("✖ Cancelar Edición"):
             ss.editing_flow_id = None
+            ss.show_flow_form = False
             st.rerun()
 
     # Settear valores default del formulario
@@ -1282,7 +1256,12 @@ def page_flows():
         role_index = 2 # Fallback
     default_desc = editing_wf.get("description", EVAL_INSTRUCTION) if editing_wf else EVAL_INSTRUCTION
     default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
-    default_jd_text = editing_wf.get("jd_text", ROLE_PRESETS[default_role]["jd"]) if editing_wf else ROLE_PRESETS[default_role]["jd"]
+    
+    # JD por defecto: usa el JD del flujo en edición, o el JD del rol seleccionado, o el JD del primer rol
+    default_jd_text = ROLE_PRESETS[default_role].get("jd", "")
+    if editing_wf and editing_wf.get("jd_text"):
+        default_jd_text = editing_wf.get("jd_text")
+
     default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
     
     # Asegurarse que el índice del agente es válido
@@ -1290,85 +1269,232 @@ def page_flows():
         default_agent_idx = 0
 
     with st.form("wf_form"):
-      st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
-      name = st.text_input("Name*", value=default_name)
-      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index)
-      desc = st.text_area("Description*", value=default_desc, height=110)
-      expected = st.text_area("Expected output*", value=default_expected, height=80)
+        st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
+        name = st.text_input("Name*", value=default_name)
+        role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index, key="flow_form_role_select")
+        
+        # Cargar JD dinámicamente si el rol cambia (solo en modo creación)
+        if not editing_wf:
+            selected_role_key = ss.get("flow_form_role_select", default_role)
+            default_jd_text = ROLE_PRESETS.get(selected_role_key, {}).get("jd", "")
 
-      st.markdown("**Job Description (elige una opción)**")
-      jd_text = st.text_area("JD en texto", value=default_jd_text, height=140)
-      jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
-      jd_from_file = ""
-      if jd_file is not None:
-        jd_from_file = extract_text_from_file(jd_file)
-        st.caption("Vista previa del JD extraído:")
-        st.text_area("Preview", jd_from_file[:4000], height=160)
+        desc = st.text_area("Description*", value=default_desc, height=110)
+        expected = st.text_area("Expected output*", value=default_expected, height=80)
 
-      st.markdown("---")
-      st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
-      if ss.agents:
-        agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model',LLM_IN_USE)})" for i,a in enumerate(ss.agents)]
-        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx)
-        agent_idx = int(agent_pick.split(" — ")[0])
-      else:
-        st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
-        agent_idx = -1
+        st.markdown("**Job Description (elige una opción)**")
+        jd_text = st.text_area("JD en texto", value=default_jd_text, height=140)
+        jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
+        jd_from_file = ""
+        if jd_file is not None:
+            jd_from_file = extract_text_from_file(jd_file)
+            st.caption("Vista previa del JD extraído:")
+            st.text_area("Preview", jd_from_file[:4000], height=160)
 
-      st.markdown("---")
-      st.markdown("<div class='badge'>Guardar · Aprobación y programación</div>", unsafe_allow_html=True)
-      run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
-      run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
-      
-      # (Req. 4) Lógica de botones separada
-      if editing_wf:
-          update_flow = st.form_submit_button("💾 Actualizar Flujo")
-          save_draft = False; send_approval = False; schedule = False
-      else:
-          update_flow = False
-          col_a, col_b, col_c = st.columns(3)
-          save_draft    = col_a.form_submit_button("💾 Guardar borrador")
-          send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
-          schedule      = col_c.form_submit_button("📅 Guardar y Programar")
-
-      if save_draft or send_approval or schedule or update_flow:
-        jd_final = jd_from_file if jd_from_file.strip() else jd_text
-        if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
-        elif agent_idx < 0:      st.error("Debes asignar un agente.")
+        st.markdown("---")
+        st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
+        if ss.agents:
+            agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model',LLM_IN_USE)})" for i,a in enumerate(ss.agents)]
+            agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx)
+            agent_idx = int(agent_pick.split(" — ")[0])
         else:
-          wf_data = {
-              "name": name, "role": role, "description": desc, "expected_output": expected,
-              "jd_text": jd_final[:200000], "agent_idx": agent_idx
-          }
+            st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
+            agent_idx = -1
 
-          if update_flow:
-              # (Req. 4) Actualizar flujo existente
-              editing_wf.update(wf_data)
-              editing_wf["status"] = "Borrador" # Resetear estado al editar
-              save_workflows(ss.workflows)
-              st.success("Flujo actualizado.")
-              ss.editing_flow_id = None
-              st.rerun()
-          else:
-              # Lógica de creación (como antes)
-              wf = wf_data.copy()
-              wf.update({
-                  "id": f"WF-{int(datetime.now().timestamp())}",
-                  "created_at": datetime.now().isoformat(),
-                  "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""
-              })
-              
-              if send_approval:
-                wf["status"] = "Pendiente de aprobación"; st.success("Flujo enviado a aprobación.")
-              if schedule:
-                if puede_aprobar:
-                  wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success("Flujo programado.")
+        st.markdown("---")
+        st.markdown("<div class='badge'>Guardar · Aprobación y programación</div>", unsafe_allow_html=True)
+        run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+        run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
+        
+        # Lógica de botones separada
+        if editing_wf:
+            update_flow = st.form_submit_button("💾 Actualizar Flujo")
+            save_draft = False; send_approval = False; schedule = False
+        else:
+            update_flow = False
+            col_a, col_b, col_c = st.columns(3)
+            save_draft    = col_a.form_submit_button("💾 Guardar borrador")
+            send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
+            schedule      = col_c.form_submit_button("📅 Guardar y Programar")
+
+        if save_draft or send_approval or schedule or update_flow:
+            jd_final = jd_from_file if jd_from_file.strip() else jd_text
+            if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
+            elif agent_idx < 0:      st.error("Debes asignar un agente.")
+            else:
+                wf_data = {
+                    "name": name, "role": role, "description": desc, "expected_output": expected,
+                    "jd_text": jd_final[:200000], "agent_idx": agent_idx,
+                    "last_updated_by": ss.auth.get("name", "Admin")
+                }
+
+                if update_flow:
+                    # Actualizar flujo existente
+                    editing_wf.update(wf_data)
+                    editing_wf["status"] = "Borrador" # Resetear estado al editar
+                    editing_wf["approved_by"] = ""
+                    editing_wf["approved_at"] = ""
+                    editing_wf["schedule_at"] = ""
+                    save_workflows(ss.workflows)
+                    st.success("Flujo actualizado.")
+                    ss.editing_flow_id = None
+                    ss.show_flow_form = False # Ocultar formulario
+                    st.rerun()
                 else:
-                  wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info("Pendiente de aprobación.")
-              if save_draft:
-                st.success("Borrador guardado.")
-              
-              ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
+                    # Lógica de creación (como antes)
+                    wf = wf_data.copy()
+                    wf.update({
+                        "id": f"WF-{int(datetime.now().timestamp())}",
+                        "created_at": datetime.now().isoformat(),
+                        "created_by": ss.auth.get("name", "Admin"),
+                        "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""
+                    })
+                    
+                    if send_approval:
+                        wf["status"] = "Pendiente de aprobación"; st.success("Flujo enviado a aprobación.")
+                    if schedule:
+                        if puede_aprobar:
+                            wf["status"]="Programado"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.success("Flujo programado.")
+                        else:
+                            wf["status"]="Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time.strftime('%H:%M')}"; st.info("Pendiente de aprobación.")
+                    if save_draft:
+                        st.success("Borrador guardado.")
+                    
+                    ss.workflows.insert(0, wf)
+                    save_workflows(ss.workflows)
+                    ss.show_flow_form = False # Ocultar formulario
+                    st.rerun()
+# (FIN DE MODIFICACIÓN)
+
+# ===================== FLUJOS (REDISEÑADO) =====================
+def page_flows():
+    st.header("Flujos")
+    
+    # 1. Botón para mostrar/ocultar el formulario
+    if st.button("➕ Nuevo Flujo" if not ss.show_flow_form else "✖ Ocultar Formulario", key="toggle_flow_form"):
+        ss.show_flow_form = not ss.show_flow_form
+        if not ss.show_flow_form:
+            ss.editing_flow_id = None # Limpiar modo edición si se cierra
+        st.rerun()
+
+    # 2. Renderizar el formulario (si está activado)
+    if ss.show_flow_form:
+        render_flow_form() # Renderiza el formulario de creación/edición
+
+    # 3. Renderizar la tabla de flujos
+    st.subheader("Mis flujos")
+    if not ss.workflows:
+        st.info("No hay flujos aún. Crea uno con **➕ Nuevo Flujo**.")
+        return
+
+    # Definir columnas de la tabla
+    col_w = [0.8, 1.5, 2.5, 1.2, 1.2, 1.3]
+    h_id, h_nom, h_desc, h_cre, h_est, h_acc = st.columns(col_w)
+    with h_id:   st.markdown("**Id**")
+    with h_nom:  st.markdown("**Nombre**")
+    with h_desc: st.markdown("**Descripción**")
+    with h_cre:  st.markdown("**Creado el**")
+    with h_est:  st.markdown("**Estado**")
+    with h_acc:  st.markdown("**Acciones**")
+    st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+
+    # Iterar y mostrar filas
+    for wf in ss.workflows:
+        wf_id = wf.get("id", str(uuid.uuid4()))
+        wf["id"] = wf_id # Asegurar que tenga ID
+        
+        c_id, c_nom, c_desc, c_cre, c_est, c_acc = st.columns(col_w)
+        
+        with c_id:
+            st.caption(f"{wf_id[:8]}...")
+        with c_nom:
+            st.markdown(f"**{wf.get('name', '—')}**")
+            st.caption(f"Puesto: {wf.get('role', 'N/A')}")
+        with c_desc:
+            st.caption(f"{wf.get('description', '—')[:80]}...")
+        with c_cre:
+            try:
+                creado_dt = datetime.fromisoformat(wf.get('created_at', ''))
+                st.markdown(creado_dt.strftime('%Y-%m-%d'))
+            except:
+                st.markdown("—")
+        with c_est:
+            st.markdown(_flow_status_pill(wf.get('status', 'Borrador')), unsafe_allow_html=True)
+        with c_acc:
+            st.selectbox(
+                "Acciones",
+                ["Selecciona...", "Ver detalles", "Editar", "Eliminar"],
+                key=f"flow_action_{wf_id}",
+                label_visibility="collapsed",
+                on_change=_handle_flow_action_change,
+                args=(wf_id,)
+            )
+
+        # Lógica de confirmación de eliminación (justo debajo de la fila)
+        if ss.get("confirm_delete_flow_id") == wf_id:
+            st.error(f"¿Seguro que quieres eliminar el flujo **{wf.get('name')}**?")
+            b1, b2, _ = st.columns([1, 1, 5])
+            with b1:
+                if st.button("Sí, Eliminar", key=f"flow_del_confirm_{wf_id}", type="primary", use_container_width=True):
+                    ss.workflows = [w for w in ss.workflows if w.get("id") != wf_id]
+                    save_workflows(ss.workflows)
+                    ss.confirm_delete_flow_id = None
+                    st.warning(f"Flujo '{wf.get('name')}' eliminado."); st.rerun()
+            with b2:
+                if st.button("Cancelar", key=f"flow_del_cancel_{wf_id}", use_container_width=True):
+                    ss.confirm_delete_flow_id = None; st.rerun()
+        
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+
+    # Lógica del diálogo "Ver detalles" (al final de la función)
+    flow_id_for_dialog = ss.get("viewing_flow_id")
+    if flow_id_for_dialog:
+        wf_data = next((w for w in ss.workflows if w.get("id") == flow_id_for_dialog), None)
+        if wf_data:
+            try:
+                with st.dialog("Detalle de Flujo", width="large"):
+                    st.markdown(f"### {wf_data.get('name', 'Sin Título')}")
+                    st.markdown(f"**ID:** `{wf_data.get('id')}`")
+                    st.markdown("---")
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Información Principal**")
+                        st.markdown(f"**Puesto Objetivo:** {wf_data.get('role', 'N/A')}")
+                        st.markdown(f"**Creado por:** {wf_data.get('created_by', 'N/A')}")
+                        agente_idx = wf_data.get('agent_idx', -1)
+                        agente_nombre = "N/A"
+                        if 0 <= agente_idx < len(ss.agents):
+                            agente_nombre = ss.agents[agente_idx].get("rol", "Agente Desconocido")
+                        st.markdown(f"**Agente Asignado:** {agente_nombre}")
+                        
+                    with c2:
+                        st.markdown("**Estado y Creación**")
+                        st.markdown(f"**Estado:**"); st.markdown(_flow_status_pill(wf_data.get('status', 'Borrador')), unsafe_allow_html=True)
+                        try:
+                            creado_dt = datetime.fromisoformat(wf_data.get('created_at', ''))
+                            st.markdown(f"**Creado el:** {creado_dt.strftime('%Y-%m-%d %H:%M')}")
+                        except:
+                            st.markdown("**Creado el:** N/A")
+                        
+                    st.markdown("---")
+                    st.markdown("**Descripción:**")
+                    st.markdown(wf_data.get('description', 'Sin descripción.'))
+                    
+                    st.markdown("---")
+                    st.markdown("**Job Description (JD) Asociado:**")
+                    st.text_area("JD", value=wf_data.get('jd_text', 'Sin JD.'), height=200, disabled=True)
+                    
+                    if st.button("Cerrar", key="close_flow_dialog"):
+                        ss.viewing_flow_id = None
+                        st.rerun()
+                        
+            except Exception as e:
+                st.error(f"Error al mostrar detalles del flujo: {e}")
+                if ss.get("viewing_flow_id") == flow_id_for_dialog:
+                    ss.viewing_flow_id = None
+        else:
+            ss.viewing_flow_id = None # Limpiar si el flujo ya no existe
+# (FIN DE MODIFICACIÓN)
 
 # ===================== ANALYTICS =====================
 def page_analytics():
@@ -1669,8 +1795,5 @@ ROUTES = {
 if __name__ == "__main__":
     if require_auth():
         render_sidebar()
-        # (Req. 7) Lógica del diálogo movida a 'page_create_task'
-        # task_id_for_dialog = ss.get("expanded_task_id") 
         ROUTES.get(ss.section, page_def_carga)()
-        # (Req. 7) Lógica del diálogo movida a 'page_create_task'
 
