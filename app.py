@@ -90,8 +90,8 @@ ROLE_PRESETS = {
   "Diseñador/a UX": {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
-    "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
-    "synth_skills":["Figma","UX Research","Protototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
+    "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
+    "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
     "jd":"Planificar, ejecutar y controlar proyectos de ingeniería...",
@@ -215,14 +215,6 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .pos-badge-Abierto {{ border-color: {PRIMARY}; background: #E6FFF1; color: {PRIMARY}; font-weight: 600; }}
 .pos-badge-Pausado {{ border-color: #FFB700; background: #FFFDE6; color: #E8B900; }}
 .pos-badge-Cerrado {{ border-color: #D1D5DB; background: #F3F4F6; color: #6B7280; }}
-
-/* (Req 5.3) Estilos para expander de tareas */
-[data-testid="stExpander"] summary {{ font-size: 1.1rem !important; font-weight: 600 !important; }}
-[data-testid="stExpander"] details {{ border: 1px solid #E3EDF6 !important; border-radius: 10px !important; background: #fff !important; margin-bottom: 8px !important; padding: 2px 8px !important; box-shadow: 0 2px 4px rgba(14,25,43,.04); }}
-[data-testid="stExpander"] details summary svg {{ color: {TITLE_DARK} !important; }}
-.task-details-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }}
-.task-details-grid > div {{ background: #F8FCFF; border: 1px solid #EAF2FB; border-radius: 8px; padding: 8px; }}
-.task-details-grid strong {{ color: {TITLE_DARK}; display: block; margin-bottom: 4px; font-size: 0.85rem; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
@@ -813,7 +805,353 @@ def page_def_carga():
       st.success(f"Importados {len(new_candidates)} CVs de portales. Enviados al Pipeline.")
       st.rerun()
 
-# ===================== EVALUACIÓN (Req 5.1, 5.2 - Modificado) =====================
+def _llm_setup_credentials():
+    """Coloca credenciales desde st.secrets si existen (no rompe si faltan)."""
+    try:
+        if "AZURE_OPENAI_API_KEY" not in os.environ and "llm" in st.secrets and "azure_openai_api_key" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_API_KEY"] = st.secrets["llm"]["azure_openai_api_key"]
+        if "AZURE_OPENAI_ENDPOINT" not in os.environ and "llm" in st.secrets and "azure_openai_endpoint" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_ENDPOINT"] = st.secrets["llm"]["azure_openai_endpoint"]
+    except Exception:
+        pass
+
+# (Req 4) Modificado para aceptar contexto del flujo
+def _llm_prompt_for_resume(resume_content: str, flow_desc: str, flow_expected: str):
+    """Construye un prompt estructurado para extracción JSON, usando el contexto del flujo."""
+    if not _LC_AVAILABLE:
+        return None
+    json_object_structure = """{{
+        "Name": "Full Name",
+        "Last_position": "The most recent position in which the candidate worked",
+        "Years_of_Experience": "Number (in years)",
+        "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+        "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+        "Certifications": ["Certification 1", "Certification 2"],
+        "Additional_Notes": "Optional details inferred or contextually relevant information.",
+        "Score": "0-100"
+    }}"""
+    
+    # (Req 4) El prompt del sistema ahora incluye el contexto del flujo
+    system_template = f"""
+    ### Objective
+    You are an AI assistant executing a specific recruitment task.
+    Task Description: {flow_desc}
+    Expected Output: {flow_expected}
+
+    Your goal is to extract structured data from the CV content (below) and compute a match percentage (0-100) vs the Job Description (which will be provided by the user).
+    
+    CV Content:
+    {resume_content}
+
+    Return a JSON with the structure:
+    {json_object_structure}
+    """
+    return ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("Job description:\n{job_description}")
+    ])
+
+# (Req 4) Modificado para aceptar contexto del flujo
+def _extract_with_azure(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
+    """Intenta usar AzureChatOpenAI; si falla, devuelve {} sin romper UI."""
+    if not _LC_AVAILABLE:
+        return {}
+    _llm_setup_credentials()
+    try:
+        llm = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
+            temperature=0
+        )
+        parser = JsonOutputParser()
+        # (Req 4) Pasa el contexto del flujo al generador de prompt
+        prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
+        if prompt is None:
+            return {}
+        chain = prompt | llm | parser
+        out = chain.invoke({"job_description": job_description})
+        return out if isinstance(out, dict) else {}
+    except Exception as e:
+        st.warning(f"Azure LLM no disponible: {e}")
+        return {}
+
+# (Req 4) Modificado para aceptar contexto del flujo
+def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
+    """Fallback con ChatOpenAI (OpenAI) si hay API Key en secrets."""
+    if not _LC_AVAILABLE:
+        return {}
+    try:
+        api_key = st.secrets["llm"]["openai_api_key"]
+    except Exception:
+        return {}
+    try:
+        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key)
+        json_object_structure = """{
+            "Name": "Full Name",
+            "Last_position": "The most recent position in which the candidate worked",
+            "Years_of_Experience": "Number (in years)",
+            "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+            "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+            "Certifications": ["Certification 1", "Certification 2"],
+            "Additional_Notes": "Optional details inferred or contextually relevant information.",
+            "Score": "0-100"
+        }"""
+        
+        # (Req 4) El prompt ahora incluye el contexto del flujo
+        prompt = f"""
+        You are an AI assistant. Execute the following task:
+        Task Description: {flow_desc}
+        Expected Output: {flow_expected}
+
+        Extract structured JSON from the following CV and compute a 0-100 match vs the JD.
+
+        Job description:
+        {job_description}
+
+        CV Content:
+        {resume_content}
+
+        Return JSON with this structure:
+        {json_object_structure}
+        """
+        resp = chat.invoke(prompt)
+        txt = resp.content.strip().replace('```json','').replace('```','')
+        return json.loads(txt)
+    except Exception as e:
+        st.warning(f"OpenAI LLM no disponible: {e}")
+        return {}
+
+def _create_llm_bar(df: pd.DataFrame):
+    # Aplicando color
+    fig = px.bar(df, x='file_name', y='Score', text='Score', title='Comparativa de Puntajes (LLM)',
+                 color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
+    for _, row in df.iterrows():
+        fig.add_annotation(x=row['file_name'], y=row['Score'], text=row.get('Name',''), showarrow=True, arrowhead=1, ax=0, ay=-20)
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
+    return fig
+
+def _results_to_df(results: list) -> pd.DataFrame:
+    if not results: return pd.DataFrame()
+    df = pd.DataFrame(results).copy()
+    if "Score" in df.columns:
+        try: df["Score"] = df["Score"].astype(int)
+        except: pass
+        df = df.sort_values(by="Score", ascending=False)
+    return df
+
+# ===================== PUESTOS (Req 2/3 - Modificado) =====================
+def render_position_form():
+    """Renderiza el formulario de creación/edición de Puestos."""
+    is_edit_mode = bool(ss.get("editing_position_id"))
+    editing_pos_data = None
+    
+    if is_edit_mode:
+        editing_pos_id = ss.get("editing_position_id")
+        editing_pos_data = next((p for p in ss.positions if p["ID"] == editing_pos_id), None)
+        if editing_pos_data:
+            st.subheader(f"Editando Puesto: {editing_pos_data.get('Puesto')}")
+        else:
+            st.error("Error: No se encontró el puesto a editar.")
+            ss.editing_position_id = None
+            return
+    else:
+        st.subheader("Crear Nuevo Puesto")
+        editing_pos_data = {} # Vacío para modo creación
+
+    with st.form("position_form"):
+        default_puesto = editing_pos_data.get("Puesto", "")
+        default_ubicacion = editing_pos_data.get("Ubicación", "Lima, Perú")
+        default_hm = editing_pos_data.get("Hiring Manager", "")
+        default_jd = editing_pos_data.get("JD", "") # (Req 2/3) Cargar JD
+        
+        default_estado = editing_pos_data.get("Estado", "Abierto")
+        try:
+            estado_index = POSITION_STATUSES.index(default_estado)
+        except ValueError:
+            estado_index = 0
+            
+        try:
+            default_fecha_inicio = date.fromisoformat(editing_pos_data.get("Fecha Inicio", date.today().isoformat()))
+        except:
+            default_fecha_inicio = date.today()
+
+        puesto = st.text_input("Nombre del Puesto*", value=default_puesto)
+        
+        # (Req 2/3) Campo para JD
+        jd = st.text_area("Job Description (JD)*", value=default_jd, height=200, 
+                          help="Este JD se usará en 'Flujos' y 'Evaluación de CVs'.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            ubicacion = st.text_input("Ubicación*", value=default_ubicacion)
+        with c2:
+            hm = st.text_input("Hiring Manager*", value=default_hm)
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            estado = st.selectbox("Estado", POSITION_STATUSES, index=estado_index)
+        with c4:
+            fecha_inicio = st.date_input("Fecha de Inicio", value=default_fecha_inicio)
+            
+        st.markdown("---")
+        
+        submitted = st.form_submit_button("Guardar Puesto" if is_edit_mode else "Crear Puesto")
+        
+        if submitted:
+            if not puesto.strip() or not ubicacion.strip() or not hm.strip() or not jd.strip():
+                st.error("Por favor, completa todos los campos obligatorios (*), incluyendo el Job Description.")
+            else:
+                if is_edit_mode:
+                    # Actualizar datos existentes
+                    pos_to_update = next((p for p in ss.positions if p["ID"] == ss.editing_position_id), None)
+                    if pos_to_update:
+                        pos_to_update["Puesto"] = puesto
+                        pos_to_update["Ubicación"] = ubicacion
+                        pos_to_update["Hiring Manager"] = hm
+                        pos_to_update["Estado"] = estado
+                        pos_to_update["Fecha Inicio"] = fecha_inicio.isoformat()
+                        pos_to_update["JD"] = jd # (Req 2/3) Guardar JD
+                    st.success("Puesto actualizado.")
+                else:
+                    # Crear nuevo puesto
+                    new_pos = {
+                        "ID": f"P-{int(datetime.now().timestamp())}", # ID único
+                        "Puesto": puesto,
+                        "Ubicación": ubicacion,
+                        "Hiring Manager": hm,
+                        "Estado": estado,
+                        "Fecha Inicio": fecha_inicio.isoformat(),
+                        "JD": jd, # (Req 2/3) Guardar JD
+                        # Campos analíticos por defecto
+                        "Días Abierto": 0,
+                        "Leads": 0, "Nuevos": 0, "Recruiter Screen": 0, "HM Screen": 0,
+                        "Entrevista Telefónica": 0, "Entrevista Presencial": 0
+                    }
+                    ss.positions.insert(0, new_pos)
+                    st.success("Puesto creado.")
+                
+                save_positions(ss.positions)
+                ss.editing_position_id = None
+                ss.show_position_form = False
+                st.rerun()
+
+def page_puestos():
+    st.header("Puestos")
+
+    # 1. Botón para mostrar/ocultar el formulario
+    if st.button("➕ Nuevo Puesto" if not ss.show_position_form else "✖ Ocultar Formulario", key="toggle_pos_form"):
+        ss.show_position_form = not ss.show_position_form
+        if not ss.show_position_form:
+            ss.editing_position_id = None # Limpiar modo edición si se cierra
+        st.rerun()
+
+    # 2. Renderizar el formulario (si está activado)
+    if ss.show_position_form:
+        render_position_form()
+
+    # 3. Renderizar la tabla de Puestos (solo si el formulario no está abierto)
+    if not ss.show_position_form:
+        st.subheader("Mis Puestos")
+        
+        if not ss.positions:
+            st.info("No hay puestos definidos. Crea uno con **➕ Nuevo Puesto**.")
+            return
+
+        # Calcular totales de candidatos para la cabecera
+        all_candidates_df = pd.DataFrame(ss.candidates) if ss.candidates else pd.DataFrame(columns=["Role", "stage"])
+
+        # Definir columnas de la tabla
+        col_w = [2.5, 2.0, 1.0, 1.0, 1.0, 1.5]
+        h_puesto, h_hm, h_dias, h_leads, h_estado, h_acc = st.columns(col_w)
+        with h_puesto: st.markdown("**Puesto / Ubicación**")
+        with h_hm: st.markdown("**Hiring Manager**")
+        with h_dias: st.markdown("**Días Abierto**")
+        with h_leads: st.markdown("**Leads (Nuevos)**")
+        with h_estado: st.markdown("**Estado**")
+        with h_acc: st.markdown("**Acciones**")
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+
+        positions_list = ss.positions.copy()
+        
+        for pos in positions_list:
+            pos_id = pos.get("ID")
+            if not pos_id: # Asegurar ID
+                pos["ID"] = str(uuid.uuid4())
+                pos_id = pos["ID"]
+
+            c_puesto, c_hm, c_dias, c_leads, c_estado, c_acc = st.columns(col_w)
+
+            with c_puesto:
+                st.markdown(f"**{pos.get('Puesto', '—')}**")
+                st.caption(f"{pos.get('Ubicación', '—')}")
+            with c_hm:
+                st.markdown(f"`{pos.get('Hiring Manager', '—')}`")
+            with c_dias:
+                try:
+                    load_date = date.fromisoformat(pos.get("Fecha Inicio", date.today().isoformat()))
+                    dias_abierto = (date.today() - load_date).days
+                    st.markdown(f"**{dias_abierto}**")
+                except Exception:
+                    st.markdown("—")
+            with c_leads:
+                pos_puesto_name = pos.get("Puesto")
+                cands_for_pos = all_candidates_df[all_candidates_df["Role"] == pos_puesto_name] if pos_puesto_name else pd.DataFrame()
+                
+                leads_count = len(cands_for_pos)
+                nuevos_count = 0
+                if not cands_for_pos.empty:
+                    nuevos_count = len(cands_for_pos[cands_for_pos["stage"].isin(["Recibido", "Screening RRHH"])])
+                
+                st.markdown(f"**{leads_count}** ({nuevos_count})")
+            with c_estado:
+                st.markdown(_position_status_pill(pos.get('Estado', 'Abierto')), unsafe_allow_html=True)
+            with c_acc:
+                st.selectbox(
+                    "Acciones",
+                    ["Selecciona...", "Editar", "Eliminar"],
+                    key=f"pos_action_{pos_id}",
+                    label_visibility="collapsed",
+                    on_change=_handle_position_action_change,
+                    args=(pos_id,)
+                )
+
+            # Lógica de confirmación de eliminación
+            if ss.get("confirm_delete_position_id") == pos_id:
+                st.error(f"¿Seguro que quieres eliminar el puesto **{pos.get('Puesto')}**?")
+                b1, b2, _ = st.columns([1, 1, 5])
+                with b1:
+                    if st.button("Sí, Eliminar", key=f"pos_del_confirm_{pos_id}", type="primary", use_container_width=True, help="Esto eliminará el puesto permanentemente"):
+                        ss.positions = [p for p in ss.positions if p.get("ID") != pos_id]
+                        save_positions(ss.positions)
+                        ss.confirm_delete_position_id = None
+                        st.warning(f"Puesto '{pos.get('Puesto')}' eliminado."); st.rerun()
+                with b2:
+                    if st.button("Cancelar", key=f"pos_del_cancel_{pos_id}", use_container_width=True):
+                        ss.confirm_delete_position_id = None; st.rerun()
+
+            st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.subheader("Candidatos por Puesto")
+        # (Req 3) Actualizado para leer de la lista de dicts
+        pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+        
+        if not pos_list:
+            st.info("Aún no se han creado puestos. Los candidatos no se pueden asociar.")
+            return
+
+        selected_pos = st.selectbox("Selecciona un puesto para ver el Pipeline asociado", pos_list)
+        
+        if selected_pos:
+            candidates_for_pos = [c for c in ss.candidates if c.get("Role") == selected_pos]
+            if candidates_for_pos:
+                df_cand = pd.DataFrame(candidates_for_pos)
+                st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}),
+                             use_container_width=True, hide_index=True)
+            else:
+                st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
+
+# ===================== EVALUACIÓN (Req 4 - Modificado) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
@@ -842,65 +1180,80 @@ def page_eval():
             key="selected_flow_id_for_eval" # Clave para guardar el estado
         )
 
-        # (Req 5.1) Ya no se muestran los campos del flujo aquí
-
-        # 4. Leer el valor actual del selectbox (se necesita para el botón)
+        # 4. Leer el valor actual del selectbox
         current_flow_id = ss.get("selected_flow_id_for_eval")
         
-        # 5. Cargador de archivos y botón de ejecución (directamente después del selectbox)
+        # 5. Obtener los datos del Flujo seleccionado
+        selected_flow_data = next((wf for wf in ss.workflows if wf.get("id") == current_flow_id), None)
+
+        if selected_flow_data:
+            default_puesto = selected_flow_data.get("role", "Puesto no definido")
+            default_desc = selected_flow_data.get("description", "")
+            default_expected = selected_flow_data.get("expected_output", "")
+            default_jd = selected_flow_data.get("jd_text", "JD no encontrado.")
+        else:
+            default_puesto, default_desc, default_expected, default_jd = "N/A", "N/A", "N/A", "Selecciona un flujo válido"
+
+        # 6. Mostrar los campos cargados del Flujo
+        st.text_input("Puesto (del Flujo)", value=default_puesto, disabled=True)
+        # (Req 4) Guardamos desc y expected en ss para leerlos al presionar el botón
+        st.text_area("Descripción (del Flujo)", value=default_desc, height=100, key="eval_flow_desc", disabled=True)
+        st.text_area("Resultado Esperado (del Flujo)", value=default_expected, height=80, key="eval_flow_expected", disabled=True)
+        
+        jd_llm = st.text_area(
+            "Job Description (cargado desde Flujo)",
+            value=default_jd, # <--- ¡Cargado dinámicamente!
+            height=120,
+            key="jd_llm"
+        )
+
         up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
         run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
 
         if run_llm and up:
-            # 6. Obtener los datos del Flujo seleccionado DENTRO del if del botón
-            selected_flow_data = next((wf for wf in ss.workflows if wf.get("id") == current_flow_id), None)
+            # (Req 4) Leer los valores de los widgets en el momento del click
+            flow_desc_val = ss.get("eval_flow_desc", "")
+            flow_expected_val = ss.get("eval_flow_expected", "")
+            jd_llm_val = ss.get("jd_llm", "")
 
-            if not selected_flow_data:
-                 st.error("Flujo seleccionado no válido. Por favor, selecciona otro.")
+            if not _LC_AVAILABLE:
+                st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
+                ss.llm_eval_results = []
+            elif not jd_llm_val or jd_llm_val.startswith("JD no"):
+                st.error("No se puede ejecutar la evaluación sin un Job Description válido.")
             else:
-                # 7. Extraer la información necesaria del flujo seleccionado
-                flow_desc_val = selected_flow_data.get("description", "")
-                flow_expected_val = selected_flow_data.get("expected_output", "")
-                jd_llm_val = selected_flow_data.get("jd_text", "")
-
-                if not _LC_AVAILABLE:
-                    st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
-                    ss.llm_eval_results = []
-                elif not jd_llm_val or jd_llm_val.startswith("JD no"):
-                    st.error("El flujo seleccionado no tiene un Job Description válido. Edita el flujo y añade un JD.")
-                else:
-                    results_with_bytes = []
-                    for f in up:
-                        f_bytes = f.read(); f.seek(0)
-                        text = ""
+                results_with_bytes = []
+                for f in up:
+                    f_bytes = f.read(); f.seek(0)
+                    text = ""
+                    try:
+                        if _LC_AVAILABLE:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                                tmp.write(f_bytes); tmp.flush()
+                                loader = PyPDFLoader(tmp.name)
+                                pages = loader.load()
+                                text = "\n".join([p.page_content for p in pages])
+                        else:
+                            reader = PdfReader(io.BytesIO(f_bytes))
+                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                    except Exception:
                         try:
-                            if _LC_AVAILABLE:
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                                    tmp.write(f_bytes); tmp.flush()
-                                    loader = PyPDFLoader(tmp.name)
-                                    pages = loader.load()
-                                    text = "\n".join([p.page_content for p in pages])
-                            else:
-                                reader = PdfReader(io.BytesIO(f_bytes))
-                                for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                        except Exception:
-                            try:
-                                reader = PdfReader(io.BytesIO(f_bytes))
-                                for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                            except Exception as e:
-                                st.error(f"No se pudo leer {f.name}: {e}")
-                                continue
+                            reader = PdfReader(io.BytesIO(f_bytes))
+                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                        except Exception as e:
+                            st.error(f"No se pudo leer {f.name}: {e}")
+                            continue
 
-                        # Pasa el contexto del flujo a la función de IA
-                        meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
-                               _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
-                               
-                        if not meta:
-                            meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
-                        meta["file_name"] = f.name
-                        results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
+                    # (Req 4) Pasa el contexto del flujo a la función de IA
+                    meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
+                           _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
+                           
+                    if not meta:
+                        meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
+                    meta["file_name"] = f.name
+                    results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
 
-                    ss.llm_eval_results = results_with_bytes
+                ss.llm_eval_results = results_with_bytes
 
         # Mostrar resultados si existen en session_state
         if ss.llm_eval_results:
@@ -912,12 +1265,21 @@ def page_eval():
             else:
                 st.info("Sin resultados para mostrar.")
         else:
-            st.info("Selecciona un flujo, sube archivos y ejecuta la evaluación para ver resultados.")
+            st.info("Sube archivos y ejecuta la evaluación para ver resultados.")
 
-    # (Req 5.2) Eliminado el visualizador de CV
     # === Visualizador de CV ===
-    # if ss.llm_eval_results:
-    #    ... (código eliminado) ...
+    if ss.llm_eval_results:
+        st.markdown("---")
+        st.subheader("Visualizar CV Evaluado")
+        file_names = [r["meta"]["file_name"] for r in ss.llm_eval_results]
+        selected_file_name = st.selectbox("Selecciona un CV para visualizar", file_names)
+
+        if selected_file_name:
+            selected_file_data = next((r for r in ss.llm_eval_results if r["meta"]["file_name"] == selected_file_name), None)
+            if selected_file_data and selected_file_data.get("_bytes"):
+                pdf_viewer_embed(selected_file_data["_bytes"], height=500)
+            else:
+                st.error("No se encontró el archivo PDF correspondiente para la visualización.")
 
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
@@ -1494,11 +1856,11 @@ def page_analytics():
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Req 5.3 - Modificado) =====================
+# ===================== TODAS LAS TAREAS (Req 1 - Modificado) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
-    # Expander para creación manual de tareas
+    # (Req. 3) Expander para creación manual de tareas
     with st.expander("➕ Crear Tarea Manual"):
         with st.form("manual_task_form", clear_on_submit=True):
             st.markdown("**Nueva Tarea**")
@@ -1522,7 +1884,7 @@ def page_create_task():
                 else:
                     st.error("El Título de la Tarea es obligatorio.")
 
-    st.info("Muestra todas las tareas registradas. Haz clic en una tarea para ver los detalles.")
+    st.info("Muestra todas las tareas registradas.")
     if not isinstance(ss.tasks, list):
         st.error("Error interno: La lista de tareas no es válida.")
         ss.tasks = load_tasks()
@@ -1546,56 +1908,57 @@ def page_create_task():
         st.info(f"No hay tareas con el estado '{selected_status}'.")
         return
 
-    # (Req 5.3) - Quitar cabecera de tabla
-    # col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
-    # h_id, h_nom, h_desc, h_asg, h_cre, h_due, h_pri, h_est, h_acc = st.columns(col_w)
-    # ... (cabeceras eliminadas) ...
-    # st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+    col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
+    h_id, h_nom, h_desc, h_asg, h_cre, h_due, h_pri, h_est, h_acc = st.columns(col_w)
+    with h_id:   st.markdown("**Id**")
+    with h_nom:  st.markdown("**Nombre**")
+    with h_desc: st.markdown("**Descripción**")
+    with h_asg:  st.markdown("**Asignado a**")
+    with h_cre:  st.markdown("**Creado el**")
+    with h_due:  st.markdown("**Vencimiento**")
+    with h_pri:  st.markdown("**Prioridad**")
+    with h_est:  st.markdown("**Estado**")
+    with h_acc:  st.markdown("**Acciones**")
+    st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
     for task in tasks_to_show:
         t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
-        
-        # (Req 5.3) Usar expander
-        with st.expander(f"{task.get('titulo','—')}"):
-            # Grid para detalles
-            st.markdown('<div class="task-details-grid">', unsafe_allow_html=True)
+        c_id, c_nom, c_desc, c_asg, c_cre, c_due, c_pri, c_est, c_acc = st.columns(col_w)
+        with c_id:
+            short = (t_id[:5] + "…") if len(t_id) > 6 else t_id
+            st.caption(short)
+        with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
+        with c_desc: st.caption(task.get("desc","—"))
+        with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
+        with c_cre: st.markdown(task.get("created_at","—"))
+        with c_due: st.markdown(task.get("due","—"))
+        with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
+        with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
+
+        def _handle_action_change(task_id):
+            selectbox_key = f"accion_{task_id}"
+            if selectbox_key not in ss: return
+            action = ss[selectbox_key]
+            task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+            if not task_to_update: return
+            ss.confirm_delete_id = None; ss.show_assign_for = None; ss.expanded_task_id = None
+            if action == "Ver detalle":
+                ss.expanded_task_id = task_id
+            elif action == "Asignar tarea":
+                ss.show_assign_for = task_id
+            elif action == "Tomar tarea":
+                current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+                task_to_update["assigned_to"] = current_user
+                task_to_update["status"] = "En Proceso"
+                save_tasks(ss.tasks); st.toast("Tarea tomada.")
+                # (Req 1) st.rerun() eliminado
+            elif action == "Eliminar":
+                ss.confirm_delete_id = task_id
             
-            st.markdown(f"<div><strong>Asignado a</strong> {task.get('assigned_to','—')}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div><strong>Creado el</strong> {task.get('created_at','—')}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div><strong>Vencimiento</strong> {task.get('due','—')}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div><strong>Estado</strong> {_status_pill(task.get('status','Pendiente'))}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div><strong>Prioridad</strong> {_priority_pill(task.get('priority','Media'))}</div>", unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+            # (Req 1) Resetear selectbox
+            ss[selectbox_key] = "Selecciona…"
 
-            st.markdown("**Descripción**")
-            st.caption(task.get("desc","—") or "Sin descripción.")
-            st.markdown("---")
-
-            # Callback para acciones (sin cambios internos)
-            def _handle_action_change(task_id):
-                selectbox_key = f"accion_{task_id}"
-                if selectbox_key not in ss: return
-                action = ss[selectbox_key]
-                task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-                if not task_to_update: return
-                ss.confirm_delete_id = None; ss.show_assign_for = None; ss.expanded_task_id = None
-                if action == "Ver detalle":
-                    ss.expanded_task_id = task_id
-                elif action == "Asignar tarea":
-                    ss.show_assign_for = task_id
-                elif action == "Tomar tarea":
-                    current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-                    task_to_update["assigned_to"] = current_user
-                    task_to_update["status"] = "En Proceso"
-                    save_tasks(ss.tasks); st.toast("Tarea tomada.")
-                elif action == "Eliminar":
-                    ss.confirm_delete_id = task_id
-                
-                # Resetear selectbox
-                ss[selectbox_key] = "Selecciona…"
-
-            # Acciones (dentro del expander)
+        with c_acc:
             selectbox_key = f"accion_{t_id}"
             st.selectbox(
                 "Acciones",
@@ -1604,55 +1967,52 @@ def page_create_task():
                 on_change=_handle_action_change, args=(t_id,)
             )
 
-            # Lógica de confirmación de eliminación (dentro del expander)
-            if ss.get("confirm_delete_id") == t_id:
-                b1, b2, _ = st.columns([1.0, 1.0, 7.8]) # Ajustar columnas si es necesario
-                with b1:
-                    if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
-                        ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
-                        save_tasks(ss.tasks); ss.confirm_delete_id = None
-                        st.warning("Tarea eliminada permanentemente.")
-                        st.rerun() 
-                with b2:
-                    if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
-                        ss.confirm_delete_id = None
-                        st.rerun() 
+        if ss.get("confirm_delete_id") == t_id:
+            b1, b2, _ = st.columns([1.0, 1.0, 7.8])
+            with b1:
+                if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
+                    ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
+                    save_tasks(ss.tasks); ss.confirm_delete_id = None
+                    st.warning("Tarea eliminada permanentemente.")
+                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí porque es un botón, no un callback
+            with b2:
+                if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
+                    ss.confirm_delete_id = None
+                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
-            # Lógica de reasignación (dentro del expander)
-            if ss.show_assign_for == t_id:
-                a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0]) # Ajustar columnas si es necesario
-                with a1:
-                    assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
-                with a2:
-                    if assign_type == "En Espera":
-                        nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
-                    elif assign_type == "Equipo":
-                        nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
-                    else:
-                        nuevo_assignee = st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"val_us_{t_id}")
-                with a3:
-                    cur_p = task.get("priority", "Media")
-                    idx_p = TASK_PRIORITIES.index(cur_p) if cur_p in TASK_PRIORITIES else 1
-                    nueva_prio = st.selectbox("Prioridad", TASK_PRIORITIES, key=f"prio_{t_id}", index=idx_p)
-                with a4:
-                    if st.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
-                        task_to_update = next((t for t in ss.tasks if t.get("id") == t_id), None)
-                        if task_to_update:
-                            task_to_update["assigned_to"] = nuevo_assignee
-                            task_to_update["priority"] = nueva_prio
-                            if assign_type == "En Espera":
-                                task_to_update["status"] = "En Espera"
-                            else:
-                                if task_to_update["status"] == "En Espera":
-                                    task_to_update["status"] = "Pendiente"
-                            save_tasks(ss.tasks); ss.show_assign_for = None
-                            st.success("Cambios guardados.")
-                            st.rerun() 
+        if ss.show_assign_for == t_id:
+            a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0])
+            with a1:
+                assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
+            with a2:
+                if assign_type == "En Espera":
+                    nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
+                elif assign_type == "Equipo":
+                    nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
+                else:
+                    nuevo_assignee = st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"val_us_{t_id}")
+            with a3:
+                cur_p = task.get("priority", "Media")
+                idx_p = TASK_PRIORITIES.index(cur_p) if cur_p in TASK_PRIORITIES else 1
+                nueva_prio = st.selectbox("Prioridad", TASK_PRIORITIES, key=f"prio_{t_id}", index=idx_p)
+            with a4:
+                if st.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
+                    task_to_update = next((t for t in ss.tasks if t.get("id") == t_id), None)
+                    if task_to_update:
+                        task_to_update["assigned_to"] = nuevo_assignee
+                        task_to_update["priority"] = nueva_prio
+                        if assign_type == "En Espera":
+                            task_to_update["status"] = "En Espera"
+                        else:
+                            if task_to_update["status"] == "En Espera":
+                                task_to_update["status"] = "Pendiente"
+                        save_tasks(ss.tasks); ss.show_assign_for = None
+                        st.success("Cambios guardados.")
+                        st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
-        # (Req 5.3) Eliminada la HR entre tareas
-        # st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # Lógica del diálogo para Tareas (sin cambios)
+    # Lógica del diálogo para Tareas
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
