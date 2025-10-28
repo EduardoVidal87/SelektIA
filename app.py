@@ -72,6 +72,8 @@ AGENT_DEFAULT_IMAGES = {
 LLM_IN_USE = "gpt-4o-mini" # Modelo real usado en las funciones _extract
 
 # ===== Presets de puestos =====
+# (Req 2/3) ROLE_PRESETS ahora solo se usa en 'Sourcing' para precargar.
+# La fuente de verdad para Flujos/Evaluación será ss.positions
 ROLE_PRESETS = {
   "Asistente Administrativo": {
     "jd": "Brindar soporte administrativo: gestión documental, agenda, compras menores, logística de reuniones y reportes...",
@@ -88,7 +90,7 @@ ROLE_PRESETS = {
   "Diseñador/a UX": {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
-    "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
+    "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
     "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
@@ -253,18 +255,18 @@ DEFAULT_TASKS = [
     {"id": str(uuid.uuid4()), "titulo":"Análisis Detallado de CV_MartaDiaz.pdf", "desc":"Utilizar el agente de análisis para generar un informe de brechas de skills.", "due":str(date.today() + timedelta(days=3)), "assigned_to": "Agente de Análisis", "status": "Pendiente", "priority": "Media", "created_at": date.today().isoformat(), "context": {"candidate_name": "MartaDiaz.pdf", "role": "Desarrollador/a Backend (Python)"}}
 ]
 
-# (Req 3) Datos por defecto para Puestos
+# (Req 2/3) Datos por defecto para Puestos (con JD)
 DEFAULT_POSITIONS = [
-    {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)","Días Abierto":3,
-     "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
+    {"ID":"10,645,194","Puesto":"Desarrollador/a Backend (Python)", "JD": "Buscamos un Desarrollador Backend con experiencia en Python, Django y/o Flask. Responsable de diseñar, implementar y mantener APIs RESTful...",
+     "Días Abierto":3, "Leads":1800,"Nuevos":115,"Recruiter Screen":35,"HM Screen":7,
      "Entrevista Telefónica":14,"Entrevista Presencial":15,"Ubicación":"Lima, Perú",
      "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=3)).isoformat()},
-    {"ID":"10,376,415","Puesto":"VP de Marketing","Días Abierto":28,
-     "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
+    {"ID":"10,376,415","Puesto":"VP de Marketing", "JD": "Liderar la estrategia de marketing digital y branding. Definir KPIs, gestionar el presupuesto del área y liderar equipos multidisciplinarios...",
+     "Días Abierto":28, "Leads":8100,"Nuevos":1,"Recruiter Screen":15,"HM Screen":35,
      "Entrevista Telefónica":5,"Entrevista Presencial":7,"Ubicación":"Santiago, Chile",
      "Hiring Manager":"Angela Cruz","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=28)).isoformat()},
-    {"ID":"10,376,646","Puesto":"Planner de Demanda","Días Abierto":28,
-     "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
+    {"ID":"10,376,646","Puesto":"Planner de Demanda", "JD": "Analizar la demanda histórica y tendencias del mercado para generar el forecast de ventas. Colaboración con Ventas y Producción...",
+     "Días Abierto":28, "Leads":2300,"Nuevos":26,"Recruiter Screen":3,"HM Screen":8,
      "Entrevista Telefónica":6,"Entrevista Presencial":3,"Ubicación":"Ciudad de México, MX",
      "Hiring Manager":"Rivers Brykson","Estado":"Abierto","Fecha Inicio": (date.today() - timedelta(days=28)).isoformat()}
 ]
@@ -349,6 +351,11 @@ if "positions_loaded" not in ss:
     if not isinstance(ss.positions, list):
         ss.positions = DEFAULT_POSITIONS
         save_positions(ss.positions)
+    # (Req 2/3) Asegurar que los puestos por defecto tengan JD
+    for p in ss.positions:
+        if "JD" not in p:
+            p["JD"] = "Por favor, define el Job Description."
+    save_positions(ss.positions)
     ss.positions_loaded = True
 
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
@@ -729,11 +736,12 @@ def render_sidebar():
 # =========================================================
 def page_def_carga():
   st.header("Publicación & Sourcing")
+  # (Req 2/3) Esta página sigue usando ROLE_PRESETS para precargar, lo cual está bien.
   role_names = list(ROLE_PRESETS.keys())
 
   st.subheader("1. Definición de la Vacante")
   col_puesto, col_id = st.columns(2)
-  with col_puesto: puesto = st.selectbox("Puesto", role_names, index=0)
+  with col_puesto: puesto = st.selectbox("Puesto (Usar preset)", role_names, index=0)
   with col_id: id_puesto = st.text_input("ID de Puesto", value=f"P-{random.randint(1000,9999)}")
   preset = ROLE_PRESETS[puesto]
   jd_text = st.text_area("Descripción / JD", height=180, value=preset["jd"])
@@ -906,7 +914,7 @@ def _results_to_df(results: list) -> pd.DataFrame:
         df = df.sort_values(by="Score", ascending=False)
     return df
 
-# ===================== PUESTOS (Req 3 - Modificado) =====================
+# ===================== PUESTOS (Req 2/3 - Modificado) =====================
 def render_position_form():
     """Renderiza el formulario de creación/edición de Puestos."""
     is_edit_mode = bool(ss.get("editing_position_id"))
@@ -929,6 +937,7 @@ def render_position_form():
         default_puesto = editing_pos_data.get("Puesto", "")
         default_ubicacion = editing_pos_data.get("Ubicación", "Lima, Perú")
         default_hm = editing_pos_data.get("Hiring Manager", "")
+        default_jd = editing_pos_data.get("JD", "") # (Req 2/3) Cargar JD
         
         default_estado = editing_pos_data.get("Estado", "Abierto")
         try:
@@ -942,6 +951,11 @@ def render_position_form():
             default_fecha_inicio = date.today()
 
         puesto = st.text_input("Nombre del Puesto*", value=default_puesto)
+        
+        # (Req 2/3) Campo para JD
+        jd = st.text_area("Job Description (JD)*", value=default_jd, height=200, 
+                          help="Este JD se usará en 'Flujos' y 'Evaluación de CVs'.")
+        
         c1, c2 = st.columns(2)
         with c1:
             ubicacion = st.text_input("Ubicación*", value=default_ubicacion)
@@ -959,8 +973,8 @@ def render_position_form():
         submitted = st.form_submit_button("Guardar Puesto" if is_edit_mode else "Crear Puesto")
         
         if submitted:
-            if not puesto.strip() or not ubicacion.strip() or not hm.strip():
-                st.error("Por favor, completa todos los campos obligatorios (*).")
+            if not puesto.strip() or not ubicacion.strip() or not hm.strip() or not jd.strip():
+                st.error("Por favor, completa todos los campos obligatorios (*), incluyendo el Job Description.")
             else:
                 if is_edit_mode:
                     # Actualizar datos existentes
@@ -971,7 +985,7 @@ def render_position_form():
                         pos_to_update["Hiring Manager"] = hm
                         pos_to_update["Estado"] = estado
                         pos_to_update["Fecha Inicio"] = fecha_inicio.isoformat()
-                        # Los campos analíticos (Leads, Nuevos, etc.) se preservan
+                        pos_to_update["JD"] = jd # (Req 2/3) Guardar JD
                     st.success("Puesto actualizado.")
                 else:
                     # Crear nuevo puesto
@@ -982,6 +996,7 @@ def render_position_form():
                         "Hiring Manager": hm,
                         "Estado": estado,
                         "Fecha Inicio": fecha_inicio.isoformat(),
+                        "JD": jd, # (Req 2/3) Guardar JD
                         # Campos analíticos por defecto
                         "Días Abierto": 0,
                         "Leads": 0, "Nuevos": 0, "Recruiter Screen": 0, "HM Screen": 0,
@@ -1095,6 +1110,11 @@ def page_puestos():
         st.subheader("Candidatos por Puesto")
         # (Req 3) Actualizado para leer de la lista de dicts
         pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+        
+        if not pos_list:
+            st.info("Aún no se han creado puestos. Los candidatos no se pueden asociar.")
+            return
+
         selected_pos = st.selectbox("Selecciona un puesto para ver el Pipeline asociado", pos_list)
         
         if selected_pos:
@@ -1106,30 +1126,36 @@ def page_puestos():
             else:
                 st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
-# ===================== EVALUACIÓN (CON MODIFICACIÓN ANTERIOR) =====================
+# ===================== EVALUACIÓN (Req 2/3 - Modificado) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
-    # === Bloque LLM (Req. 5 - Modificado para guardar bytes) ===
+    # === Bloque LLM ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
 
-        # 1. Definir nombres de roles y obtener el último usado (de Sourcing)
-        role_names = list(ROLE_PRESETS.keys())
-        last_role_from_sourcing = ss.get("last_role", role_names[0] if role_names else "")
+        # (Req 2/3) 1. Definir nombres de roles desde ss.positions
+        role_names = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+        
+        if not role_names:
+            st.warning("No hay puestos definidos en la pestaña 'Puestos'. Por favor, crea un puesto primero.", icon="⚠️")
+            return
 
         # 2. Determinar el índice inicial
-        if "eval_llm_role_select" in ss:
+        last_role_from_sourcing = ss.get("last_role", role_names[0])
+        
+        if "eval_llm_role_select" in ss and ss.eval_llm_role_select in role_names:
             try:
                 initial_index = role_names.index(ss.eval_llm_role_select)
             except ValueError:
                 initial_index = 0
         else:
             try:
+                # Intenta usar el último rol de sourcing si existe en la lista de puestos
                 initial_index = role_names.index(last_role_from_sourcing)
             except ValueError:
                 initial_index = 0
 
-        # 3. Agregar el nuevo st.selectbox
+        # 3. Agregar el st.selectbox
         selected_role = st.selectbox(
             "Puesto objetivo",
             role_names,
@@ -1138,10 +1164,13 @@ def page_eval():
         )
 
         # 4. Leer el valor actual del selectbox
-        current_role_key = ss.get("eval_llm_role_select", role_names[initial_index] if role_names else "")
-        default_jd_text = ROLE_PRESETS.get(current_role_key, {}).get("jd", "")
+        current_role_key = ss.get("eval_llm_role_select", role_names[initial_index])
+        
+        # (Req 2/3) 5. Obtener el JD desde ss.positions
+        pos_data = next((p for p in ss.positions if p.get("Puesto") == current_role_key), None)
+        default_jd_text = pos_data.get("JD", "No se encontró JD para este puesto.") if pos_data else "Por favor, selecciona un puesto."
 
-        # 5. Actualizar el st.text_area para usar el 'value' dinámico
+        # 6. Actualizar el st.text_area para usar el 'value' dinámico
         jd_llm = st.text_area(
             "Job Description para el LLM",
             value=default_jd_text, # <--- ¡Cargado dinámicamente!
@@ -1156,38 +1185,38 @@ def page_eval():
             if not _LC_AVAILABLE:
                 st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
                 ss.llm_eval_results = []
-
-            results_with_bytes = []
-            for f in up:
-                f_bytes = f.read(); f.seek(0) # Leer bytes para guardar (Req. 5)
-                text = ""
-                try:
-                    if _LC_AVAILABLE:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                            tmp.write(f_bytes); tmp.flush()
-                            loader = PyPDFLoader(tmp.name)
-                            pages = loader.load()
-                            text = "\n".join([p.page_content for p in pages])
-                    else:
-                        reader = PdfReader(io.BytesIO(f_bytes))
-                        for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                except Exception:
+            elif not jd_llm or jd_llm.startswith("Por favor"):
+                st.error("No se puede ejecutar la evaluación sin un Job Description válido. Asegúrate de que el puesto seleccionado tenga un JD guardado.")
+            else:
+                results_with_bytes = []
+                for f in up:
+                    f_bytes = f.read(); f.seek(0)
+                    text = ""
                     try:
-                        reader = PdfReader(io.BytesIO(f_bytes))
-                        for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                    except Exception as e:
-                        st.error(f"No se pudo leer {f.name}: {e}")
-                        continue
+                        if _LC_AVAILABLE:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                                tmp.write(f_bytes); tmp.flush()
+                                loader = PyPDFLoader(tmp.name)
+                                pages = loader.load()
+                                text = "\n".join([p.page_content for p in pages])
+                        else:
+                            reader = PdfReader(io.BytesIO(f_bytes))
+                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                    except Exception:
+                        try:
+                            reader = PdfReader(io.BytesIO(f_bytes))
+                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                        except Exception as e:
+                            st.error(f"No se pudo leer {f.name}: {e}")
+                            continue
 
-                meta = _extract_with_azure(jd_llm, text) or _extract_with_openai(jd_llm, text)
-                if not meta:
-                    meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
-                meta["file_name"] = f.name
+                    meta = _extract_with_azure(jd_llm, text) or _extract_with_openai(jd_llm, text)
+                    if not meta:
+                        meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
+                    meta["file_name"] = f.name
+                    results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
 
-                # Guardar meta y bytes (Req. 5)
-                results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
-
-            ss.llm_eval_results = results_with_bytes # Guardar en session_state
+                ss.llm_eval_results = results_with_bytes
 
         # Mostrar resultados si existen en session_state
         if ss.llm_eval_results:
@@ -1201,17 +1230,14 @@ def page_eval():
         else:
             st.info("Sube archivos y ejecuta la evaluación para ver resultados.")
 
-    # === Visualizador de CV (Req. 5) ===
+    # === Visualizador de CV ===
     if ss.llm_eval_results:
         st.markdown("---")
         st.subheader("Visualizar CV Evaluado")
-
-        # Crear lista de nombres de archivo para el selectbox
         file_names = [r["meta"]["file_name"] for r in ss.llm_eval_results]
         selected_file_name = st.selectbox("Selecciona un CV para visualizar", file_names)
 
         if selected_file_name:
-            # Encontrar los bytes correspondientes
             selected_file_data = next((r for r in ss.llm_eval_results if r["meta"]["file_name"] == selected_file_name), None)
             if selected_file_data and selected_file_data.get("_bytes"):
                 pdf_viewer_embed(selected_file_data["_bytes"], height=500)
@@ -1456,7 +1482,7 @@ def page_agents():
                    "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-# ===================== FLUJOS (Req 2 - Modificado) =====================
+# ===================== FLUJOS (Req 1, 2, 3 - Modificado) =====================
 # Función para renderizar el formulario de Flujos (Crear/Editar/Ver)
 def render_flow_form():
     """Renderiza el formulario de creación/edición/vista de flujos."""
@@ -1477,22 +1503,41 @@ def render_flow_form():
     # 'is_disabled' es True si estamos en modo VISTA
     is_disabled = is_view_mode
 
+    # (Req 2/3) Obtener lista de puestos desde ss.positions
+    role_options = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not role_options:
+        st.error("No hay puestos definidos en la pestaña 'Puestos'. Por favor, crea un puesto antes de crear un flujo.", icon="⚠️")
+        ss.show_flow_form = False
+        return
+
     # Settear valores default del formulario
     default_name = editing_wf.get("name", "Analizar CV") if editing_wf else "Analizar CV"
-    default_role = editing_wf.get("role", "Diseñador/a UX") if editing_wf else "Diseñador/a UX"
+    default_role = editing_wf.get("role", role_options[0]) if editing_wf else role_options[0]
+    
     try:
-        role_index = list(ROLE_PRESETS.keys()).index(default_role)
+        role_index = role_options.index(default_role)
     except ValueError:
-        role_index = 2 # Fallback
+        role_index = 0 # Fallback
+        
     default_desc = editing_wf.get("description", EVAL_INSTRUCTION) if editing_wf else EVAL_INSTRUCTION
     default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
 
-    default_jd_text = ROLE_PRESETS[default_role].get("jd", "")
+    # (Req 2/3) Cargar JD dinámicamente
+    # Primero, miramos el selectbox (si cambia)
+    selected_role_from_key = ss.get("flow_form_role_select", default_role)
+    pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
+    default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
+    
+    # Si estamos editando, el JD guardado en el flujo tiene prioridad
     if editing_wf and editing_wf.get("jd_text"):
         default_jd_text = editing_wf.get("jd_text")
+    # Si estamos creando (no editando) Y el rol del selectbox cambia, usamos el JD del puesto
+    elif not editing_wf and selected_role_from_key:
+         pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
+         default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
+
 
     default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
-
     if not (0 <= default_agent_idx < len(ss.agents)):
         default_agent_idx = 0
 
@@ -1514,23 +1559,21 @@ def render_flow_form():
 
     with st.form("wf_form"):
         st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
-        # Añadir 'disabled=is_disabled' a todos los campos
         name = st.text_input("Name*", value=default_name, disabled=is_disabled)
-        role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index, key="flow_form_role_select", disabled=is_disabled)
-
-        if not editing_wf and not is_view_mode: # Solo cargar JD dinámicamente en modo creación
-            selected_role_key = ss.get("flow_form_role_select", default_role)
-            default_jd_text = ROLE_PRESETS.get(selected_role_key, {}).get("jd", "")
+        
+        # (Req 2/3) Selectbox conectado a ss.positions
+        role = st.selectbox("Puesto objetivo", role_options, index=role_index, key="flow_form_role_select", disabled=is_disabled)
 
         desc = st.text_area("Description*", value=default_desc, height=110, disabled=is_disabled)
         expected = st.text_area("Expected output*", value=default_expected, height=80, disabled=is_disabled)
 
-        st.markdown("**Job Description (elige una opción)**")
+        st.markdown("**Job Description (cargado desde 'Puestos')**")
         jd_text = st.text_area("JD en texto", value=default_jd_text, height=140, disabled=is_disabled)
         
         # (Req 2) Ocultar el file_uploader y la preview si estamos en modo VISTA
         jd_from_file = ""
         if not is_view_mode:
+            st.caption("Puedes editar el JD aquí para este flujo, o subir un archivo (esto no cambiará el JD guardado en 'Puestos').")
             jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file", disabled=is_disabled)
             if jd_file is not None:
                 jd_from_file = extract_text_from_file(jd_file)
@@ -1555,10 +1598,10 @@ def render_flow_form():
         # Lógica de botones separada por modo
         save_draft = False; send_approval = False; schedule = False; update_flow = False
 
-        # (Req 2) Modificado: No mostrar NINGÚN botón de submit en modo vista
+        # (Req 1) Modificado: Añadir botón deshabilitado para modo vista
         if is_view_mode:
             st.caption("Estás en modo de solo lectura.")
-            # Se omite el st.form_submit_button()
+            st.form_submit_button("Cerrar", disabled=True, help="Estás en modo de solo lectura. Usa el botón '✖ Cerrar Vista' de arriba para salir.")
         elif is_edit_mode:
             update_flow = st.form_submit_button("💾 Actualizar Flujo")
         else: # Modo Creación
@@ -1568,11 +1611,14 @@ def render_flow_form():
             schedule      = col_c.form_submit_button("📅 Guardar y Programar")
 
         if save_draft or send_approval or schedule or update_flow:
-            # Solo procesar si no estamos en modo vista (esta condición ya estaba implícita y sigue funcionando)
             if not is_view_mode:
+                # (Req 2/3) Usar jd_text del formulario (que pudo ser editado)
                 jd_final = jd_from_file if jd_from_file.strip() else jd_text
-                if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
-                elif agent_idx < 0:      st.error("Debes asignar un agente.")
+                
+                if not jd_final.strip() or jd_final.startswith("JD no encontrado"): 
+                    st.error("Debes proporcionar un JD (cargado desde Puestos o pegado).")
+                elif agent_idx < 0:
+                    st.error("Debes asignar un agente.")
                 else:
                     wf_data = {
                         "name": name, "role": role, "description": desc, "expected_output": expected,
@@ -1581,7 +1627,6 @@ def render_flow_form():
                     }
 
                     if update_flow and is_edit_mode: # Asegurar que es modo edición
-                        # Actualizar flujo existente
                         editing_wf.update(wf_data)
                         editing_wf["status"] = "Borrador" # Resetear estado al editar
                         editing_wf["approved_by"] = ""
@@ -1593,7 +1638,6 @@ def render_flow_form():
                         ss.show_flow_form = False # Ocultar formulario
                         st.rerun()
                     elif not is_edit_mode: # Solo crear si no estamos en modo edición
-                        # Lógica de creación (como antes)
                         wf = wf_data.copy()
                         wf.update({
                             "id": f"WF-{int(datetime.now().timestamp())}",
@@ -1692,12 +1736,10 @@ def page_flows():
                         ss.workflows = [w for w in ss.workflows if w.get("id") != wf_id]
                         save_workflows(ss.workflows)
                         ss.confirm_delete_flow_id = None
-                        st.warning(f"Flujo '{wf.get('name')}' eliminado.")
-                        # (Req 1) st.rerun() eliminado
+                        st.warning(f"Flujo '{wf.get('name')}' eliminado."); st.rerun()
                 with b2:
                     if st.button("Cancelar", key=f"flow_del_cancel_{wf_id}", use_container_width=True):
-                        ss.confirm_delete_flow_id = None
-                        # (Req 1) st.rerun() eliminado
+                        ss.confirm_delete_flow_id = None; st.rerun()
 
             st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
@@ -1897,11 +1939,11 @@ def page_create_task():
                     ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
                     save_tasks(ss.tasks); ss.confirm_delete_id = None
                     st.warning("Tarea eliminada permanentemente.")
-                    # (Req 1) st.rerun() eliminado
+                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí porque es un botón, no un callback
             with b2:
                 if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
                     ss.confirm_delete_id = None
-                    # (Req 1) st.rerun() eliminado
+                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
         if ss.show_assign_for == t_id:
             a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0])
@@ -1931,7 +1973,7 @@ def page_create_task():
                                 task_to_update["status"] = "Pendiente"
                         save_tasks(ss.tasks); ss.show_assign_for = None
                         st.success("Cambios guardados.")
-                        # (Req 1) st.rerun() eliminado
+                        st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
