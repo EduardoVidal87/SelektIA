@@ -1151,14 +1151,14 @@ def page_puestos():
             else:
                 st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
-# ===================== EVALUACIÓN (Req 4 - Modificado) =====================
+# ===================== EVALUACIÓN (Req 1, 2 - Modificado) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
     # === Bloque LLM ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
 
-        # (Req 4) 1. Definir nombres de flujos desde ss.workflows
+        # 1. Definir nombres de flujos desde ss.workflows
         flow_options = {wf.get("id"): wf.get("name", "Flujo sin nombre") for wf in ss.workflows if wf.get("id")}
         
         if not flow_options:
@@ -1186,35 +1186,31 @@ def page_eval():
         # 5. Obtener los datos del Flujo seleccionado
         selected_flow_data = next((wf for wf in ss.workflows if wf.get("id") == current_flow_id), None)
 
+        # --- INICIO CAMBIO (Solicitud 1) ---
+        # 6. Cargar datos en session_state SIN mostrarlos
         if selected_flow_data:
-            default_puesto = selected_flow_data.get("role", "Puesto no definido")
-            default_desc = selected_flow_data.get("description", "")
-            default_expected = selected_flow_data.get("expected_output", "")
-            default_jd = selected_flow_data.get("jd_text", "JD no encontrado.")
+            ss.eval_flow_puesto = selected_flow_data.get("role", "Puesto no definido")
+            ss.eval_flow_desc = selected_flow_data.get("description", "")
+            ss.eval_flow_expected = selected_flow_data.get("expected_output", "")
+            ss.eval_jd_llm = selected_flow_data.get("jd_text", "JD no encontrado.") # Clave nueva
         else:
-            default_puesto, default_desc, default_expected, default_jd = "N/A", "N/A", "N/A", "Selecciona un flujo válido"
+            ss.eval_flow_puesto = "N/A"
+            ss.eval_flow_desc = "N/A"
+            ss.eval_flow_expected = "N/A"
+            ss.eval_jd_llm = "Selecciona un flujo válido" # Clave nueva
 
-        # 6. Mostrar los campos cargados del Flujo
-        st.text_input("Puesto (del Flujo)", value=default_puesto, disabled=True)
-        # (Req 4) Guardamos desc y expected en ss para leerlos al presionar el botón
-        st.text_area("Descripción (del Flujo)", value=default_desc, height=100, key="eval_flow_desc", disabled=True)
-        st.text_area("Resultado Esperado (del Flujo)", value=default_expected, height=80, key="eval_flow_expected", disabled=True)
-        
-        jd_llm = st.text_area(
-            "Job Description (cargado desde Flujo)",
-            value=default_jd, # <--- ¡Cargado dinámicamente!
-            height=120,
-            key="jd_llm"
-        )
+        # Los campos de texto (Puesto, Descripción, Expected, JD) se ocultan.
+        # El file_uploader se muestra directamente.
+        # --- FIN CAMBIO (Solicitud 1) ---
 
         up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
         run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
 
         if run_llm and up:
-            # (Req 4) Leer los valores de los widgets en el momento del click
+            # (Solicitud 1) Leer los valores desde session_state (ya no desde widgets)
             flow_desc_val = ss.get("eval_flow_desc", "")
             flow_expected_val = ss.get("eval_flow_expected", "")
-            jd_llm_val = ss.get("jd_llm", "")
+            jd_llm_val = ss.get("eval_jd_llm", "") # <-- Cambio de clave
 
             if not _LC_AVAILABLE:
                 st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
@@ -1267,19 +1263,10 @@ def page_eval():
         else:
             st.info("Sube archivos y ejecuta la evaluación para ver resultados.")
 
+    # --- INICIO CAMBIO (Solicitud 2) ---
     # === Visualizador de CV ===
-    if ss.llm_eval_results:
-        st.markdown("---")
-        st.subheader("Visualizar CV Evaluado")
-        file_names = [r["meta"]["file_name"] for r in ss.llm_eval_results]
-        selected_file_name = st.selectbox("Selecciona un CV para visualizar", file_names)
-
-        if selected_file_name:
-            selected_file_data = next((r for r in ss.llm_eval_results if r["meta"]["file_name"] == selected_file_name), None)
-            if selected_file_data and selected_file_data.get("_bytes"):
-                pdf_viewer_embed(selected_file_data["_bytes"], height=500)
-            else:
-                st.error("No se encontró el archivo PDF correspondiente para la visualización.")
+    # El bloque completo de "Visualizar CV Evaluado" se ha eliminado.
+    # --- FIN CAMBIO (Solicitud 2) ---
 
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
@@ -1856,7 +1843,7 @@ def page_analytics():
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Req 1 - Modificado) =====================
+# ===================== TODAS LAS TAREAS (Req 3 - Modificado) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
@@ -1908,13 +1895,13 @@ def page_create_task():
         st.info(f"No hay tareas con el estado '{selected_status}'.")
         return
 
-    col_w = [0.9, 2.2, 2.4, 1.6, 1.4, 1.6, 1.0, 1.2, 1.6]
-    h_id, h_nom, h_desc, h_asg, h_cre, h_due, h_pri, h_est, h_acc = st.columns(col_w)
-    with h_id:   st.markdown("**Id**")
+    # --- INICIO CAMBIO (Solicitud 3) ---
+    # Columnas simplificadas: Se ocultan Id, Descripción, Creado el
+    col_w = [3.0, 1.8, 1.8, 1.2, 1.2, 1.8]
+    h_nom, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
+    
     with h_nom:  st.markdown("**Nombre**")
-    with h_desc: st.markdown("**Descripción**")
     with h_asg:  st.markdown("**Asignado a**")
-    with h_cre:  st.markdown("**Creado el**")
     with h_due:  st.markdown("**Vencimiento**")
     with h_pri:  st.markdown("**Prioridad**")
     with h_est:  st.markdown("**Estado**")
@@ -1923,17 +1910,29 @@ def page_create_task():
 
     for task in tasks_to_show:
         t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
-        c_id, c_nom, c_desc, c_asg, c_cre, c_due, c_pri, c_est, c_acc = st.columns(col_w)
-        with c_id:
-            short = (t_id[:5] + "…") if len(t_id) > 6 else t_id
-            st.caption(short)
+        
+        # Columnas simplificadas
+        c_nom, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
+        
+        # Columna Id (oculta)
+        # with c_id:
+        #     short = (t_id[:5] + "…") if len(t_id) > 6 else t_id
+        #     st.caption(short)
+            
         with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
-        with c_desc: st.caption(task.get("desc","—"))
+        
+        # Columna Desc (oculta)
+        # with c_desc: st.caption(task.get("desc","—"))
+        
         with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
-        with c_cre: st.markdown(task.get("created_at","—"))
+        
+        # Columna Creado el (oculta)
+        # with c_cre: st.markdown(task.get("created_at","—"))
+        
         with c_due: st.markdown(task.get("due","—"))
         with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
         with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
+        # --- FIN CAMBIO (Solicitud 3) ---
 
         def _handle_action_change(task_id):
             selectbox_key = f"accion_{task_id}"
@@ -1968,20 +1967,22 @@ def page_create_task():
             )
 
         if ss.get("confirm_delete_id") == t_id:
-            b1, b2, _ = st.columns([1.0, 1.0, 7.8])
-            with b1:
+            # (Solicitud 3) Ajuste de columnas para el popup de borrado
+            _, col_btn1, col_btn2, _ = st.columns([3.0, 1.8, 1.8, 4.0])
+            with col_btn1:
                 if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
                     ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
                     save_tasks(ss.tasks); ss.confirm_delete_id = None
                     st.warning("Tarea eliminada permanentemente.")
                     st.rerun() # (Req 1) st.rerun() MANTENIDO aquí porque es un botón, no un callback
-            with b2:
+            with col_btn2:
                 if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
                     ss.confirm_delete_id = None
                     st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
         if ss.show_assign_for == t_id:
-            a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0])
+            # (Solicitud 3) Ajuste de columnas para el popup de asignación
+            _, a1, a2, a3, a4, _ = st.columns([3.0, 1.2, 1.2, 1.0, 1.0, 2.2])
             with a1:
                 assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
             with a2:
