@@ -384,7 +384,15 @@ def login_screen():
       if u in USERS and USERS[u]["password"] == p: ss.auth = {"username":u, "role": USERS[u]["role"], "name": USERS[u]["name"]}; st.success("Bienvenido."); st.rerun()
       else: st.error("Usuario o contraseña incorrectos.")
   st.markdown("</div></div>", unsafe_allow_html=True)
-def require_auth(): if ss.auth is None: login_screen(); return False; return True
+
+# --- Función require_auth CORREGIDA ---
+def require_auth():
+  if ss.auth is None:
+    login_screen()
+    return False
+  return True
+# --- Fin de la corrección ---
+
 def render_sidebar():
   with st.sidebar:
     st.markdown('<div class="sidebar-brand"><div class="brand-title">SelektIA</div><div class="brand-sub">Powered by Wayki Consulting</div></div>', unsafe_allow_html=True)
@@ -569,7 +577,7 @@ def page_flows():
           with c1: if st.button("🧬 Duplicar"): clone=dict(wf); clone["id"]=f"WF-{int(datetime.now().timestamp())}"; clone["status"]="Borrador"; ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Duplicado."); ss.editing_flow_id = None; ss.form_loaded_from_edit = False; st.rerun()
           with c2: if st.button("🗑 Eliminar"): ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows); st.success("Eliminado."); if ss.editing_flow_id == wf["id"]: ss.editing_flow_id = None; ss.form_loaded_from_edit = False; st.rerun()
           with c3: st.markdown(f"<div class='badge'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
-            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar: # Corregido: Pendiente de aprobación
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar:
               a1,a2=st.columns(2)
               with a1: if st.button("✅ Aprobar"): wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat(); save_workflows(ss.workflows); st.success("Aprobado."); st.rerun()
               with a2: if st.button("❌ Rechazar"): wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat(); save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
