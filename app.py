@@ -87,7 +87,7 @@ ROLE_PRESETS = {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
     "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
-    "synth_skills":["Figma","UX Research","Protototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
+    "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
     "jd":"Planificar, ejecutar y controlar proyectos de ingeniería...",
@@ -533,22 +533,21 @@ def _handle_flow_action_change(wf_id):
     if action_key not in ss: return
     action = ss[action_key]
     
-    # --- (INICIO DE CORRECCIÓN) ---
     # Resetear todos los estados modales/popups
     ss.viewing_flow_id = None
-    ss.editing_flow_id = None
     ss.confirm_delete_flow_id = None
-    ss.show_flow_form = False # Ocultar formulario por defecto
+    # No cerramos el formulario si ya está abierto, pero limpiamos el ID de edición
+    # a menos que la acción sea "Editar".
+    if action != "Editar":
+        ss.editing_flow_id = None 
 
     if action == "Ver detalles":
         ss.viewing_flow_id = wf_id
-        ss.show_flow_form = True # Abrir el formulario en modo VISTA
     elif action == "Editar":
         ss.editing_flow_id = wf_id
-        ss.show_flow_form = True # Abrir el formulario en modo EDICIÓN
+        ss.show_flow_form = True # Abrir el formulario en modo edición
     elif action == "Eliminar":
         ss.confirm_delete_flow_id = wf_id
-    # --- (FIN DE CORRECCIÓN) ---
     
     # Resetear el selectbox para permitir una nueva selección
     ss[action_key] = "Selecciona..."
@@ -635,7 +634,6 @@ def render_sidebar():
       ss.section = "flows"
       ss.pipeline_filter = None
       ss.editing_flow_id = None # Limpiar edición al cambiar
-      ss.viewing_flow_id = None # Limpiar vista al cambiar
     if st.button("Agentes", key="sb_agents"):
       ss.section = "agents"
       ss.pipeline_filter = None
@@ -660,8 +658,8 @@ def render_sidebar():
             ss.pipeline_filter = None
       else:
         if st.button(txt, key=f"sb_{sec}"):
-          ss.section = sec
-          ss.pipeline_filter = None
+            ss.section = sec
+            ss.pipeline_filter = None
 
     st.markdown("#### TAREAS")
     if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task"
@@ -672,7 +670,6 @@ def render_sidebar():
     if st.button("Cerrar sesión", key="sb_logout"):
       ss.auth = None
       ss.editing_flow_id = None
-      ss.viewing_flow_id = None
       ss.llm_eval_results = []
       st.rerun()
 
@@ -1003,9 +1000,9 @@ def page_pipeline():
         candidates_to_show = ss.candidates
     st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
     if not candidates_to_show and filter_stage:
-            st.info(f"No hay candidatos en la fase **{filter_stage}**."); return
+          st.info(f"No hay candidatos en la fase **{filter_stage}**."); return
     elif not ss.candidates:
-            st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**."); return
+          st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**."); return
     candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
     for c in candidates_to_show:
         candidates_by_stage[c["stage"]].append(c)
@@ -1233,25 +1230,22 @@ def page_agents():
 
 # (INICIO DE MODIFICACIÓN) Nueva función para renderizar el formulario de Flujos
 def render_flow_form():
-    """Renderiza el formulario de creación/edición/vista de flujos."""
+    """Renderiza el formulario de creación/edición de flujos."""
     vista_como = ss.auth.get("role", "Colaborador")
     puede_aprobar = vista_como in ("Supervisor", "Administrador")
 
-    # --- (INICIO DE CORRECCIÓN) ---
-    # Determinar el modo (VISTA, EDICIÓN o CREACIÓN)
-    is_view_mode = bool(ss.get("viewing_flow_id"))
-    is_edit_mode = bool(ss.get("editing_flow_id"))
-    
-    # Determinar qué ID de flujo cargar
-    flow_id_to_load = ss.get("editing_flow_id") or ss.get("viewing_flow_id")
-    
     editing_wf = None
-    if flow_id_to_load:
-        editing_wf = next((w for w in ss.workflows if w["id"] == flow_id_to_load), None)
+    if ss.editing_flow_id:
+        editing_wf = next((w for w in ss.workflows if w["id"] == ss.editing_flow_id), None)
+
+    st.subheader("Crear Flujo" if not editing_wf else f"Editando Flujo: {editing_wf.get('name')}")
     
-    # 'is_disabled' es True si estamos en modo VISTA
-    is_disabled = is_view_mode
-    # --- (FIN DE CORRECCIÓN) ---
+    if editing_wf:
+        # Botón para cancelar la edición y cerrar el formulario
+        if st.button("✖ Cancelar Edición"):
+            ss.editing_flow_id = None
+            ss.show_flow_form = False
+            st.rerun()
 
     # Settear valores default del formulario
     default_name = editing_wf.get("name", "Analizar CV") if editing_wf else "Analizar CV"
@@ -1263,65 +1257,44 @@ def render_flow_form():
     default_desc = editing_wf.get("description", EVAL_INSTRUCTION) if editing_wf else EVAL_INSTRUCTION
     default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
     
+    # JD por defecto: usa el JD del flujo en edición, o el JD del rol seleccionado, o el JD del primer rol
     default_jd_text = ROLE_PRESETS[default_role].get("jd", "")
     if editing_wf and editing_wf.get("jd_text"):
         default_jd_text = editing_wf.get("jd_text")
 
     default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
     
+    # Asegurarse que el índice del agente es válido
     if not (0 <= default_agent_idx < len(ss.agents)):
         default_agent_idx = 0
 
-    # --- (INICIO DE CORRECCIÓN) ---
-    # Título dinámico y botón de cierre
-    if is_view_mode:
-        st.subheader(f"Viendo Flujo: {editing_wf.get('name')}")
-    elif is_edit_mode:
-        st.subheader(f"Editando Flujo: {editing_wf.get('name')}")
-    else:
-        st.subheader("Crear Flujo")
-    
-    if is_view_mode or is_edit_mode:
-        # Botón para cancelar la edición/vista y cerrar el formulario
-        if st.button("✖ Cerrar Vista"):
-            ss.editing_flow_id = None
-            ss.viewing_flow_id = None
-            ss.show_flow_form = False
-            st.rerun()
-    # --- (FIN DE CORRECCIÓN) ---
-
     with st.form("wf_form"):
         st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
-        # --- (INICIO DE CORRECCIÓN) ---
-        # Añadir 'disabled=is_disabled' a todos los campos
-        name = st.text_input("Name*", value=default_name, disabled=is_disabled)
-        role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index, key="flow_form_role_select", disabled=is_disabled)
+        name = st.text_input("Name*", value=default_name)
+        role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index, key="flow_form_role_select")
         
+        # Cargar JD dinámicamente si el rol cambia (solo en modo creación)
         if not editing_wf:
             selected_role_key = ss.get("flow_form_role_select", default_role)
             default_jd_text = ROLE_PRESETS.get(selected_role_key, {}).get("jd", "")
 
-        desc = st.text_area("Description*", value=default_desc, height=110, disabled=is_disabled)
-        expected = st.text_area("Expected output*", value=default_expected, height=80, disabled=is_disabled)
+        desc = st.text_area("Description*", value=default_desc, height=110)
+        expected = st.text_area("Expected output*", value=default_expected, height=80)
 
         st.markdown("**Job Description (elige una opción)**")
-        jd_text = st.text_area("JD en texto", value=default_jd_text, height=140, disabled=is_disabled)
-        jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file", disabled=is_disabled)
-        # --- (FIN DE CORRECCIÓN) ---
-        
+        jd_text = st.text_area("JD en texto", value=default_jd_text, height=140)
+        jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
         jd_from_file = ""
         if jd_file is not None:
             jd_from_file = extract_text_from_file(jd_file)
             st.caption("Vista previa del JD extraído:")
-            st.text_area("Preview", jd_from_file[:4000], height=160, disabled=True) # Preview siempre deshabilitado
+            st.text_area("Preview", jd_from_file[:4000], height=160)
 
         st.markdown("---")
         st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
         if ss.agents:
             agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model',LLM_IN_USE)})" for i,a in enumerate(ss.agents)]
-            # --- (INICIO DE CORRECCIÓN) ---
-            agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx, disabled=is_disabled)
-            # --- (FIN DE CORRECCIÓN) ---
+            agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx)
             agent_idx = int(agent_pick.split(" — ")[0])
         else:
             st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
@@ -1329,24 +1302,19 @@ def render_flow_form():
 
         st.markdown("---")
         st.markdown("<div class='badge'>Guardar · Aprobación y programación</div>", unsafe_allow_html=True)
-        # --- (INICIO DE CORRECCIÓN) ---
-        run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1), disabled=is_disabled)
-        run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0), disabled=is_disabled)
+        run_date = st.date_input("Fecha de ejecución", value=date.today()+timedelta(days=1))
+        run_time = st.time_input("Hora de ejecución", value=datetime.now().time().replace(second=0, microsecond=0))
         
-        # Lógica de botones separada por modo
-        save_draft = False; send_approval = False; schedule = False; update_flow = False
-        
-        if is_view_mode:
-            st.caption("Estás en modo de solo lectura.")
-            # No se asigna ningún botón de submit
-        elif is_edit_mode:
+        # Lógica de botones separada
+        if editing_wf:
             update_flow = st.form_submit_button("💾 Actualizar Flujo")
-        else: # Modo Creación
+            save_draft = False; send_approval = False; schedule = False
+        else:
+            update_flow = False
             col_a, col_b, col_c = st.columns(3)
             save_draft    = col_a.form_submit_button("💾 Guardar borrador")
             send_approval = col_b.form_submit_button("📝 Enviar a aprobación")
             schedule      = col_c.form_submit_button("📅 Guardar y Programar")
-        # --- (FIN DE CORRECCIÓN) ---
 
         if save_draft or send_approval or schedule or update_flow:
             jd_final = jd_from_file if jd_from_file.strip() else jd_text
@@ -1406,12 +1374,11 @@ def page_flows():
         ss.show_flow_form = not ss.show_flow_form
         if not ss.show_flow_form:
             ss.editing_flow_id = None # Limpiar modo edición si se cierra
-            ss.viewing_flow_id = None # Limpiar modo vista si se cierra
         st.rerun()
 
     # 2. Renderizar el formulario (si está activado)
     if ss.show_flow_form:
-        render_flow_form() # Renderiza el formulario de creación/edición/VISTA
+        render_flow_form() # Renderiza el formulario de creación/edición
 
     # 3. Renderizar la tabla de flujos
     st.subheader("Mis flujos")
@@ -1478,11 +1445,55 @@ def page_flows():
         
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # --- (INICIO DE CORRECCIÓN) ---
-    # Se ELIMINA toda la lógica de 'st.dialog' que estaba aquí.
-    # Ya no es necesaria porque 'render_flow_form' maneja la vista de detalles.
-    # --- (FIN DE CORRECCIÓN) ---
-
+    # Lógica del diálogo "Ver detalles" (al final de la función)
+    flow_id_for_dialog = ss.get("viewing_flow_id")
+    if flow_id_for_dialog:
+        wf_data = next((w for w in ss.workflows if w.get("id") == flow_id_for_dialog), None)
+        if wf_data:
+            try:
+                with st.dialog("Detalle de Flujo", width="large"):
+                    st.markdown(f"### {wf_data.get('name', 'Sin Título')}")
+                    st.markdown(f"**ID:** `{wf_data.get('id')}`")
+                    st.markdown("---")
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Información Principal**")
+                        st.markdown(f"**Puesto Objetivo:** {wf_data.get('role', 'N/A')}")
+                        st.markdown(f"**Creado por:** {wf_data.get('created_by', 'N/A')}")
+                        agente_idx = wf_data.get('agent_idx', -1)
+                        agente_nombre = "N/A"
+                        if 0 <= agente_idx < len(ss.agents):
+                            agente_nombre = ss.agents[agente_idx].get("rol", "Agente Desconocido")
+                        st.markdown(f"**Agente Asignado:** {agente_nombre}")
+                        
+                    with c2:
+                        st.markdown("**Estado y Creación**")
+                        st.markdown(f"**Estado:**"); st.markdown(_flow_status_pill(wf_data.get('status', 'Borrador')), unsafe_allow_html=True)
+                        try:
+                            creado_dt = datetime.fromisoformat(wf_data.get('created_at', ''))
+                            st.markdown(f"**Creado el:** {creado_dt.strftime('%Y-%m-%d %H:%M')}")
+                        except:
+                            st.markdown("**Creado el:** N/A")
+                        
+                    st.markdown("---")
+                    st.markdown("**Descripción:**")
+                    st.markdown(wf_data.get('description', 'Sin descripción.'))
+                    
+                    st.markdown("---")
+                    st.markdown("**Job Description (JD) Asociado:**")
+                    st.text_area("JD", value=wf_data.get('jd_text', 'Sin JD.'), height=200, disabled=True)
+                    
+                    if st.button("Cerrar", key="close_flow_dialog"):
+                        ss.viewing_flow_id = None
+                        st.rerun()
+                        
+            except Exception as e:
+                st.error(f"Error al mostrar detalles del flujo: {e}")
+                if ss.get("viewing_flow_id") == flow_id_for_dialog:
+                    ss.viewing_flow_id = None
+        else:
+            ss.viewing_flow_id = None # Limpiar si el flujo ya no existe
 # (FIN DE MODIFICACIÓN)
 
 # ===================== ANALYTICS =====================
@@ -1540,7 +1551,7 @@ def page_analytics():
             "Contratados (Últ. 90d)": [8, 5, 12, 9],
             "CVs Gestionados": [450, 300, 700, 620]
         })
-        fig_prod = px.bar(df_prod, x="Reclutador", y="Contratados (Últ. Y (d)": 
+        fig_prod = px.bar(df_prod, x="Reclutador", y="Contratados (Últ. 90d)", 
                           title="Contrataciones por Reclutador",
                           color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
         fig_prod.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
@@ -1714,50 +1725,44 @@ def page_create_task():
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # (INICIO DE CORRECCIÓN)
-                # 'st.dialog' no es un context manager ('with'), es una función que devuelve un objeto.
-                # Todos los elementos de UI dentro del diálogo deben llamarse desde el objeto 'dialog'.
-                dialog = st.dialog("Detalle de Tarea", width="large")
+                with st.dialog("Detalle de Tarea", width="large"):
+                    st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                    
+                    # (Req. 7.2 / Foto 3) Layout de detalles mejorado
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Información Principal**")
+                        st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                        st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                        st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    with c2:
+                        st.markdown("**Estado y Prioridad**")
+                        st.markdown(f"**Estado:**"); st.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                        st.markdown(f"**Prioridad:**"); st.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
 
-                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                
-                c1, c2 = dialog.columns(2)
-                with c1:
-                    dialog.markdown("**Información Principal**")
-                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                with c2:
-                    dialog.markdown("**Estado y Prioridad**")
-                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-
-                context = task_data.get("context")
-                if context and ("candidate_name" in context or "role" in context):
-                    dialog.markdown("---")
-                    dialog.markdown("**Contexto del Flujo**")
-                    if "candidate_name" in context:
-                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
-                    if "role" in context:
-                        dialog.markdown(f"**Puesto:** {context['role']}")
-                
-                dialog.markdown("---")
-                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
-                dialog.markdown("---")
-                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
-                
-                # 'with dialog.form' es mejor para formularios dentro de diálogos
-                with dialog.form("comment_form_dialog"):
-                    # Se añade una 'key' única para el widget dentro del diálogo
-                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
-                    submitted = st.form_submit_button("Enviar Comentario")
-                    if submitted: st.toast("Comentario (aún no) guardado.")
-                
-                if dialog.button("Cerrar", key="close_dialog"):
-                    ss.expanded_task_id = None
-                    dialog.close() # Usar .close() en el objeto dialog
-                # (FIN DE CORRECCIÓN)
-                        
+                    # (Req 7.2 / Foto 3) Mostrar contexto del postulante si existe
+                    context = task_data.get("context")
+                    if context and ("candidate_name" in context or "role" in context):
+                        st.markdown("---")
+                        st.markdown("**Contexto del Flujo**")
+                        if "candidate_name" in context:
+                            st.markdown(f"**Postulante:** {context['candidate_name']}")
+                        if "role" in context:
+                            st.markdown(f"**Puesto:** {context['role']}")
+                    
+                    st.markdown("---")
+                    st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+                    st.markdown("---")
+                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
+                    
+                    with st.form("comment_form"):
+                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
+                        submitted = st.form_submit_button("Enviar Comentario")
+                        if submitted: st.toast("Comentario (aún no) guardado.")
+                    
+                    if st.button("Cerrar", key="close_dialog"):
+                        ss.expanded_task_id = None
+                        st.rerun()
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
                 if ss.get("expanded_task_id") == task_id_for_dialog:
@@ -1791,3 +1796,4 @@ if __name__ == "__main__":
     if require_auth():
         render_sidebar()
         ROUTES.get(ss.section, page_def_carga)()
+
