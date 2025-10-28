@@ -1254,7 +1254,7 @@ def page_eval():
                         # (Req 4) Pasa el contexto del flujo a la función de IA
                         meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
                                _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
-                               
+                                
                         if not meta:
                             meta = {"Name":"Error de Análisis","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"La IA no pudo procesar este CV.","Score":0}
                         
@@ -1276,11 +1276,16 @@ def page_eval():
                         # Formatear Descripción (Req 4.1)
                         task_desc = f"Revisión para '{puesto_name}'. | PDF: {f.name} | Score IA: {meta.get('Score', 'N/A')}%"
                         
+                        # ======== INICIO DE MODIFICACIÓN (Req. Video 2.1) ========
+                        # Guardar el Job Description usado en la evaluación dentro del contexto de la tarea
                         task_context = {
                             "source": "Evaluación LLM",
                             "llm_analysis": meta, # Guardar todo el JSON del análisis
-                            "pdf_bytes_b64": base64.b64encode(f_bytes).decode('utf-8') # Guardar el PDF
+                            "pdf_bytes_b64": base64.b64encode(f_bytes).decode('utf-8'), # Guardar el PDF
+                            "jd_text": jd_llm_val # <-- AÑADIDO: Guardar el JD
                         }
+                        # ======== FIN DE MODIFICACIÓN (Req. Video 2.1) ========
+
                         create_manual_task(task_title, task_desc, date.today() + timedelta(days=2), current_user, "Media", task_context)
                         # (FIN REQ 4.1 y 4.2)
 
@@ -1543,7 +1548,7 @@ def page_agents():
       perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
         ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,
-                  "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
+                   "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
 # ===================== FLUJOS (Req 1, 2, 3 - Modificado) =====================
@@ -2107,12 +2112,27 @@ def page_create_task():
                     if "pdf_bytes_b64" in context:
                         try:
                             pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                            with dialog.expander("Visualizar CV (PDF)", expanded=True):
-                                # (Req 4) Usar el 'container=dialog'
-                                pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
+
+                            # ======== INICIO DE CORRECCIÓN (BUG PDF Viewer) ========
+                            # Se crea el expander y se guarda en una variable
+                            expander_pdf = dialog.expander("Visualizar CV (PDF)", expanded=True)
+                            # Se pasa el objeto 'expander_pdf' como el 'container'
+                            # para que el PDF se renderice DENTRO del expander.
+                            pdf_viewer_embed(pdf_bytes, height=400, container=expander_pdf)
+                            # ======== FIN DE CORRECCIÓN (BUG PDF Viewer) ========
+                                
                         except Exception as e:
                             dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+                    
+                    # ======== INICIO DE MODIFICACIÓN (Req. Video 2.2) ========
+                    # Mostrar el Job Description si existe en el contexto
+                    if "jd_text" in context and context["jd_text"]:
+                        expander_jd = dialog.expander("Ver Job Description (JD) usado", expanded=False)
+                        expander_jd.text(context["jd_text"])
+                    # ======== FIN DE MODIFICACIÓN (Req. Video 2.2) ========
+                    
                     dialog.markdown("---")
+
 
                 # --- Mostrar Información de Tarea (General) ---
                 c1, c2 = dialog.columns(2)
@@ -2140,16 +2160,48 @@ def page_create_task():
                 dialog.markdown("---")
                 dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
 
-                # Usar dialog.form para el formulario dentro del diálogo
-                with dialog.form("comment_form_dialog"):
-                    # Añadir key única
-                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
-                    submitted = st.form_submit_button("Enviar Comentario")
-                    if submitted: st.toast("Comentario (aún no) guardado.")
 
-                if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
+                # ======== INICIO DE MODIFICACIÓN (Req. Video 3) ========
+                # Formulario de acciones (Completar / Reasignar)
+                with dialog.form("task_actions_form_dialog"):
+                    dialog.markdown("**Acciones de Tarea**")
+                    
+                    # Obtener estado actual
+                    current_status = task_data.get("status", "Pendiente")
+                    all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"]
+                    if current_status not in all_statuses:
+                        all_statuses.append(current_status)
+                    status_index = all_statuses.index(current_status)
+                    
+                    t_id = task_data.get('id') # Obtener t_id
+                    
+                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
+                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+                    
+                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
+                    
+                    if submitted:
+                        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+                        if task_to_update:
+                            task_to_update["status"] = new_status
+                            # (Opcional: guardar comentarios)
+                            if new_comment:
+                                if "comments" not in task_to_update: task_to_update["comments"] = []
+                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
+                                task_to_update["comments"].append(f"{user_name} ({datetime.now().strftime('%Y-%m-%d %H:%M')}): {new_comment}")
+                                task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario: {new_comment}]" # Agregar al desc
+                            
+                            save_tasks(ss.tasks)
+                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
+                            ss.expanded_task_id = None
+                            dialog.close()
+                            st.rerun() # Rerun para refrescar la tabla de tareas
+                            
+                if dialog.button("Cancelar", key=f"dialog_cancel_{t_id}"):
                     ss.expanded_task_id = None
-                    dialog.close() # Usar .close() en el objeto dialog
+                    dialog.close()
+                # ======== FIN DE MODIFICACIÓN (Req. Video 3) ========
+
 
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
