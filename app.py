@@ -4,7 +4,7 @@
 # =========================================================
 # IMPORTS
 # =========================================================
-import io, base64, re, json, random, zipfile, uuid
+import io, base64, re, json, random, zipfile, uuid, tempfile, os
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
@@ -12,6 +12,16 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
+
+# ====== (LLM / LangChain) - usados SOLO en “Evaluación de CVs > Resultados LLM” ======
+_LC_AVAILABLE = True
+try:
+    from langchain_core.output_parsers import JsonOutputParser
+    from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_openai import AzureChatOpenAI
+except Exception:
+    _LC_AVAILABLE = False
 
 # =========================================================
 # PALETA / CONST (NO CAMBIAR LOOK & FEEL)
@@ -91,7 +101,7 @@ ROLE_PRESETS = {
 }
 
 # ---------------------------------------------------------
-# Bytes de PDF mínimo para vistas
+# Bytes PDF dummy
 # ---------------------------------------------------------
 DUMMY_PDF_BYTES = base64.b64decode(
     b'JVBERi0xLjAKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzMCAzMF0vUGFyZW50IDIgMCBSPj5lbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTIgMDAwMDAgbiAKMDAwMDAwMDA5OSAwMDAwMCBuIAp0cmFpbGVyPDwvU2l6ZSA0L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMTQ3CiUlRU9G'
@@ -157,22 +167,6 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
-
-# Powered by chiquito
-st.markdown("""
-<style>
-[data-testid="stSidebar"] .sidebar-brand .brand-sub{
-  font-size: 12px !important; line-height: 1.2 !important; margin-top: 4px !important; opacity: .95 !important;
-}
-[data-testid="stSidebar"] .sidebar-brand{ margin-top:0 !important; padding-bottom:0 !important; margin-bottom:55px !important; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap:2px !important; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"]>div{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] h4, [data-testid="stSidebar"] .stMarkdown h4{ margin:2px 8px 2px !important; line-height:1 !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{ margin:2px 8px !important; }
-[data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
-[data-testid="stSidebar"] .stButton>button{ margin:0 8px 6px 0 !important; padding-left:8px !important; line-height:1.05 !important; gap:6px !important; }
-</style>
-""", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia
@@ -353,19 +347,96 @@ def extract_text_from_file(uploaded_file) -> str:
     return ""
 
 # =========================================================
+# LLM helpers (del bloque original del usuario)
+# =========================================================
+def _setup_azure_env_from_secrets():
+    """Carga credenciales desde st.secrets['llm'] a variables de entorno (sin tocar el código base)."""
+    try:
+        llmsec = st.secrets["llm"]
+        if "AZURE_OPENAI_API_KEY" not in os.environ and "azure_openai_api_key" in llmsec:
+            os.environ["AZURE_OPENAI_API_KEY"] = llmsec["azure_openai_api_key"]
+        if "AZURE_OPENAI_ENDPOINT" not in os.environ and "azure_openai_endpoint" in llmsec:
+            os.environ["AZURE_OPENAI_ENDPOINT"] = llmsec["azure_openai_endpoint"]
+    except Exception:
+        pass
+
+def _get_prompt_for_cv(resume_content: str) -> ChatPromptTemplate:
+    json_object_structure = """{{
+        "Name": "Full Name",
+        "Last_position": "The most recent position in which the candidate worked",
+        "Years_of_Experience": "Number (in years)",
+        "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+        "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+        "Certifications": ["Certification 1", "Certification 2"],
+        "Additional_Notes": "Optional details inferred or contextually relevant information.",
+        "Score": "0-100"
+    }}"""
+    json_object_example = """{{
+        "Name": "Jane Smith",
+        "Last_position": "Data Engineer",
+        "Years_of_Experience": 8,
+        "English_Level": "Fluent",
+        "Key_Skills": ["Project Management", "Data Analysis", "Python", "SQL"],
+        "Certifications": ["PMP Certification", "Google Data Analytics Certificate"],
+        "Additional_Notes": "Led multiple cross-functional teams.",
+        "Score": "87"
+    }}"""
+    system_template = f"""
+    ### Objective:
+    - Extract structured info from the resume below and return a JSON object with the specified fields.
+    - Given a job description, also return a 0-100 match **Score**.
+
+    ### CV Content:
+    {resume_content}
+
+    ### Deliverable JSON shape:
+    {json_object_structure}
+
+    ### Example:
+    {json_object_example}
+
+    Job description:
+    """
+    return ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("{job_description}")
+    ])
+
+def _extract_with_azure(job_description: str, resume_text: str) -> dict:
+    """Usa AzureChatOpenAI + JsonOutputParser (como tu bloque original)."""
+    _setup_azure_env_from_secrets()
+    llm = AzureChatOpenAI(
+        azure_deployment=st.secrets["llm"]["azure_deployment"],
+        api_version=st.secrets["llm"]["azure_api_version"],
+        temperature=0
+    )
+    parser = JsonOutputParser()
+    prompt = _get_prompt_for_cv(resume_text)
+    chain = prompt | llm | parser
+    analysis = chain.invoke({"job_description": job_description})
+    return analysis
+
+def _create_dataframe_llm(results: list) -> pd.DataFrame:
+    df = pd.DataFrame(results)
+    if "Score" in df.columns:
+        try: df["Score"] = df["Score"].astype(int)
+        except: pass
+    return df.sort_values(by="Score", ascending=False)
+
+def _create_barchart_llm(df: pd.DataFrame):
+    fig = px.bar(df, x='file_name', y='Score', text='Score', title='Comparativa de Puntajes (LLM)')
+    fig.update_traces(hovertemplate="%{x}<br>Score: %{y}%")
+    fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
+                      font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score (%)")
+    return fig
+
+# =========================================================
 # LOGIN + SIDEBAR
 # =========================================================
-def asset_logo_wayki():
-  local = Path("assets/logo-wayki.png")
-  if local.exists(): return str(local)
-  return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
-
 def login_screen():
   st.markdown('<div class="login-bg" style="background:#0E192B;position:fixed;inset:0;display:flex;align-items:center;justify-content:center">', unsafe_allow_html=True)
   st.markdown('<div class="login-card" style="background:transparent;border:none;box-shadow:none;padding:0;width:min(600px,92vw);">', unsafe_allow_html=True)
   st.markdown('<div class="login-logo-wrap" style="display:flex;align-items:center;justify-content:center;margin-bottom:14px">', unsafe_allow_html=True)
-  try: st.image(asset_logo_wayki(), width=120)
-  except: pass
   st.markdown("</div>", unsafe_allow_html=True)
   st.markdown('<div class="login-sub" style="color:#9fb2d3;text-align:center;margin:0 0 18px 0;font-size:12.5px">Acceso a SelektIA</div>', unsafe_allow_html=True)
   with st.form("login_form", clear_on_submit=False):
@@ -503,7 +574,7 @@ def page_eval():
     if not ss.candidates:
         st.info("Carga CVs en **Publicación & Sourcing**."); return
 
-    # Zona de configuración (mantener) para recalcular ranking
+    # Configuración de ranking (manteniendo vista)
     jd_text = st.text_area("JD para matching por skills", ss.get("last_jd_text",""), height=140)
     preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
     col1,col2 = st.columns(2)
@@ -512,7 +583,6 @@ def page_eval():
     must = [s.strip() for s in (must_default or "").split(",") if s.strip()]
     nice = [s.strip() for s in (nice_default or "").split(",") if s.strip()]
 
-    # RANKING (mantener)
     enriched = []
     for c in ss.candidates:
         cv = c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
@@ -531,14 +601,16 @@ def page_eval():
     st.dataframe(df[["Name","Fit","Must (ok/total)","Nice (ok/total)","Extras"]],
                  use_container_width=True, height=260, hide_index=True)
 
-    # *** QUITAMOS la sección “Detalle y explicación” ***
-
-    # ---------------- Bloque LLM con loader (no intrusivo) ----------------
+    # ------- Sección LLM real (Azure) con loader conservando look & feel -------
     st.markdown("---")
     with st.expander("Resultados LLM", expanded=True):
-        llm_files = st.file_uploader(
+        if not _LC_AVAILABLE:
+            st.warning("Para evaluar con IA debes instalar las dependencias de LangChain y reiniciar la app.")
+            return
+
+        uploaded_files = st.file_uploader(
             "Subir CVs (PDF) para evaluación con IA",
-            type=["pdf"], accept_multiple_files=True, key="llm_upl"
+            type=["pdf"], accept_multiple_files=True, key="llm_upl_eval"
         )
 
         loader_slot = st.empty()
@@ -554,42 +626,41 @@ def page_eval():
             """, unsafe_allow_html=True)
 
         btn_disabled = ss.eval_llm_busy
-        col_btn, _ = st.columns([0.3, 1])
-        with col_btn:
-            if st.button("Ejecutar evaluación LLM", disabled=btn_disabled, key="btn_llm_run"):
-                if not llm_files:
-                    st.warning("Sube al menos un PDF.")
-                else:
-                    try:
-                        ss.eval_llm_busy = True; _render_loader(True)
-                        jd_loc = ss.get("last_jd_text","")
-                        preset_loc = ROLE_PRESETS.get(ss.get("last_role",""), {})
-                        must_list = preset_loc.get("must",[]) or []
-                        nice_list = preset_loc.get("nice",[]) or []
-                        results = []
-                        for uploaded_file in llm_files:
-                            b = uploaded_file.read(); uploaded_file.seek(0)
-                            text = extract_text_from_file(uploaded_file)
-                            score, _ = score_fit_by_skills(jd_loc, must_list, nice_list, text or "")
-                            results.append({"file_name": uploaded_file.name, "Name": uploaded_file.name.replace(".pdf",""), "Score": int(score)})
-                        ss.llm_results = results
-                        st.success("Evaluación LLM completada.")
-                    except Exception as e:
-                        st.error(f"Ocurrió un error al evaluar: {e}")
-                    finally:
-                        ss.eval_llm_busy = False; _render_loader(False); st.rerun()
+        if st.button("Ejecutar evaluación LLM", disabled=btn_disabled, key="btn_llm_run_eval"):
+            if not uploaded_files:
+                st.warning("Sube al menos un PDF.")
+            else:
+                try:
+                    ss.eval_llm_busy = True; _render_loader(True)
+                    results = []
+                    job_desc = jd_text or preset.get("jd","")
+                    for uf in uploaded_files:
+                        # Cargar páginas del PDF con PyPDFLoader (idéntico a tu snippet)
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                            temp_file.write(uf.read()); pdf_path = temp_file.name
+                        pages = PyPDFLoader(pdf_path).load()
+                        cv_text = "\n".join([p.page_content for p in pages])
+
+                        meta = _extract_with_azure(job_desc, cv_text)  # <-- AzureChatOpenAI real
+                        # Normalizamos “Score” como int y añadimos filename
+                        try: meta["Score"] = int(meta.get("Score", 0))
+                        except: pass
+                        meta["file_name"] = uf.name
+                        if "Name" not in meta or not str(meta["Name"]).strip():
+                            meta["Name"] = uf.name.replace(".pdf","")
+                        results.append(meta)
+
+                    ss.llm_results = results
+                    st.success("Evaluación LLM completada.")
+                except Exception as e:
+                    st.error(f"Ocurrió un error al evaluar: {e}")
+                finally:
+                    ss.eval_llm_busy = False; _render_loader(False); st.rerun()
 
         if ss.llm_results:
-            df_llm = pd.DataFrame(ss.llm_results)
+            df_llm = _create_dataframe_llm(ss.llm_results)
             st.dataframe(df_llm, use_container_width=True, hide_index=True)
-            try:
-                fig_llm = px.bar(df_llm, x='file_name', y='Score', text='Score', title="Comparativa de Puntajes (LLM)")
-                fig_llm.update_traces(hovertemplate="%{x}<br>Score: %{y}%")
-                fig_llm.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)",
-                                      font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score (%)")
-                st.plotly_chart(fig_llm, use_container_width=True)
-            except: pass
-    # ---------------- Fin bloque LLM ----------------
+            st.plotly_chart(_create_barchart_llm(df_llm), use_container_width=True)
 
 def page_pipeline():
     st.header("Pipeline de Candidatos (Vista Kanban)")
@@ -701,7 +772,7 @@ def page_agents():
       with c2:
         herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=["Parser de PDF","Recomendador de skills"])
         llm_model  = st.selectbox("Modelo LLM", LLM_MODELS, index=0)
-        img_src    = st.text_input("URL de imagen (opcional)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
+        img_src    = st.text_input("URL de imagen (si deseas)", value=AGENT_DEFAULT_IMAGES.get("Headhunter",""))
         perms      = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=["Supervisor","Administrador"])
       saved = st.form_submit_button("Guardar/Actualizar Agente")
       if saved:
@@ -775,7 +846,7 @@ def page_agents():
       guardrails = st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
       herramientas = st.multiselect("Herramientas habilitadas", ["Parser de PDF","Recomendador de skills","Comparador JD-CV"], default=ag.get("herramientas",["Parser de PDF","Recomendador de skills"]))
       llm_model    = st.selectbox("Modelo LLM", LLM_MODELS, index=max(0, LLM_MODELS.index(ag.get("llm_model","gpt-4o-mini"))))
-      img_src      = st.text_input("URL de imagen", value=ag.get("image",""))
+      img_src      = st.text_input("URL de imagen (si deseas)", value=ag.get("image",""))
       perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
         ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,"herramientas": herramientas,
@@ -880,14 +951,12 @@ def page_flows():
           if save_draft: st.success("Borrador guardado.")
           ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
 
-# ===================== ANALYTICS (NUEVO MÓDULO) =====================
+# ===================== ANALYTICS =====================
 def _calc_analytics_full():
-    # Embudo por fase
     stage_counts = {s: 0 for s in PIPELINE_STAGES}
     for c in ss.candidates: stage_counts[c.get("stage", PIPELINE_STAGES[0])] += 1
     funnel_df = pd.DataFrame({"Fase": list(stage_counts.keys()), "Candidatos": list(stage_counts.values())})
 
-    # Tiempos: aproximación con datos disponibles
     days_open = []
     for c in ss.candidates:
         try:
@@ -902,7 +971,6 @@ def _calc_analytics_full():
     else:
         ttx = {"P50": "—", "P90": "—"}
 
-    # Conversión simple entre fases consecutivas
     conv = []
     for i in range(len(PIPELINE_STAGES)-1):
         a = stage_counts[PIPELINE_STAGES[i]] or 1
@@ -910,19 +978,16 @@ def _calc_analytics_full():
         conv.append({"De": PIPELINE_STAGES[i], "A": PIPELINE_STAGES[i+1], "Conversión": round(100*b/a,1)})
     conv_df = pd.DataFrame(conv)
 
-    # Productividad por fuente (proxy a recruiter)
     src_counts = {}
     for c in ss.candidates:
         src = c.get("source","Carga Manual")
         src_counts[src] = src_counts.get(src,0)+1
     prod_df = pd.DataFrame(list(src_counts.items()), columns=["Fuente","Candidatos"])
 
-    # Costo por hire (proxy): supuestos
     hires = stage_counts.get("Contratado",0)
-    costo_total = 300 * len(ss.candidates)  # 300 USD por candidato evaluado (supuesto)
+    costo_total = 300 * len(ss.candidates)
     cph = f"${round(costo_total / max(1, hires), 2)}" if hires>0 else "—"
 
-    # Exactitud IA (proxy): correlación simple Score vs Score_LLM si existe
     pairs=[]
     for c in ss.candidates:
         s1=c.get("Score"); s2=c.get("Score_LLM")
