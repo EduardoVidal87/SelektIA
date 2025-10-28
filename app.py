@@ -90,7 +90,7 @@ ROLE_PRESETS = {
   "Diseñador/a UX": {
     "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
-    "must": ["Figma","UX Research","Protototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
+    "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
     "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
@@ -164,6 +164,11 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
   background:#F1F7FD !important; color:{TITLE_DARK} !important; border:1.5px solid #E3EDF6 !important; border-radius:10px !important;
 }}
 .block-container [data-testid="stTextInput"] input[disabled] {{
+  background: #E9F3FF !important;
+  color: #555 !important;
+}}
+/* (Req 4) Añadido estilo para text_area deshabilitado */
+.block-container [data-testid="stTextArea"] textarea[disabled] {{
   background: #E9F3FF !important;
   color: #555 !important;
 }}
@@ -350,7 +355,6 @@ if "positions_loaded" not in ss:
     ss.positions = load_positions()
     if not isinstance(ss.positions, list):
         ss.positions = DEFAULT_POSITIONS
-        save_positions(ss.positions)
     # (Req 2/3) Asegurar que los puestos por defecto tengan JD
     for p in ss.positions:
         if "JD" not in p:
@@ -377,6 +381,10 @@ if "confirm_delete_flow_id" not in ss: ss.confirm_delete_flow_id = None
 if "show_position_form" not in ss: ss.show_position_form = False
 if "editing_position_id" not in ss: ss.editing_position_id = None
 if "confirm_delete_position_id" not in ss: ss.confirm_delete_position_id = None
+
+# (Req 4) Nuevo estado para Evaluación
+if "selected_flow_id_for_eval" not in ss: ss.selected_flow_id_for_eval = None
+
 
 # =========================================================
 # UTILS
@@ -807,8 +815,9 @@ def _llm_setup_credentials():
     except Exception:
         pass
 
-def _llm_prompt_for_resume(resume_content: str):
-    """Construye un prompt estructurado para extracción JSON."""
+# (Req 4) Modificado para aceptar contexto del flujo
+def _llm_prompt_for_resume(resume_content: str, flow_desc: str, flow_expected: str):
+    """Construye un prompt estructurado para extracción JSON, usando el contexto del flujo."""
     if not _LC_AVAILABLE:
         return None
     json_object_structure = """{{
@@ -821,9 +830,16 @@ def _llm_prompt_for_resume(resume_content: str):
         "Additional_Notes": "Optional details inferred or contextually relevant information.",
         "Score": "0-100"
     }}"""
+    
+    # (Req 4) El prompt del sistema ahora incluye el contexto del flujo
     system_template = f"""
     ### Objective
-    Extract structured data from CV content (below) and compute a match percentage vs JD.
+    You are an AI assistant executing a specific recruitment task.
+    Task Description: {flow_desc}
+    Expected Output: {flow_expected}
+
+    Your goal is to extract structured data from the CV content (below) and compute a match percentage (0-100) vs the Job Description (which will be provided by the user).
+    
     CV Content:
     {resume_content}
 
@@ -835,7 +851,8 @@ def _llm_prompt_for_resume(resume_content: str):
         HumanMessagePromptTemplate.from_template("Job description:\n{job_description}")
     ])
 
-def _extract_with_azure(job_description: str, resume_content: str) -> dict:
+# (Req 4) Modificado para aceptar contexto del flujo
+def _extract_with_azure(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
     """Intenta usar AzureChatOpenAI; si falla, devuelve {} sin romper UI."""
     if not _LC_AVAILABLE:
         return {}
@@ -847,7 +864,8 @@ def _extract_with_azure(job_description: str, resume_content: str) -> dict:
             temperature=0
         )
         parser = JsonOutputParser()
-        prompt = _llm_prompt_for_resume(resume_content)
+        # (Req 4) Pasa el contexto del flujo al generador de prompt
+        prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
         if prompt is None:
             return {}
         chain = prompt | llm | parser
@@ -857,7 +875,8 @@ def _extract_with_azure(job_description: str, resume_content: str) -> dict:
         st.warning(f"Azure LLM no disponible: {e}")
         return {}
 
-def _extract_with_openai(job_description: str, resume_content: str) -> dict:
+# (Req 4) Modificado para aceptar contexto del flujo
+def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
     """Fallback con ChatOpenAI (OpenAI) si hay API Key en secrets."""
     if not _LC_AVAILABLE:
         return {}
@@ -866,7 +885,7 @@ def _extract_with_openai(job_description: str, resume_content: str) -> dict:
     except Exception:
         return {}
     try:
-        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key) # (Req 1) Usa la const
+        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key)
         json_object_structure = """{
             "Name": "Full Name",
             "Last_position": "The most recent position in which the candidate worked",
@@ -877,7 +896,13 @@ def _extract_with_openai(job_description: str, resume_content: str) -> dict:
             "Additional_Notes": "Optional details inferred or contextually relevant information.",
             "Score": "0-100"
         }"""
+        
+        # (Req 4) El prompt ahora incluye el contexto del flujo
         prompt = f"""
+        You are an AI assistant. Execute the following task:
+        Task Description: {flow_desc}
+        Expected Output: {flow_expected}
+
         Extract structured JSON from the following CV and compute a 0-100 match vs the JD.
 
         Job description:
@@ -1126,54 +1151,58 @@ def page_puestos():
             else:
                 st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
-# ===================== EVALUACIÓN (Req 2/3 - Modificado) =====================
+# ===================== EVALUACIÓN (Req 4 - Modificado) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
     # === Bloque LLM ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
 
-        # (Req 2/3) 1. Definir nombres de roles desde ss.positions
-        role_names = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+        # (Req 4) 1. Definir nombres de flujos desde ss.workflows
+        flow_options = {wf.get("id"): wf.get("name", "Flujo sin nombre") for wf in ss.workflows if wf.get("id")}
         
-        if not role_names:
-            st.warning("No hay puestos definidos en la pestaña 'Puestos'. Por favor, crea un puesto primero.", icon="⚠️")
+        if not flow_options:
+            st.warning("No hay flujos definidos en la pestaña 'Flujos'. Por favor, crea un flujo primero.", icon="⚠️")
             return
 
         # 2. Determinar el índice inicial
-        last_role_from_sourcing = ss.get("last_role", role_names[0])
-        
-        if "eval_llm_role_select" in ss and ss.eval_llm_role_select in role_names:
-            try:
-                initial_index = role_names.index(ss.eval_llm_role_select)
-            except ValueError:
-                initial_index = 0
+        initial_flow_id = list(flow_options.keys())[0]
+        if "selected_flow_id_for_eval" in ss and ss.selected_flow_id_for_eval in flow_options:
+            initial_flow_id = ss.selected_flow_id_for_eval
         else:
-            try:
-                # Intenta usar el último rol de sourcing si existe en la lista de puestos
-                initial_index = role_names.index(last_role_from_sourcing)
-            except ValueError:
-                initial_index = 0
+             ss.selected_flow_id_for_eval = initial_flow_id # Asegurar que esté seteado
 
         # 3. Agregar el st.selectbox
-        selected_role = st.selectbox(
-            "Puesto objetivo",
-            role_names,
-            index=initial_index,
-            key="eval_llm_role_select" # Clave para guardar el estado
+        st.selectbox(
+            "Seleccionar Flujo de Evaluación",
+            options=list(flow_options.keys()),
+            format_func=lambda fid: flow_options.get(fid),
+            key="selected_flow_id_for_eval" # Clave para guardar el estado
         )
 
         # 4. Leer el valor actual del selectbox
-        current_role_key = ss.get("eval_llm_role_select", role_names[initial_index])
+        current_flow_id = ss.get("selected_flow_id_for_eval")
         
-        # (Req 2/3) 5. Obtener el JD desde ss.positions
-        pos_data = next((p for p in ss.positions if p.get("Puesto") == current_role_key), None)
-        default_jd_text = pos_data.get("JD", "No se encontró JD para este puesto.") if pos_data else "Por favor, selecciona un puesto."
+        # 5. Obtener los datos del Flujo seleccionado
+        selected_flow_data = next((wf for wf in ss.workflows if wf.get("id") == current_flow_id), None)
 
-        # 6. Actualizar el st.text_area para usar el 'value' dinámico
+        if selected_flow_data:
+            default_puesto = selected_flow_data.get("role", "Puesto no definido")
+            default_desc = selected_flow_data.get("description", "")
+            default_expected = selected_flow_data.get("expected_output", "")
+            default_jd = selected_flow_data.get("jd_text", "JD no encontrado.")
+        else:
+            default_puesto, default_desc, default_expected, default_jd = "N/A", "N/A", "N/A", "Selecciona un flujo válido"
+
+        # 6. Mostrar los campos cargados del Flujo
+        st.text_input("Puesto (del Flujo)", value=default_puesto, disabled=True)
+        # (Req 4) Guardamos desc y expected en ss para leerlos al presionar el botón
+        st.text_area("Descripción (del Flujo)", value=default_desc, height=100, key="eval_flow_desc", disabled=True)
+        st.text_area("Resultado Esperado (del Flujo)", value=default_expected, height=80, key="eval_flow_expected", disabled=True)
+        
         jd_llm = st.text_area(
-            "Job Description para el LLM",
-            value=default_jd_text, # <--- ¡Cargado dinámicamente!
+            "Job Description (cargado desde Flujo)",
+            value=default_jd, # <--- ¡Cargado dinámicamente!
             height=120,
             key="jd_llm"
         )
@@ -1182,11 +1211,16 @@ def page_eval():
         run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
 
         if run_llm and up:
+            # (Req 4) Leer los valores de los widgets en el momento del click
+            flow_desc_val = ss.get("eval_flow_desc", "")
+            flow_expected_val = ss.get("eval_flow_expected", "")
+            jd_llm_val = ss.get("jd_llm", "")
+
             if not _LC_AVAILABLE:
                 st.warning("Los paquetes de LangChain/OpenAI no están disponibles en el entorno. Se omite esta evaluación.")
                 ss.llm_eval_results = []
-            elif not jd_llm or jd_llm.startswith("Por favor"):
-                st.error("No se puede ejecutar la evaluación sin un Job Description válido. Asegúrate de que el puesto seleccionado tenga un JD guardado.")
+            elif not jd_llm_val or jd_llm_val.startswith("JD no"):
+                st.error("No se puede ejecutar la evaluación sin un Job Description válido.")
             else:
                 results_with_bytes = []
                 for f in up:
@@ -1210,7 +1244,10 @@ def page_eval():
                             st.error(f"No se pudo leer {f.name}: {e}")
                             continue
 
-                    meta = _extract_with_azure(jd_llm, text) or _extract_with_openai(jd_llm, text)
+                    # (Req 4) Pasa el contexto del flujo a la función de IA
+                    meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
+                           _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
+                           
                     if not meta:
                         meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
                     meta["file_name"] = f.name
@@ -1508,6 +1545,7 @@ def render_flow_form():
     if not role_options:
         st.error("No hay puestos definidos en la pestaña 'Puestos'. Por favor, crea un puesto antes de crear un flujo.", icon="⚠️")
         ss.show_flow_form = False
+        st.rerun() # Volver a la lista de flujos
         return
 
     # Settear valores default del formulario
@@ -1523,16 +1561,13 @@ def render_flow_form():
     default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
 
     # (Req 2/3) Cargar JD dinámicamente
-    # Primero, miramos el selectbox (si cambia)
     selected_role_from_key = ss.get("flow_form_role_select", default_role)
-    pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
-    default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
     
     # Si estamos editando, el JD guardado en el flujo tiene prioridad
     if editing_wf and editing_wf.get("jd_text"):
         default_jd_text = editing_wf.get("jd_text")
-    # Si estamos creando (no editando) Y el rol del selectbox cambia, usamos el JD del puesto
-    elif not editing_wf and selected_role_from_key:
+    # Si estamos creando (no editando) O si el rol del selectbox cambia, usamos el JD del puesto
+    else:
          pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
          default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
 
@@ -1568,7 +1603,7 @@ def render_flow_form():
         expected = st.text_area("Expected output*", value=default_expected, height=80, disabled=is_disabled)
 
         st.markdown("**Job Description (cargado desde 'Puestos')**")
-        jd_text = st.text_area("JD en texto", value=default_jd_text, height=140, disabled=is_disabled)
+        jd_text = st.text_area("JD en texto", value=default_jd_text, height=140, key="flow_jd_text", disabled=is_disabled)
         
         # (Req 2) Ocultar el file_uploader y la preview si estamos en modo VISTA
         jd_from_file = ""
@@ -1613,7 +1648,7 @@ def render_flow_form():
         if save_draft or send_approval or schedule or update_flow:
             if not is_view_mode:
                 # (Req 2/3) Usar jd_text del formulario (que pudo ser editado)
-                jd_final = jd_from_file if jd_from_file.strip() else jd_text
+                jd_final = jd_from_file if jd_from_file.strip() else ss.get("flow_jd_text", default_jd_text)
                 
                 if not jd_final.strip() or jd_final.startswith("JD no encontrado"): 
                     st.error("Debes proporcionar un JD (cargado desde Puestos o pegado).")
