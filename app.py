@@ -1261,16 +1261,28 @@ def page_eval():
                         meta["file_name"] = f.name
                         results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
                         
-                        # (INICIO REQ 4) Crear Tarea individual por CV
-                        task_title = f"{meta.get('Name', 'Candidato')} ({f.name})"
-                        task_desc = f"Revisión de CV para '{puesto_name}'. | Score IA: {meta.get('Score', 'N/A')}% | {meta.get('Additional_Notes', 'Revisar detalle.')}"
+                        # (INICIO REQ 4.1 y 4.2) Crear Tarea individual por CV
+                        
+                        # Formatear Título (Req 4.2)
+                        full_name = meta.get('Name', 'Candidato')
+                        task_title = f"CV {f.name}" # Fallback
+                        if full_name not in ['Candidato', 'Error de Análisis', '—']:
+                            name_parts = full_name.split()
+                            if len(name_parts) >= 2:
+                                task_title = f"CV {name_parts[0]} {name_parts[1]}"
+                            elif len(name_parts) == 1:
+                                task_title = f"CV {name_parts[0]}"
+                        
+                        # Formatear Descripción (Req 4.1)
+                        task_desc = f"Revisión para '{puesto_name}'. | PDF: {f.name} | Score IA: {meta.get('Score', 'N/A')}%"
+                        
                         task_context = {
                             "source": "Evaluación LLM",
                             "llm_analysis": meta, # Guardar todo el JSON del análisis
                             "pdf_bytes_b64": base64.b64encode(f_bytes).decode('utf-8') # Guardar el PDF
                         }
                         create_manual_task(task_title, task_desc, date.today() + timedelta(days=2), current_user, "Media", task_context)
-                        # (FIN REQ 4)
+                        # (FIN REQ 4.1 y 4.2)
 
                 ss.llm_eval_results = results_with_bytes
                 
@@ -1949,12 +1961,13 @@ def page_create_task():
         st.info(f"No hay tareas que coincidan con los filtros seleccionados.")
         return
 
-    # --- INICIO CAMBIO (Solicitud 3) ---
-    # Columnas simplificadas: Se ocultan Id, Descripción, Creado el
-    col_w = [3.0, 1.8, 1.8, 1.2, 1.2, 1.8]
-    h_nom, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
+    # --- INICIO CAMBIO (Solicitud 3.1) ---
+    # Columnas con Descripción: [Nombre, Descripción, Asignado, Vencimiento, Prioridad, Estado, Acciones]
+    col_w = [2.0, 2.5, 1.2, 1.2, 1.0, 1.0, 1.5]
+    h_nom, h_desc, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
     
     with h_nom:  st.markdown("**Nombre**")
+    with h_desc: st.markdown("**Descripción**") # (Req 3.1) Columna añadida
     with h_asg:  st.markdown("**Asignado a**")
     with h_due:  st.markdown("**Vencimiento**")
     with h_pri:  st.markdown("**Prioridad**")
@@ -1965,15 +1978,16 @@ def page_create_task():
     for task in tasks_to_show:
         t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
         
-        # Columnas simplificadas
-        c_nom, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
+        # Columnas con Descripción
+        c_nom, c_desc, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
         
         with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
+        with c_desc: st.caption(task.get("desc","—")) # (Req 3.1) Columna añadida
         with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
         with c_due: st.markdown(task.get("due","—"))
         with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
         with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
-        # --- FIN CAMBIO (Solicitud 3) ---
+        # --- FIN CAMBIO (Solicitud 3.1) ---
 
         def _handle_action_change(task_id):
             selectbox_key = f"accion_{task_id}"
@@ -2008,8 +2022,8 @@ def page_create_task():
             )
 
         if ss.get("confirm_delete_id") == t_id:
-            # (Solicitud 3) Ajuste de columnas para el popup de borrado
-            _, col_btn1, col_btn2, _ = st.columns([3.0, 1.8, 1.8, 4.0])
+            # (Solicitud 3.1) Ajuste de columnas para el popup de borrado
+            _, col_btn1, col_btn2, _ = st.columns([4.5, 1.2, 1.2, 1.5])
             with col_btn1:
                 if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
                     ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
@@ -2022,8 +2036,8 @@ def page_create_task():
                     st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
 
         if ss.show_assign_for == t_id:
-            # (Solicitud 3) Ajuste de columnas para el popup de asignación
-            _, a1, a2, a3, a4, _ = st.columns([3.0, 1.2, 1.2, 1.0, 1.0, 2.2])
+            # (Solicitud 3.1) Ajuste de columnas para el popup de asignación
+            _, a1, a2, a3, a4, _ = st.columns([4.5, 1.2, 1.0, 1.0, 1.7])
             with a1:
                 assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
             with a2:
@@ -2054,87 +2068,91 @@ def page_create_task():
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # (INICIO REQ 4) Lógica del diálogo para Tareas (Modificada)
+    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA)
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # Usar el objeto dialog devuelto por st.dialog()
-                dialog = st.dialog("Detalle de Tarea", width="large")
+                # --- INICIO CORRECCIÓN ERROR ---
+                # Usar 'with st.dialog...' en lugar de 'dialog = st.dialog...'
+                with st.dialog("Detalle de Tarea", width="large") as dialog:
+                # --- FIN CORRECCIÓN ERROR ---
 
-                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                context = task_data.get("context", {}) # Cargar contexto
+                    dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                    context = task_data.get("context", {}) # Cargar contexto
 
-                # --- Mostrar Análisis de IA y PDF si existe ---
-                if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
-                    dialog.markdown("---")
-                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
-                    analysis_data = context["llm_analysis"]
+                    # --- Mostrar Análisis de IA y PDF si existe ---
+                    if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                        dialog.markdown("---")
+                        dialog.markdown("🤖 **Análisis de IA (LLM)**")
+                        analysis_data = context["llm_analysis"]
+                        
+                        d_c1, d_c2, d_c3 = dialog.columns(3)
+                        d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                        d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                        d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+
+                        dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                        # (Req 3.3) Traducción
+                        dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                        dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                        
+                        if "pdf_bytes_b64" in context:
+                            try:
+                                pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                                with dialog.expander("Visualizar CV (PDF)", expanded=True):
+                                    # (Req 4) Usar el 'container=dialog'
+                                    pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
+                            except Exception as e:
+                                dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+                        dialog.markdown("---")
+
+                    # --- Mostrar Información de Tarea (General) ---
+                    c1, c2 = dialog.columns(2)
+                    with c1:
+                        dialog.markdown("**Información Principal**")
+                        dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                        dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                        dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    with c2:
+                        dialog.markdown("**Estado y Prioridad**")
+                        dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                        dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
                     
-                    d_c1, d_c2, d_c3 = dialog.columns(3)
-                    d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
-                    d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
-                    d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+                    # Contexto de Flujo (si no es de IA)
+                    if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
+                        dialog.markdown("---")
+                        dialog.markdown("**Contexto del Flujo**")
+                        if "candidate_name" in context:
+                            dialog.markdown(f"**Postulante:** {context['candidate_name']}")
+                        if "role" in context:
+                            dialog.markdown(f"**Puesto:** {context['role']}")
 
-                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                    dialog.markdown(f"**Key Skills:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
-                    
-                    if "pdf_bytes_b64" in context:
-                        try:
-                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                            with dialog.expander("Visualizar CV (PDF)", expanded=True):
-                                # (Req 4) Usar el 'container=dialog'
-                                pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
-                        except Exception as e:
-                            dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
                     dialog.markdown("---")
-
-                # --- Mostrar Información de Tarea (General) ---
-                c1, c2 = dialog.columns(2)
-                with c1:
-                    dialog.markdown("**Información Principal**")
-                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                with c2:
-                    dialog.markdown("**Estado y Prioridad**")
-                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-                
-                # Contexto de Flujo (si no es de IA)
-                if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
+                    dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
                     dialog.markdown("---")
-                    dialog.markdown("**Contexto del Flujo**")
-                    if "candidate_name" in context:
-                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
-                    if "role" in context:
-                        dialog.markdown(f"**Puesto:** {context['role']}")
+                    dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
 
-                dialog.markdown("---")
-                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
-                dialog.markdown("---")
-                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
+                    # Usar dialog.form para el formulario dentro del diálogo
+                    with dialog.form("comment_form_dialog"):
+                        # Añadir key única
+                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
+                        submitted = st.form_submit_button("Enviar Comentario")
+                        if submitted: st.toast("Comentario (aún no) guardado.")
 
-                # Usar dialog.form para el formulario dentro del diálogo
-                with dialog.form("comment_form_dialog"):
-                    # Añadir key única
-                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
-                    submitted = st.form_submit_button("Enviar Comentario")
-                    if submitted: st.toast("Comentario (aún no) guardado.")
-
-                if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
-                    ss.expanded_task_id = None
-                    dialog.close() # Usar .close() en el objeto dialog
+                    if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
+                        ss.expanded_task_id = None
+                        dialog.close() # Usar .close() en el objeto dialog
 
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
+                print(f"Error detallado en dialog: {e}") # Debug
                 if ss.get("expanded_task_id") == task_id_for_dialog:
                     ss.expanded_task_id = None
         else:
             ss.expanded_task_id = None # Limpiar si la tarea ya no existe
-    # (FIN REQ 4)
+    # (FIN REQ 3.3)
 
 
 # =========================================================
