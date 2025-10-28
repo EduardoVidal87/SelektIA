@@ -423,15 +423,19 @@ def build_analysis_text(name,ex):
   extras=", ".join(ex["extras"][:3]) if ex["extras"] else "—"
   return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
 
-def pdf_viewer_embed(file_bytes: bytes, height=520):
+# (INICIO REQ 4) Modificado para aceptar un 'container' (para usar en st.dialog)
+def pdf_viewer_embed(file_bytes: bytes, height=520, container=st):
+  """Muestra un PDF en un container de Streamlit (st o st.dialog)."""
   try:
       b64=base64.b64encode(file_bytes).decode("utf-8")
-      st.components.v1.html(
+      # Llama a .components.v1.html en el container provisto
+      container.components.v1.html(
         f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>',
         height=height
       )
   except Exception as e:
-      st.error(f"Error al mostrar PDF: {e}")
+      container.error(f"Error al mostrar PDF: {e}")
+# (FIN REQ 4)
 
 def _extract_docx_bytes(b: bytes) -> str:
   try:
@@ -555,22 +559,24 @@ def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coord
   ss.tasks.insert(0, t)
   save_tasks(ss.tasks)
 
-# Helper para crear tarea manual
-def create_manual_task(title, desc, due_date, assigned_to, priority):
+# (INICIO REQ 4) Helper para crear tarea manual (modificado para aceptar 'context')
+def create_manual_task(title, desc, due_date, assigned_to, priority, context:dict=None):
+    """Crea una tarea manual y la guarda."""
     t = {
         "id": str(uuid.uuid4()),
         "titulo": title,
         "desc": desc,
         "due": due_date.isoformat(),
         "assigned_to": assigned_to,
-        "status": "Pendiente",
+        "status": "Pendiente", # (Req 4) Tareas de IA inician como Pendiente
         "priority": priority,
         "created_at": date.today().isoformat(),
-        "context": {"source": "Manual"}
+        "context": context or {"source": "Manual"} # (Req 4) Añadido
     }
     if not isinstance(ss.tasks, list): ss.tasks = []
     ss.tasks.insert(0, t)
     save_tasks(ss.tasks)
+# (FIN REQ 4)
 
 # Helper para acciones de Flujo
 def _handle_flow_action_change(wf_id):
@@ -1151,7 +1157,7 @@ def page_puestos():
             else:
                 st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
-# ===================== EVALUACIÓN (Req 1, 2 - Modificado) =====================
+# ===================== EVALUACIÓN (Req 1, 2, 4 - Modificado) =====================
 def page_eval():
     st.header("Resultados de evaluación")
 
@@ -1219,43 +1225,65 @@ def page_eval():
                 st.error("No se puede ejecutar la evaluación sin un Job Description válido.")
             else:
                 results_with_bytes = []
-                for f in up:
-                    f_bytes = f.read(); f.seek(0)
-                    text = ""
-                    try:
-                        if _LC_AVAILABLE:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                                tmp.write(f_bytes); tmp.flush()
-                                loader = PyPDFLoader(tmp.name)
-                                pages = loader.load()
-                                text = "\n".join([p.page_content for p in pages])
-                        else:
-                            reader = PdfReader(io.BytesIO(f_bytes))
-                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                    except Exception:
+                # (INICIO REQ 4) Preparar para crear tareas
+                current_user = ss.auth.get("name", "Admin")
+                puesto_name = ss.get("eval_flow_puesto", "N/A")
+                
+                with st.spinner(f"Analizando {len(up)} CVs con IA..."):
+                    for f in up:
+                        f_bytes = f.read(); f.seek(0)
+                        text = ""
                         try:
-                            reader = PdfReader(io.BytesIO(f_bytes))
-                            for p in reader.pages: text += (p.extract_text() or "") + "\n"
-                        except Exception as e:
-                            st.error(f"No se pudo leer {f.name}: {e}")
-                            continue
+                            if _LC_AVAILABLE:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                                    tmp.write(f_bytes); tmp.flush()
+                                    loader = PyPDFLoader(tmp.name)
+                                    pages = loader.load()
+                                    text = "\n".join([p.page_content for p in pages])
+                            else:
+                                reader = PdfReader(io.BytesIO(f_bytes))
+                                for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                        except Exception:
+                            try:
+                                reader = PdfReader(io.BytesIO(f_bytes))
+                                for p in reader.pages: text += (p.extract_text() or "") + "\n"
+                            except Exception as e:
+                                st.error(f"No se pudo leer {f.name}: {e}")
+                                continue
 
-                    # (Req 4) Pasa el contexto del flujo a la función de IA
-                    meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
-                           _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
-                           
-                    if not meta:
-                        meta = {"Name":"—","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"—","Score":0}
-                    meta["file_name"] = f.name
-                    results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
+                        # (Req 4) Pasa el contexto del flujo a la función de IA
+                        meta = _extract_with_azure(jd_llm_val, text, flow_desc_val, flow_expected_val) or \
+                               _extract_with_openai(jd_llm_val, text, flow_desc_val, flow_expected_val)
+                               
+                        if not meta:
+                            meta = {"Name":"Error de Análisis","Years_of_Experience":"—","English_Level":"—","Key_Skills":[],"Certifications":[],"Additional_Notes":"La IA no pudo procesar este CV.","Score":0}
+                        
+                        meta["file_name"] = f.name
+                        results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
+                        
+                        # (INICIO REQ 4) Crear Tarea individual por CV
+                        task_title = f"{meta.get('Name', 'Candidato')} ({f.name})"
+                        task_desc = f"Revisión de CV para '{puesto_name}'. | Score IA: {meta.get('Score', 'N/A')}% | {meta.get('Additional_Notes', 'Revisar detalle.')}"
+                        task_context = {
+                            "source": "Evaluación LLM",
+                            "llm_analysis": meta, # Guardar todo el JSON del análisis
+                            "pdf_bytes_b64": base64.b64encode(f_bytes).decode('utf-8') # Guardar el PDF
+                        }
+                        create_manual_task(task_title, task_desc, date.today() + timedelta(days=2), current_user, "Media", task_context)
+                        # (FIN REQ 4)
 
                 ss.llm_eval_results = results_with_bytes
+                
+                # (INICIO REQ 4) Mensaje de éxito final
+                st.success(f"¡Análisis completo! Se crearon {len(ss.llm_eval_results)} tareas en 'Todas las tareas' para su revisión.")
+                # (FIN REQ 4)
+
 
         # Mostrar resultados si existen en session_state
         if ss.llm_eval_results:
             df_llm = _results_to_df([r["meta"] for r in ss.llm_eval_results])
             if not df_llm.empty:
-                st.subheader("Resultados LLM")
+                st.subheader("Resultados de la Ejecución")
                 st.dataframe(df_llm, use_container_width=True, hide_index=True)
                 st.plotly_chart(_create_llm_bar(df_llm), use_container_width=True)
             else:
@@ -1843,7 +1871,7 @@ def page_analytics():
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Req 3 - Modificado) =====================
+# ===================== TODAS LAS TAREAS (Req 3, 4 - Modificado) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
@@ -1882,17 +1910,43 @@ def page_create_task():
         return
 
     tasks_list = ss.tasks
+    
+    # --- INICIO CAMBIO (Req 4) ---
+    # Añadir filtros de Cola (Asignado a) y Búsqueda
+    
+    # 1. Definir opciones de filtros
     all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
-    if "En Espera" not in all_statuses_set:
-        all_statuses_set.add("En Espera")
-    all_statuses = ["Todos"] + sorted(list(all_statuses_set))
+    if "En Espera" not in all_statuses_set: all_statuses_set.add("En Espera")
+    all_statuses = ["Todos los estados"] + sorted(list(all_statuses_set))
     prefer_order = ["Pendiente", "En Proceso", "En Espera"]
-    preferred = next((s for s in prefer_order if s in all_statuses), "Todos")
-    selected_status = st.selectbox("Filtrar por Estado", options=all_statuses, index=all_statuses.index(preferred))
+    preferred = next((s for s in prefer_order if s in all_statuses), "Todos los estados")
 
-    tasks_to_show = tasks_list if selected_status == "Todos" else [t for t in tasks_list if t.get("status") == selected_status]
+    all_assignees = ["Todas las colas"] + sorted(list(set(t.get('assigned_to', 'N/A') for t in tasks_list)))
+
+    # 2. Renderizar filtros en 3 columnas
+    f1, f2, f3 = st.columns([1, 1, 1.5])
+    with f1:
+        selected_status = st.selectbox("Estado", options=all_statuses, index=all_statuses.index(preferred))
+    with f2:
+        selected_queue = st.selectbox("Cola (Asignado a)", options=all_assignees, key="task_queue_filter")
+    with f3:
+        search_query = st.text_input("Buscar por nombre...", key="task_search_query", placeholder="Buscar...")
+
+    # 3. Lógica de filtrado
+    tasks_filtered = tasks_list
+    if selected_status != "Todos los estados":
+        tasks_filtered = [t for t in tasks_filtered if t.get("status") == selected_status]
+    if selected_queue != "Todas las colas":
+        tasks_filtered = [t for t in tasks_filtered if t.get("assigned_to") == selected_queue]
+    if search_query:
+        tasks_filtered = [t for t in tasks_filtered if search_query.lower() in t.get("titulo", "").lower()]
+    
+    tasks_to_show = tasks_filtered
+    # --- FIN CAMBIO (Req 4) ---
+
+
     if not tasks_to_show:
-        st.info(f"No hay tareas con el estado '{selected_status}'.")
+        st.info(f"No hay tareas que coincidan con los filtros seleccionados.")
         return
 
     # --- INICIO CAMBIO (Solicitud 3) ---
@@ -1914,21 +1968,8 @@ def page_create_task():
         # Columnas simplificadas
         c_nom, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
         
-        # Columna Id (oculta)
-        # with c_id:
-        #     short = (t_id[:5] + "…") if len(t_id) > 6 else t_id
-        #     st.caption(short)
-            
         with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
-        
-        # Columna Desc (oculta)
-        # with c_desc: st.caption(task.get("desc","—"))
-        
         with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
-        
-        # Columna Creado el (oculta)
-        # with c_cre: st.markdown(task.get("created_at","—"))
-        
         with c_due: st.markdown(task.get("due","—"))
         with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
         with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
@@ -2013,7 +2054,7 @@ def page_create_task():
 
         st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # Lógica del diálogo para Tareas
+    # (INICIO REQ 4) Lógica del diálogo para Tareas (Modificada)
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
@@ -2023,7 +2064,34 @@ def page_create_task():
                 dialog = st.dialog("Detalle de Tarea", width="large")
 
                 dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                context = task_data.get("context", {}) # Cargar contexto
 
+                # --- Mostrar Análisis de IA y PDF si existe ---
+                if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                    dialog.markdown("---")
+                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
+                    analysis_data = context["llm_analysis"]
+                    
+                    d_c1, d_c2, d_c3 = dialog.columns(3)
+                    d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                    d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                    d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+
+                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                    dialog.markdown(f"**Key Skills:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                    
+                    if "pdf_bytes_b64" in context:
+                        try:
+                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                            with dialog.expander("Visualizar CV (PDF)", expanded=True):
+                                # (Req 4) Usar el 'container=dialog'
+                                pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
+                        except Exception as e:
+                            dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+                    dialog.markdown("---")
+
+                # --- Mostrar Información de Tarea (General) ---
                 c1, c2 = dialog.columns(2)
                 with c1:
                     dialog.markdown("**Información Principal**")
@@ -2034,9 +2102,9 @@ def page_create_task():
                     dialog.markdown("**Estado y Prioridad**")
                     dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
                     dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-
-                context = task_data.get("context")
-                if context and ("candidate_name" in context or "role" in context):
+                
+                # Contexto de Flujo (si no es de IA)
+                if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
                     dialog.markdown("---")
                     dialog.markdown("**Contexto del Flujo**")
                     if "candidate_name" in context:
@@ -2066,6 +2134,7 @@ def page_create_task():
                     ss.expanded_task_id = None
         else:
             ss.expanded_task_id = None # Limpiar si la tarea ya no existe
+    # (FIN REQ 4)
 
 
 # =========================================================
