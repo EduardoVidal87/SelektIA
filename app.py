@@ -1,7 +1,7 @@
 # app.py
 # -*- coding: utf-8 -*-
 
-import io, base64, re, json, random, zipfile, uuid, statistics
+import io, base64, re, json, random, zipfile, uuid, statistics # statistics added for P50/P90
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
@@ -13,11 +13,11 @@ from PyPDF2 import PdfReader
 # =========================================================
 # PALETA / CONST
 # =========================================================
-PRIMARY       = "#00CD78"
+PRIMARY        = "#00CD78"
 SIDEBAR_BG = "#0E192B"
 SIDEBAR_TX = "#B9C7DF"
-BODY_BG     = "#F7FBFF"
-CARD_BG     = "#0E192B"
+BODY_BG      = "#F7FBFF"
+CARD_BG      = "#0E192B"
 TITLE_DARK = "#142433"
 
 BAR_DEFAULT = "#E9F3FF"
@@ -306,8 +306,8 @@ if "agent_view_idx" not in ss: ss.agent_view_idx = None
 if "agent_edit_idx" not in ss: ss.agent_edit_idx = None
 if "new_role_mode" not in ss: ss.new_role_mode = False
 if "roles" not in ss: ss.roles = load_roles()
-if "llm_results" not in ss: ss.llm_results = []              # resultados LLM centralizados
-if "eval_llm_busy" not in ss: ss.eval_llm_busy = False       # loader Evaluación de CVs
+if "llm_results" not in ss: ss.llm_results = []           # resultados LLM centralizados
+if "eval_llm_busy" not in ss: ss.eval_llm_busy = False    # loader Evaluación de CVs
 
 if "positions" not in ss:
   ss.positions = pd.DataFrame([
@@ -452,30 +452,42 @@ def calculate_analytics(candidates):
   hired_days = []
 
   for c in candidates:
-    txt = c.get("_text") or (c.get("_bytes") or b"").decode("utf-8", "ignore")
-    f, _ = score_fit_by_skills(jd, must, nice, txt or "")
-    fits.append(f)
+    # Usa el score pre-calculado si existe, sino lo calcula
+    score = c.get("Score")
+    if score is None:
+        txt = c.get("_text") or (c.get("_bytes") or b"").decode("utf-8", "ignore")
+        score, _ = score_fit_by_skills(jd, must, nice, txt or "")
+    fits.append(int(score))
+
     stage = c.get("stage", PIPELINE_STAGES[0])
     stages[stage] = stages.get(stage, 0) + 1
     src = c.get("source", "Carga Manual")
     sources[src] = sources.get(src, 0) + 1
 
-    # tiempos: desde load_date -> hoy (proxy)
+    # tiempos: desde load_date -> hoy (proxy) o hire_date si existe
     try:
-      ld = datetime.fromisoformat(c.get("load_date", date.today().isoformat()))
-      days = max(0, (datetime.now() - ld).days)
+      ld_str = c.get("load_date", date.today().isoformat())
+      ld = datetime.fromisoformat(ld_str).date() # Asegura que sea date
+      
+      end_date = date.today() # Por defecto es hoy
+      if stage == "Contratado" and c.get("hire_date"):
+          try:
+              end_date = datetime.fromisoformat(c["hire_date"]).date() # Usa hire_date si existe
+          except: pass # Si hire_date es inválido, usa hoy
+
+      days = max(0, (end_date - ld).days)
       time_to_stage_days.append(days)
       if stage == "Contratado":
         hired_days.append(days)
     except:
-      pass
+      pass # Ignora errores de fecha para no romper el cálculo
 
   avg_fit = round(sum(fits) / len(fits), 1) if fits else 0
   df_funnel = pd.DataFrame({"Fase": PIPELINE_STAGES, "Candidatos": [stages.get(s, 0) for s in PIPELINE_STAGES]})
   df_sources = pd.DataFrame(list(sources.items()), columns=["Fuente", "Candidatos"]).sort_values("Candidatos", ascending=False)
 
   # P50 / P90 sobre tiempos (proxy)
-  def p50(vals): 
+  def p50(vals):
       if not vals: return 0
       return int(round(statistics.median(sorted(vals))))
   def p90(vals):
@@ -505,7 +517,7 @@ def calculate_analytics(candidates):
     if nm in name_to_fit:
       join_rows.append({"file_name":nm,"Fit_Skills":name_to_fit[nm],"Score_LLM":r["Score_LLM"]})
   df_corr=pd.DataFrame(join_rows)
-  corr_val = round(float(df_corr.corr(numeric_only=True).get("Fit_Skills",{}).get("Score_LLM",0)),3) if not df_corr.empty else 0.0
+  corr_val = round(float(df_corr.corr(numeric_only=True).get("Fit_Skills",{}).get("Score_LLM",0)),3) if not df_corr.empty and len(df_corr) > 1 else 0.0 # Corr necesita > 1 punto
 
   # Puestos
   df_pos = ss.positions.copy() if isinstance(ss.get("positions"), pd.DataFrame) else pd.DataFrame()
@@ -575,22 +587,25 @@ def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coord
 # =========================================================
 if "candidate_init" not in ss:
   initial_candidates = [
-    {"Name": "CV_AnaLopez.pdf", "Score": 85, "Role": "Business Analytics", "source": "LinkedIn Jobs"},
-    {"Name": "CV_LuisGomez.pdf", "Score": 42, "Role": "Business Analytics", "source": "Computrabajo"},
-    {"Name": "CV_MartaDiaz.pdf", "Score": 91, "Role": "Desarrollador/a Backend (Python)", "source": "Indeed"},
-    {"Name": "CV_JaviRuiz.pdf", "Score": 30, "Role": "Diseñador/a UX", "source": "laborum.pe"},
+    {"Name": "CV_AnaLopez.pdf", "Score": 85, "Role": "Business Analytics", "source": "LinkedIn Jobs", "load_date": (date.today() - timedelta(days=25)).isoformat()},
+    {"Name": "CV_LuisGomez.pdf", "Score": 42, "Role": "Business Analytics", "source": "Computrabajo", "load_date": (date.today() - timedelta(days=18)).isoformat()},
+    {"Name": "CV_MartaDiaz.pdf", "Score": 91, "Role": "Desarrollador/a Backend (Python)", "source": "Indeed", "load_date": (date.today() - timedelta(days=12)).isoformat()},
+    {"Name": "CV_JaviRuiz.pdf", "Score": 30, "Role": "Diseñador/a UX", "source": "laborum.pe", "load_date": (date.today() - timedelta(days=5)).isoformat()},
   ]
   candidates_list = []
   for i, c in enumerate(initial_candidates):
     c["id"] = f"C{i+1}-{random.randint(1000, 9999)}"
     c["stage"] = PIPELINE_STAGES[random.choice([0, 1, 1, 2, 6])]
-    c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat()
+    #c["load_date"] = (date.today() - timedelta(days=random.randint(5, 30))).isoformat() # Usar las fechas predefinidas
     c["_bytes"] = DUMMY_PDF_BYTES
     c["_is_pdf"] = True
     c["_text"] = f"CV de {c['Name']}. Experiencia 5 años. Skills: SQL, Power BI, Python, Excel. Candidato {c['Name']}."
     c["meta"] = extract_meta(c["_text"])
     if c["stage"] == "Descartado": c["Score"] = random.randint(20, 34)
-    if c["stage"] == "Contratado": c["Score"] = 95
+    if c["stage"] == "Contratado":
+        c["Score"] = 95
+        c["hire_date"] = (datetime.fromisoformat(c["load_date"]) + timedelta(days=random.randint(7,20))).date().isoformat() # Fecha de contratación para los de ejemplo
+
     candidates_list.append(c)
   ss.candidates = candidates_list
   ss.candidate_init = True
@@ -770,10 +785,13 @@ def page_puestos():
     if candidates_for_pos:
       df_cand = pd.DataFrame(candidates_for_pos)
       st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}),
-                   use_container_width=True, hide_index=True)
+                      use_container_width=True, hide_index=True)
     else:
       st.info(f"No hay candidatos activos para el puesto **{selected_pos}**.")
 
+# =========================================================
+# PÁGINA EVAL (MODIFICADA CON LOADER)
+# =========================================================
 def page_eval():
     st.header("Resultados de evaluación")
     if not ss.candidates:
@@ -790,7 +808,7 @@ def page_eval():
     for c in ss.candidates:
         cv = c.get("_text") or (c.get("_bytes") or b"").decode("utf-8","ignore")
         fit, exp = score_fit_by_skills(jd_text, must, nice, cv or "")
-        c["Score"] = fit; c["_exp"] = exp
+        c["Score"] = fit; c["_exp"] = exp # Actualiza el score basado en skills aquí
         enriched.append({
             "id": c["id"],
             "Name": c["Name"],
@@ -838,8 +856,8 @@ def page_eval():
 
     # --------- Bloque LLM con loader animado (no intrusivo) ----------
     st.markdown("---")
-    st.subheader("Resultados LLM")
-    llm_files = st.file_uploader("Subir CVs (PDF) para ejecución LLM", type=["pdf"], accept_multiple_files=True, key="llm_upl")
+    st.subheader("Evaluación IA") # Cambio de título
+    llm_files = st.file_uploader("Subir CVs (PDF) para evaluación IA", type=["pdf"], accept_multiple_files=True, key="llm_upl")
 
     # contenedor para loader
     loader_slot = st.empty()
@@ -849,35 +867,65 @@ def page_eval():
             loader_slot.empty(); return
         # Animación ligera, inline, sin afectar estilos globales
         loader_slot.markdown(f"""
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E3EDF6;border-radius:12px;background:#FFFFFF;max-width:280px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E3EDF6;border-radius:12px;background:#FFFFFF;max-width:280px;margin-bottom:10px;">
           <div style="width:16px;height:16px;border:3px solid #E3EDF6;border-top-color:{PRIMARY};border-radius:50%;animation:spin 0.9s linear infinite"></div>
           <div style="font-weight:600;color:{TITLE_DARK};">Analizando CVs…</div>
         </div>
         <style>@keyframes spin{{to{{transform:rotate(360deg)}}}}</style>
         """, unsafe_allow_html=True)
 
+    # Renderiza el loader si está ocupado
+    _render_loader(ss.eval_llm_busy)
+
     btn_disabled = ss.eval_llm_busy
-    if st.button("Ejecutar evaluación LLM", disabled=btn_disabled):
+    if st.button("Ejecutar evaluación IA", disabled=btn_disabled, key="btn_eval_llm"):
         if not llm_files:
             st.warning("Sube al menos un PDF."); return
         try:
             ss.eval_llm_busy = True
-            _render_loader(True)
+            st.rerun() # Fuerza rerender para mostrar loader y deshabilitar botón
+
+        except Exception as e: # Captura error antes de procesar
+            st.error(f"Error iniciando evaluación: {e}")
+            ss.eval_llm_busy = False # Resetea estado si hay error inicial
+            st.rerun()
+
+    # Lógica de procesamiento fuera del botón principal para que se ejecute después del rerender
+    if ss.eval_llm_busy and "btn_eval_llm" in ss and ss.btn_eval_llm: # Ejecuta solo si el botón fue presionado y estamos en estado busy
+        try:
             results = []
             # Proxy de extracción/score para mantener compatibilidad y no introducir dependencias
             jd = ss.get("last_jd_text","")
             preset = ROLE_PRESETS.get(ss.get("last_role",""), {})
             must_list = preset.get("must",[]) or []
             nice_list = preset.get("nice",[]) or []
+            
+            # Recupera los archivos subidos (podrían perderse en reruns si no se maneja bien)
+            # Nota: Esto es una simplificación. Una app real necesitaría manejar el estado de los archivos subidos de forma más robusta.
+            # Asumimos que los archivos persisten en el widget si no se navega fuera.
+            
+            # --- Aquí iría la llamada real al LLM si estuviera integrada ---
+            # Ejemplo: results = call_my_llm(llm_files, jd_text)
+            # --- Usaremos el score de skills como proxy ---
             for uploaded_file in llm_files:
-                b = uploaded_file.read(); uploaded_file.seek(0)
-                text = extract_text_from_file(uploaded_file)
-                score, _ = score_fit_by_skills(jd, must_list, nice_list, text or "")
-                results.append({
-                    "file_name": uploaded_file.name,
-                    "Name": uploaded_file.name.replace(".pdf",""),
-                    "Score": int(score)
-                })
+                try:
+                    b = uploaded_file.read(); uploaded_file.seek(0)
+                    text = extract_text_from_file(uploaded_file)
+                    score, _ = score_fit_by_skills(jd, must_list, nice_list, text or "")
+                    results.append({
+                        "file_name": uploaded_file.name,
+                        "Name": uploaded_file.name.replace(".pdf",""),
+                        "Score": int(score) # Score proxy
+                    })
+                except Exception as file_e:
+                    st.warning(f"Error procesando {uploaded_file.name}: {file_e}")
+                    results.append({ # Añade entrada de error
+                        "file_name": uploaded_file.name,
+                        "Name": uploaded_file.name.replace(".pdf",""),
+                        "Score": 0,
+                        "Error": str(file_e)
+                    })
+
             ss.llm_results = results
 
             # Actualiza pipeline con Score_LLM cuando coincida el filename
@@ -885,31 +933,40 @@ def page_eval():
                 name_to_cand = { str(c.get("Name","")).strip(): c for c in ss.candidates }
                 for r in results:
                     fn = str(r.get("file_name","")).strip()
-                    if fn in name_to_cand:
+                    if fn in name_to_cand and "Error" not in r: # Solo actualiza si no hubo error
                         name_to_cand[fn]["Score_LLM"] = int(r.get("Score",0))
-            except:
-                pass
+            except Exception as update_e:
+                print(f"Error actualizando scores LLM en pipeline: {update_e}") # Log error
 
-            st.success("Evaluación LLM completada.")
+            st.success("Evaluación IA completada.")
+
         except Exception as e:
-            st.error(f"Ocurrió un error al evaluar: {e}")
+            st.error(f"Ocurrió un error durante la evaluación: {e}")
         finally:
-            ss.eval_llm_busy = False
-            _render_loader(False)
-            st.rerun()
+            ss.eval_llm_busy = False # Termina estado busy
+            # Limpia el estado del botón para evitar re-ejecución en el siguiente rerender
+            if "btn_eval_llm" in ss: del ss["btn_eval_llm"]
+            st.rerun() # Fuerza rerender final para quitar loader y habilitar botón
 
     # Mostrar resultados si existen
     if ss.llm_results:
         df_llm = pd.DataFrame(ss.llm_results)
-        st.dataframe(df_llm.rename(columns={"Score":"Score"}), use_container_width=True, hide_index=True)
+        st.dataframe(df_llm.rename(columns={"Score":"Score IA"}), use_container_width=True, hide_index=True)
         try:
-            fig_llm = px.bar(df_llm, x='file_name', y='Score', text='Score', title="Comparativa de Puntajes (LLM)")
-            fig_llm.update_traces(hovertemplate="%{x}<br>Score: %{y}%")
-            fig_llm.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score (%)")
-            st.plotly_chart(fig_llm, use_container_width=True)
-        except:
-            pass
+            # Filtra resultados con errores antes de graficar
+            df_plot = df_llm[df_llm.get("Error").isna()] if "Error" in df_llm.columns else df_llm
+            if not df_plot.empty:
+                fig_llm = px.bar(df_plot, x='file_name', y='Score', text='Score', title="Comparativa de Puntajes (IA)")
+                fig_llm.update_traces(hovertemplate="%{x}<br>Score: %{y}%")
+                fig_llm.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Score IA (%)")
+                st.plotly_chart(fig_llm, use_container_width=True)
+        except Exception as plot_e:
+            print(f"Error graficando resultados LLM: {plot_e}") # Log error de gráfico
 
+
+# =========================================================
+# PÁGINA PIPELINE (MODIFICADA CON HIRE_DATE y SCORE_LLM)
+# =========================================================
 def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
     if filter_stage:
@@ -918,49 +975,62 @@ def page_pipeline():
     else:
         st.header("Pipeline de Candidatos (Vista Kanban)")
         candidates_to_show = ss.candidates
-    st.caption("Arrastra los candidatos a través de las etapas para avanzar el proceso.")
+    st.caption("Mueve los candidatos a través de las etapas para avanzar el proceso.") # Texto actualizado
     if not candidates_to_show and filter_stage:
           st.info(f"No hay candidatos en la fase **{filter_stage}**."); return
     elif not ss.candidates:
-          st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing**."); return
+          st.info("No hay candidatos activos. Carga CVs en **Publicación & Sourcing** o **Evaluación de CVs**."); return
     candidates_by_stage = {stage: [] for stage in PIPELINE_STAGES}
     for c in candidates_to_show:
-        candidates_by_stage[c["stage"]].append(c)
+        candidates_by_stage[c.get("stage", PIPELINE_STAGES[0])].append(c) # Usa .get por seguridad
     cols = st.columns(len(PIPELINE_STAGES))
     for i, stage in enumerate(PIPELINE_STAGES):
         with cols[i]:
             st.markdown(f"**{stage} ({len(candidates_by_stage[stage])})**", unsafe_allow_html=True)
             st.markdown("---")
             for c in candidates_by_stage[stage]:
+                score = c.get("Score", 0) # Score de skills
+                score_llm = c.get("Score_LLM") # Score de IA
                 card_name = c["Name"].split('_')[-1].replace('.pdf', '').replace('.txt', '')
-                extra_llm = f"<span style='font-size:11px;opacity:.7'> · IA:{int(c.get('Score_LLM',0))}%</span>" if c.get("Score_LLM") else ""
+                extra_llm = f"<span style='font-size:11px;opacity:.7'> · IA:{int(score_llm)}%</span>" if score_llm is not None else "" # Muestra score IA si existe
                 st.markdown(f"""
-                <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
+                <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if score >= 70 else ('#FFA500' if score >= 40 else '#D60000')}">
                     <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
                     <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
-                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span>{extra_llm}</div>
+                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{score}%</span>{extra_llm}</div>
                     <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
-                    current_stage_index = PIPELINE_STAGES.index(stage)
-                    available_stages = [s for s in PIPELINE_STAGES if s != stage]
+                    current_stage = c.get("stage", PIPELINE_STAGES[0])
+                    current_stage_index = PIPELINE_STAGES.index(current_stage)
+                    available_stages = [s for s in PIPELINE_STAGES if s != current_stage]
                     try:
-                        default_index = available_stages.index(PIPELINE_STAGES[min(current_stage_index + 1, len(PIPELINE_STAGES) - 1)])
+                        # Intenta poner la siguiente etapa como default, o la última si ya está al final
+                        next_stage_candidate = PIPELINE_STAGES[min(current_stage_index + 1, len(PIPELINE_STAGES) - 1)]
+                        if next_stage_candidate in available_stages:
+                             default_index = available_stages.index(next_stage_candidate)
+                        elif current_stage_index > 0 and PIPELINE_STAGES[current_stage_index -1] in available_stages: # fallback a la anterior si siguiente no aplica (ej: descartado)
+                            default_index = available_stages.index(PIPELINE_STAGES[current_stage_index -1])
+                        else: default_index = 0 # fallback a la primera
                     except ValueError:
                         default_index = 0
                     new_stage = st.selectbox("Mover a:", available_stages, key=f"select_move_{c['id']}", index=default_index, label_visibility="collapsed")
                     if st.form_submit_button("Mover Candidato"):
                         c["stage"] = new_stage
-                        if new_stage == "Descartado":
-                            st.success(f"📧 **Comunicación:** Email de rechazo automático enviado a {card_name}.")
+                        # Registrar fecha de contratación
+                        if new_stage == "Contratado":
+                            c["hire_date"] = date.today().isoformat() # <-- AÑADIDO hire_date
+                            st.balloons()
+                            st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
+                        # Lógica existente
+                        elif new_stage == "Descartado":
+                            st.success(f"📧 **Comunicación:** Email de rechazo enviado a {card_name}.")
                         elif new_stage == "Entrevista Telefónica":
                             st.info(f"📅 **Automatización:** Tarea de programación de entrevista generada para {card_name}.")
                             create_task_from_flow(f"Programar entrevista - {card_name}", date.today()+timedelta(days=2),
                                                   "Coordinar entrevista telefónica con el candidato.", assigned="Headhunter", status="Pendiente")
-                        elif new_stage == "Contratado":
-                            st.balloons()
-                            st.success(f"🎉 **¡Éxito!** Flujo de Onboarding disparado para {card_name}.")
+
                         if filter_stage and new_stage != filter_stage:
                             ss.pipeline_filter = None
                             st.info("El filtro ha sido removido al mover el candidato de fase.")
@@ -1203,13 +1273,13 @@ def page_flows():
       desc = st.text_area("Description*", value=EVAL_INSTRUCTION, height=110)
       expected = st.text_area("Expected output*", value="- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV justificando el puntaje", height=80)
 
-      st.markdown("**Job Description (elige una opción)**")
+      st.markdown("**Job Description**")
       jd_text = st.text_area("JD en texto", value=ROLE_PRESETS[role]["jd"], height=140)
       jd_file = st.file_uploader("…o sube JD en PDF/TXT/DOCX", type=["pdf","txt","docx"], key="wf_jd_file")
       jd_from_file = ""
       if jd_file is not None:
         jd_from_file = extract_text_from_file(jd_file)
-        st.caption("Vista previa del JD extraído (solo texto):")
+        st.caption("Vista previa del JD extraído:")
         st.text_area("Preview", jd_from_file[:4000], height=160)
 
       st.markdown("---")
@@ -1265,8 +1335,8 @@ def page_analytics():
 
   c5,c6,c7,c8 = st.columns(4)
   c5.metric("Puestos activos", a["puestos_activos"])
-  c6.metric("Time-to-X P50", f"{a['ttx_p50']} días")
-  c7.metric("Time-to-X P90", f"{a['ttx_p90']} días")
+  c6.metric("Time-to-Hire P50", f"{a['tth_p50']} días") # TTH en lugar de TTX
+  c7.metric("Time-to-Hire P90", f"{a['tth_p90']} días") # TTH en lugar de TTX
   c8.metric("Costo por hire", f"${a['costo_hire']}")
 
   st.markdown("---")
@@ -1276,55 +1346,67 @@ def page_analytics():
   with left:
     st.subheader("Embudo por etapa")
     df_f = a["funnel_data"]
-    wrap = st.container()
-    if not df_f.empty:
+    wrap_funnel = st.container() # Contenedor para posible scroll
+    if not df_f.empty and df_f["Candidatos"].sum() > 0:
       fig = px.funnel(df_f[df_f["Candidatos"]>0], x="Candidatos", y="Fase")
-      fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None)
-      wrap.plotly_chart(fig, use_container_width=True)
+      fig.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), yaxis_title=None, margin=dict(l=0, r=0, t=30, b=0), height=400) # Ajusta altura/márgenes
+      wrap_funnel.plotly_chart(fig, use_container_width=True)
     else:
-      wrap.info("Aún no hay datos del pipeline.")
+      wrap_funnel.info("Aún no hay datos del pipeline.")
 
     st.subheader("Productividad del reclutador")
     df_p = a["productividad"]
+    wrap_prod = st.container()
     if not df_p.empty:
-      figp = px.bar(df_p, x="Usuario/Equipo", y="Completadas", text="Completadas")
-      figp.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Tareas")
-      st.plotly_chart(figp, use_container_width=True)
+      figp = px.bar(df_p, x="Usuario/Equipo", y="Completadas", text="Completadas", color_discrete_sequence=[PRIMARY])
+      figp.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="Tareas Completadas", margin=dict(l=0, r=0, t=30, b=0), height=350)
+      wrap_prod.plotly_chart(figp, use_container_width=True)
     else:
-      st.caption("Sin tareas completadas registradas.")
+      wrap_prod.caption("Sin tareas completadas registradas.")
 
   with right:
     st.subheader("Conversión por etapa")
-    df_f = a["funnel_data"].copy()
-    if not df_f.empty:
-      total = float(df_f["Candidatos"].max() or 1)
-      df_f["Conversión %"] = (df_f["Candidatos"]/total*100).round(1)
-      figc = px.bar(df_f, x="Fase", y="Conversión %", text="Conversión %")
-      figc.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="%")
-      st.plotly_chart(figc, use_container_width=True)
+    df_f_conv = a["funnel_data"].copy()
+    wrap_conv = st.container()
+    if not df_f_conv.empty and df_f_conv["Candidatos"].sum() > 0:
+        # Calcula conversión respecto a la etapa anterior
+        df_f_conv['Prev_Candidatos'] = df_f_conv['Candidatos'].shift(1)
+        # La primera etapa tiene conversión 100% sobre sí misma
+        df_f_conv.loc[0, 'Prev_Candidatos'] = df_f_conv.loc[0, 'Candidatos']
+        df_f_conv['Conversión %'] = (df_f_conv['Candidatos'] / df_f_conv['Prev_Candidatos'].replace(0, pd.NA) * 100).fillna(0).round(1)
+
+        figc = px.bar(df_f_conv, x="Fase", y="Conversión %", text="Conversión %", color_discrete_sequence=[PRIMARY])
+        figc.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), xaxis_title=None, yaxis_title="% Conversión vs Etapa Anterior", margin=dict(l=0, r=0, t=30, b=0), height=400)
+        wrap_conv.plotly_chart(figc, use_container_width=True)
     else:
-      st.caption("Sin datos para conversión.")
+        wrap_conv.info("Sin datos para calcular conversión.")
+
 
     st.subheader("Fuentes de talento")
     df_s = a["sources_data"]
+    wrap_source = st.container()
     if not df_s.empty:
-      fig_pie = px.pie(df_s, values='Candidatos', names='Fuente', title=None)
-      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
-      st.plotly_chart(fig_pie, use_container_width=True)
+      fig_pie = px.pie(df_s, values='Candidatos', names='Fuente', title=None, color_discrete_sequence=px.colors.qualitative.Pastel) # Paleta diferente
+      fig_pie.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), margin=dict(l=0, r=0, t=30, b=0), height=350, legend_title_text='Fuente')
+      wrap_source.plotly_chart(fig_pie, use_container_width=True)
     else:
-      st.caption("Sin distribución por fuentes.")
+      wrap_source.caption("Sin distribución por fuentes.")
 
   st.markdown("---")
 
   # Correlación Skills vs IA
   st.subheader("Exactitud de IA (Skills vs IA)")
   df_corr = a["corr_data"]
-  if not df_corr.empty:
-    fig_sc = px.scatter(df_corr, x="Fit_Skills", y="Score_LLM", trendline="ols", title=f"Correlación: {a['corr_fit_vs_llm']}")
-    fig_sc.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
-    st.plotly_chart(fig_sc, use_container_width=True)
+  wrap_corr = st.container()
+  if not df_corr.empty and len(df_corr) > 1: # Corr necesita > 1 punto
+    fig_sc = px.scatter(df_corr, x="Fit_Skills", y="Score_LLM", trendline="ols", title=f"Correlación: {a['corr_fit_vs_llm']}", labels={'Fit_Skills':'Score Skills (%)','Score_LLM':'Score IA (%)'}, color_discrete_sequence=[PRIMARY])
+    fig_sc.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK), height=450)
+    wrap_corr.plotly_chart(fig_sc, use_container_width=True)
+  elif not df_corr.empty and len(df_corr) == 1:
+      wrap_corr.info("Se necesita más de un CV evaluado por IA y Skills para calcular la correlación.")
   else:
-    st.caption("No hay pares coincidentes de (CV skills vs IA) para correlación.")
+    wrap_corr.info("No hay suficientes datos (CVs evaluados por ambos métodos) para calcular la correlación.")
+
 
 # ===================== TODAS LAS TAREAS =====================
 def page_create_task():
@@ -1496,7 +1578,7 @@ ROUTES = {
   "agents": page_agents,
   "flows": page_flows,
   "agent_tasks": page_agent_tasks,
-  "analytics": page_analytics,
+  "analytics": page_analytics, # <-- Analytics añadido
   "create_task": page_create_task,
 }
 
@@ -1508,9 +1590,10 @@ if require_auth():
 
     task_id_for_dialog = ss.get("expanded_task_id")
 
+    # Ejecuta la página actual
     ROUTES.get(ss.section, page_def_carga)()
 
-    # Diálogo de detalle de tarea
+    # Diálogo de detalle de tarea (se muestra sobre cualquier página si está activo)
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
@@ -1544,16 +1627,18 @@ if require_auth():
                         st.text_area("Comentarios", placeholder="Añadir un comentario...", key="task_comment")
                         submitted = st.form_submit_button("Enviar Comentario")
                         if submitted:
-                            st.toast("Comentario (aún no) guardado.")
+                            st.toast("Comentario (aún no) guardado.") # Funcionalidad placeholder
 
                     if st.button("Cerrar", key="close_dialog"):
                         ss.expanded_task_id = None
                         st.rerun()
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
-                if ss.get("expanded_task_id") == task_id_for_dialog:
+                if ss.get("expanded_task_id") == task_id_for_dialog: # Resetea si falla
                     ss.expanded_task_id = None
                     st.rerun()
         else:
+             # Si el ID existe pero no se encuentra la tarea, resetea
             if ss.get("expanded_task_id") == task_id_for_dialog:
                ss.expanded_task_id = None
+               # No necesita rerun aquí, simplemente no mostrará el diálogo
