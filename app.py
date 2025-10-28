@@ -1543,7 +1543,7 @@ def page_agents():
       perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
       if st.form_submit_button("Guardar cambios"):
         ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,
-                   "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
+                  "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
 # ===================== FLUJOS (Req 1, 2, 3 - Modificado) =====================
@@ -1595,8 +1595,8 @@ def render_flow_form():
         default_jd_text = editing_wf.get("jd_text")
     # Si estamos creando (no editando) O si el rol del selectbox cambia, usamos el JD del puesto
     else:
-         pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
-         default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
+        pos_data = next((p for p in ss.positions if p.get("Puesto") == selected_role_from_key), None)
+        default_jd_text = pos_data.get("JD", "JD no encontrado.") if pos_data else "JD no encontrado."
 
 
     default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
@@ -1883,7 +1883,7 @@ def page_analytics():
         fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_ia, use_container_width=True)
 
-# ===================== TODAS LAS TAREAS (Req 3, 4 - Modificado) =====================
+# ===================== TODAS LAS TAREAS (Req 3, 4 - CORREGIDO) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
@@ -2037,7 +2037,12 @@ def page_create_task():
 
         if ss.show_assign_for == t_id:
             # (Solicitud 3.1) Ajuste de columnas para el popup de asignación
-            _, a1, a2, a3, a4, _ = st.columns([4.5, 1.2, 1.0, 1.0, 1.7])
+            
+            # ======== INICIO DE CORRECCIÓN (ERROR 2) ========
+            # Se ha cambiado el desempaquetado de 6 variables a 5, para coincidir con las 5 columnas definidas
+            _, a1, a2, a3, a4 = st.columns([4.5, 1.2, 1.0, 1.0, 1.7])
+            # ======== FIN DE CORRECCIÓN (ERROR 2) ========
+
             with a1:
                 assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
             with a2:
@@ -2074,76 +2079,77 @@ def page_create_task():
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # --- INICIO CORRECCIÓN ERROR ---
-                # Usar 'with st.dialog...' en lugar de 'dialog = st.dialog...'
-                with st.dialog("Detalle de Tarea", width="large") as dialog:
-                # --- FIN CORRECCIÓN ERROR ---
+                # ======== INICIO DE CORRECCIÓN (ERROR 1) ========
+                # Se ha cambiado 'with st.dialog(...) as dialog:' por 'dialog = st.dialog(...)'
+                # para evitar el error de "content manager protocol".
+                dialog = st.dialog("Detalle de Tarea", width="large")
+                # ======== FIN DE CORRECCIÓN (ERROR 1) ========
 
-                    dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                    context = task_data.get("context", {}) # Cargar contexto
+                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                context = task_data.get("context", {}) # Cargar contexto
 
-                    # --- Mostrar Análisis de IA y PDF si existe ---
-                    if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
-                        dialog.markdown("---")
-                        dialog.markdown("🤖 **Análisis de IA (LLM)**")
-                        analysis_data = context["llm_analysis"]
-                        
-                        d_c1, d_c2, d_c3 = dialog.columns(3)
-                        d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
-                        d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
-                        d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
-
-                        dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                        # (Req 3.3) Traducción
-                        dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                        dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
-                        
-                        if "pdf_bytes_b64" in context:
-                            try:
-                                pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                                with dialog.expander("Visualizar CV (PDF)", expanded=True):
-                                    # (Req 4) Usar el 'container=dialog'
-                                    pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
-                            except Exception as e:
-                                dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
-                        dialog.markdown("---")
-
-                    # --- Mostrar Información de Tarea (General) ---
-                    c1, c2 = dialog.columns(2)
-                    with c1:
-                        dialog.markdown("**Información Principal**")
-                        dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                        dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                        dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                    with c2:
-                        dialog.markdown("**Estado y Prioridad**")
-                        dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                        dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+                # --- Mostrar Análisis de IA y PDF si existe ---
+                if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                    dialog.markdown("---")
+                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
+                    analysis_data = context["llm_analysis"]
                     
-                    # Contexto de Flujo (si no es de IA)
-                    if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
-                        dialog.markdown("---")
-                        dialog.markdown("**Contexto del Flujo**")
-                        if "candidate_name" in context:
-                            dialog.markdown(f"**Postulante:** {context['candidate_name']}")
-                        if "role" in context:
-                            dialog.markdown(f"**Puesto:** {context['role']}")
+                    d_c1, d_c2, d_c3 = dialog.columns(3)
+                    d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                    d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                    d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
 
+                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                    # (Req 3.3) Traducción
+                    dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                    
+                    if "pdf_bytes_b64" in context:
+                        try:
+                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                            with dialog.expander("Visualizar CV (PDF)", expanded=True):
+                                # (Req 4) Usar el 'container=dialog'
+                                pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
+                        except Exception as e:
+                            dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
                     dialog.markdown("---")
-                    dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
+
+                # --- Mostrar Información de Tarea (General) ---
+                c1, c2 = dialog.columns(2)
+                with c1:
+                    dialog.markdown("**Información Principal**")
+                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                with c2:
+                    dialog.markdown("**Estado y Prioridad**")
+                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+                
+                # Contexto de Flujo (si no es de IA)
+                if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
                     dialog.markdown("---")
-                    dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
+                    dialog.markdown("**Contexto del Flujo**")
+                    if "candidate_name" in context:
+                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
+                    if "role" in context:
+                        dialog.markdown(f"**Puesto:** {context['role']}")
 
-                    # Usar dialog.form para el formulario dentro del diálogo
-                    with dialog.form("comment_form_dialog"):
-                        # Añadir key única
-                        st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
-                        submitted = st.form_submit_button("Enviar Comentario")
-                        if submitted: st.toast("Comentario (aún no) guardado.")
+                dialog.markdown("---")
+                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
+                dialog.markdown("---")
+                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
 
-                    if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
-                        ss.expanded_task_id = None
-                        dialog.close() # Usar .close() en el objeto dialog
+                # Usar dialog.form para el formulario dentro del diálogo
+                with dialog.form("comment_form_dialog"):
+                    # Añadir key única
+                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
+                    submitted = st.form_submit_button("Enviar Comentario")
+                    if submitted: st.toast("Comentario (aún no) guardado.")
+
+                if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
+                    ss.expanded_task_id = None
+                    dialog.close() # Usar .close() en el objeto dialog
 
             except Exception as e:
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
