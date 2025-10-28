@@ -306,9 +306,7 @@ if "flow_form_agent_idx" not in ss: ss.flow_form_agent_idx = 0
 if "form_loaded_from_edit" not in ss: ss.form_loaded_from_edit = False
 DEFAULT_EVAL_LLM_ROLE = ss.get("last_role", DEFAULT_FLOW_ROLE)
 if "eval_llm_role" not in ss: ss.eval_llm_role = DEFAULT_EVAL_LLM_ROLE
-# Asegura que eval_llm_jd se inicialice correctamente
-if "eval_llm_jd" not in ss or not ss.eval_llm_jd: 
-    ss.eval_llm_jd = ROLE_PRESETS.get(ss.eval_llm_role, {}).get("jd", "")
+if "eval_llm_jd" not in ss or not ss.eval_llm_jd: ss.eval_llm_jd = ROLE_PRESETS.get(ss.eval_llm_role, {}).get("jd", "")
 
 # =========================================================
 # UTILS
@@ -340,7 +338,17 @@ def pdf_viewer_embed(b: bytes, h=520):
         st.error(f"Error PDF: {e}")
 # --- Fin de la corrección ---
 
-def _extract_docx_bytes(b: bytes) -> str: try: with zipfile.ZipFile(io.BytesIO(b)) as z: xml = z.read("word/document.xml").decode("utf-8", "ignore"); text = re.sub(r"<.*?>", " ", xml); return re.sub(r"\s+", " ", text).strip() except: return ""
+# --- Función _extract_docx_bytes CORREGIDA ---
+def _extract_docx_bytes(b: bytes) -> str:
+    try:
+        with zipfile.ZipFile(io.BytesIO(b)) as z:
+            xml = z.read("word/document.xml").decode("utf-8", "ignore")
+            text = re.sub(r"<.*?>", " ", xml)
+            return re.sub(r"\s+", " ", text).strip()
+    except Exception:
+        return ""
+# --- Fin de la corrección ---
+
 def extract_text_from_file(up_file) -> str:
   try:
     suf = Path(up_file.name).suffix.lower(); b = up_file.read(); up_file.seek(0)
@@ -354,10 +362,12 @@ def _status_pill(s: str)->str: c={"Pendiente": "#9AA6B2", "En Proceso": "#0072E3
 def _priority_pill(p: str) -> str: p_safe = p if p in TASK_PRIORITIES else "Media"; return f'<span class="badge priority-{p_safe}">{p_safe}</span>'
 def create_task_from_flow(name:str, due_date:date, desc:str, assigned:str="Coordinador RR.HH.", status:str="Pendiente", priority:str="Media", context:dict=None):
   t = { "id": str(uuid.uuid4()), "titulo": f"Ejecutar flujo: {name}", "desc": desc or "Tarea de Flujo.", "due": due_date.isoformat(), "assigned_to": assigned, "status": status, "priority": priority if priority in TASK_PRIORITIES else "Media", "created_at": date.today().isoformat(), "context": context or {} }
-  if not isinstance(ss.tasks, list): ss.tasks = []; ss.tasks.insert(0, t); save_tasks(ss.tasks)
+  if not isinstance(ss.tasks, list): ss.tasks = []
+  ss.tasks.insert(0, t); save_tasks(ss.tasks)
 def create_manual_task(title, desc, due_date, assigned_to, priority):
   t = { "id": str(uuid.uuid4()), "titulo": title, "desc": desc, "due": due_date.isoformat(), "assigned_to": assigned_to, "status": "Pendiente", "priority": priority, "created_at": date.today().isoformat(), "context": {"source": "Manual"} }
-  if not isinstance(ss.tasks, list): ss.tasks = []; ss.tasks.insert(0, t); save_tasks(ss.tasks)
+  if not isinstance(ss.tasks, list): ss.tasks = []
+  ss.tasks.insert(0, t); save_tasks(ss.tasks)
 
 # =========================================================
 # LOGIN + SIDEBAR
@@ -391,9 +401,10 @@ def render_sidebar():
     st.markdown("#### ACCIONES"); if st.button("Cerrar sesión", key="sb_logout"): ss.auth = None; ss.editing_flow_id = None; ss.last_llm_batch = []; ss.form_loaded_from_edit = False; st.rerun()
 
 # =========================================================
-# PÁGINAS (Definiciones completas, incluyendo las que faltaban)
+# PÁGINAS
 # =========================================================
-def page_def_carga(): # Sin cambios
+# --- page_def_carga ---
+def page_def_carga():
   st.header("Publicación & Sourcing"); role_names = list(ROLE_PRESETS.keys())
   st.subheader("1. Definición de la Vacante"); c1,c2=st.columns(2); with c1: puesto=st.selectbox("Puesto", role_names, index=0); with c2: id_puesto=st.text_input("ID Puesto", value=f"P-{random.randint(1000,9999)}")
   preset = ROLE_PRESETS[puesto]; jd_text = st.text_area("Descripción / JD", height=180, value=preset["jd"]); kw_text = st.text_area("Keywords", height=100, value=preset["keywords"], help="Scoring.")
@@ -413,7 +424,8 @@ def page_def_carga(): # Sin cambios
           new_cand.append({"id": f"C{idx}-{int(datetime.now().timestamp())}", "Name":f"{board}_Cand_{i:02d}.pdf", "Score": score, "Role": puesto, "Role_ID": id_puesto, "_bytes": DUMMY_PDF_BYTES, "_is_pdf": True, "_text": txt, "meta": extract_meta(txt), "stage": PIPELINE_STAGES[0], "load_date": date.today().isoformat(), "_exp": exp, "source": board})
       [c.update(stage="Descartado") for c in new_cand if c["Score"] < 35]; ss.candidates.extend(new_cand); st.success(f"{len(new_cand)} CVs importados."); st.rerun()
 
-def page_puestos(): # Sin cambios
+# --- page_puestos ---
+def page_puestos():
   st.header("Puestos"); df_pos = ss.positions.copy()
   df_pos["Time to Hire (promedio)"] = df_pos["Días Abierto"].apply(lambda d: f"{d+random.randint(10, 40)} días" if d < 30 else f"{d} días")
   st.dataframe(df_pos[["Puesto","Días Abierto","Time to Hire (promedio)","Leads","Nuevos","Recruiter Screen","HM Screen","Entrevista Telefónica","Entrevista Presencial","Ubicación","Hiring Manager","Estado","ID"]].sort_values(["Estado","Días Abierto","Leads"], ascending=[True,True,False]), use_container_width=True, height=380, hide_index=True)
@@ -423,7 +435,8 @@ def page_puestos(): # Sin cambios
     if candidates_for_pos: df_cand = pd.DataFrame(candidates_for_pos); st.dataframe(df_cand[["Name", "Score", "stage", "load_date"]].rename(columns={"Name":"Candidato", "Score":"Fit", "stage":"Fase"}), use_container_width=True, hide_index=True)
     else: st.info(f"No hay candidatos para **{selected_pos}**.")
 
-def page_eval(): # Modificado
+# --- page_eval ---
+def page_eval():
     st.header("Resultados de evaluación")
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
         role_options = list(ROLE_PRESETS.keys()); role_index = role_options.index(ss.eval_llm_role) if ss.eval_llm_role in role_options else 0
@@ -433,7 +446,7 @@ def page_eval(): # Modificado
         c1, c2 = st.columns([1, 0.4]); with c1: run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
         with c2: st.button("🗑️ Limpiar Historial", key="btn_clear_evals", help="Borra historial guardado.", on_click=lambda: (ss.update(all_evaluations=[], last_llm_batch=[]), save_evals([]), st.success("Historial limpiado.")))
         if run_llm and up:
-            if not _LC_AVAILABLE: st.warning("Paquetes LLM no disponibles."); ss.last_llm_batch = [];
+            if not _LC_AVAILABLE: st.warning("Paquetes LLM no disponibles."); ss.last_llm_batch = []; return
             results_with_bytes = []; new_meta_to_save = []; current_jd_for_eval = ss.eval_llm_jd
             for f in up:
                 f_bytes = f.read(); f.seek(0); text = "";
@@ -443,7 +456,7 @@ def page_eval(): # Modificado
                     else: reader = PdfReader(io.BytesIO(f_bytes)); text = "\n".join([(p.extract_text() or "") for p in reader.pages])
                 except Exception as e: st.error(f"Error leer {f.name}: {e}"); continue
                 meta = _extract_with_azure(current_jd_for_eval, text) or _extract_with_openai(current_jd_for_eval, text)
-                if not meta: meta = {"Name":"—","Score":0}; meta["file_name"] = f.name
+                meta = meta or {"Name":"—","Score":0}; meta["file_name"] = f.name
                 results_with_bytes.append({"meta": meta, "_bytes": f_bytes}); new_meta_to_save.append(meta)
             ss.last_llm_batch = results_with_bytes; ss.all_evaluations.extend(new_meta_to_save); save_evals(ss.all_evaluations)
             st.success(f"Evaluación completada. {len(new_meta_to_save)} resultados guardados."); st.rerun()
@@ -460,7 +473,8 @@ def page_eval(): # Modificado
             if selected_file_data and selected_file_data.get("_bytes"): pdf_viewer_embed(selected_file_data["_bytes"], height=500)
             else: st.error("No se encontró PDF.")
 
-def page_pipeline(): # Incluida (sin cambios)
+# --- page_pipeline ---
+def page_pipeline():
     filter_stage = ss.get("pipeline_filter")
     if filter_stage: st.header(f"Pipeline: Fase '{filter_stage}'"); candidates_to_show = [c for c in ss.candidates if c.get("stage") == filter_stage]
     else: st.header("Pipeline de Candidatos"); candidates_to_show = ss.candidates
@@ -490,22 +504,27 @@ def page_pipeline(): # Incluida (sin cambios)
                         st.rerun()
                 st.markdown("<br>", unsafe_allow_html=True)
 
-def page_interview(): # Incluida (sin cambios)
+# --- page_interview ---
+def page_interview():
   st.header("Entrevista (Gerencia)"); st.write("Redirige a Pipeline [Filtro: Entrevista Gerencia].")
   st.info("Usa Pipeline + filtro lateral."); ss.section = "pipeline"; ss.pipeline_filter = "Entrevista Gerencia"; st.rerun()
 
-def _ensure_offer_record(cand_name: str): # Incluida (sin cambios)
+# --- _ensure_offer_record ---
+def _ensure_offer_record(cand_name: str):
   if cand_name not in ss.offers: ss.offers[cand_name] = { "puesto": "", "salario": "", "estado": "Borrador", "fecha_inicio": date.today() + timedelta(days=14), "caducidad": date.today() + timedelta(days=7)}
 
-def page_offer(): # Incluida (sin cambios)
+# --- page_offer ---
+def page_offer():
   st.header("Oferta"); st.write("Redirige a Pipeline [Filtro: Oferta].")
   st.info("Usa Pipeline + filtro lateral."); ss.section = "pipeline"; ss.pipeline_filter = "Oferta"; st.rerun()
 
-def page_onboarding(): # Incluida (sin cambios)
+# --- page_onboarding ---
+def page_onboarding():
   st.header("Onboarding"); st.write("Redirige a Pipeline [Filtro: Contratado].")
   st.info("Usa Pipeline + filtro lateral."); ss.section = "pipeline"; ss.pipeline_filter = "Contratado"; st.rerun()
 
-def page_hh_tasks(): # Incluida (sin cambios)
+# --- page_hh_tasks ---
+def page_hh_tasks():
     st.header("Tareas Asignadas a Mí"); st.write("Tareas asignadas a tu rol.")
     if not isinstance(ss.tasks, list) or not ss.tasks: st.info("No tienes tareas."); return
     df_tasks = pd.DataFrame(ss.tasks); my_name = ss.auth["name"] if ss.get("auth") else "Colab"
@@ -516,7 +535,8 @@ def page_hh_tasks(): # Incluida (sin cambios)
     if not my_tasks_filtered.empty: st.dataframe(my_tasks_filtered.rename(columns={"titulo":"Título", "desc":"Desc", "due":"Vence", "status": "Estado", "priority": "Prio"})[["Título", "Desc", "Estado", "Prio", "Vence"]], use_container_width=True, hide_index=True)
     else: st.info(f"No hay tareas '{sel_status}'.")
 
-def page_agent_tasks(): # Incluida (sin cambios)
+# --- page_agent_tasks ---
+def page_agent_tasks():
     st.header("Tareas Asignadas Equipo"); st.write("Tareas generadas por Flujos y asignadas a roles.")
     if not isinstance(ss.tasks, list) or not ss.tasks: st.info("No hay tareas de equipo."); return
     df_tasks = pd.DataFrame(ss.tasks); team_tasks = df_tasks[df_tasks["assigned_to"].isin(HR_ROLES + ["Agente de Análisis"])]
@@ -526,7 +546,8 @@ def page_agent_tasks(): # Incluida (sin cambios)
     if not team_tasks_filtered.empty: st.dataframe(team_tasks_filtered.rename(columns={"titulo":"Título", "desc":"Desc", "due":"Vence", "assigned_to": "Asignado", "status": "Estado", "priority": "Prio"})[["Título", "Desc", "Asignado", "Estado", "Prio", "Vence"]], use_container_width=True, hide_index=True)
     else: st.info(f"No hay tareas '{sel_status}'.")
 
-def page_flows(): # Incluida (sin cambios)
+# --- page_flows ---
+def page_flows():
   st.header("Flujos"); vista_como = ss.auth["role"]; puede_aprobar = vista_como in ("Supervisor","Administrador")
   left, right = st.columns([0.9, 1.1])
   with left:
@@ -548,7 +569,7 @@ def page_flows(): # Incluida (sin cambios)
           with c1: if st.button("🧬 Duplicar"): clone=dict(wf); clone["id"]=f"WF-{int(datetime.now().timestamp())}"; clone["status"]="Borrador"; ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Duplicado."); ss.editing_flow_id = None; ss.form_loaded_from_edit = False; st.rerun()
           with c2: if st.button("🗑 Eliminar"): ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows); st.success("Eliminado."); if ss.editing_flow_id == wf["id"]: ss.editing_flow_id = None; ss.form_loaded_from_edit = False; st.rerun()
           with c3: st.markdown(f"<div class='badge'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
-            if wf.get("status")=="Pendiente" and puede_aprobar:
+            if wf.get("status")=="Pendiente de aprobación" and puede_aprobar: # Corregido: Pendiente de aprobación
               a1,a2=st.columns(2)
               with a1: if st.button("✅ Aprobar"): wf["status"]="Aprobado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat(); save_workflows(ss.workflows); st.success("Aprobado."); st.rerun()
               with a2: if st.button("❌ Rechazar"): wf["status"]="Rechazado"; wf["approved_by"]=vista_como; wf["approved_at"]=datetime.now().isoformat(); save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
@@ -580,12 +601,13 @@ def page_flows(): # Incluida (sin cambios)
         if update_flow: editing_wf.update(wf_data); editing_wf["status"] = "Borrador"; save_workflows(ss.workflows); st.success("Actualizado."); ss.editing_flow_id=None; ss.form_loaded_from_edit=False; st.rerun()
         else:
             wf = wf_data.copy(); wf.update({"id": f"WF-{int(datetime.now().timestamp())}", "created_at": datetime.now().isoformat(), "status": "Borrador", "approved_by": "", "approved_at": "", "schedule_at": ""})
-            if send_approval: wf["status"] = "Pendiente"; st.success("Enviado.")
-            if schedule: wf["status"] = "Programado" if puede_aprobar else "Pendiente"; wf["schedule_at"]=f"{run_date} {run_time:%H:%M}"; st.success("Programado." if puede_aprobar else "Pendiente aprobación.")
+            if send_approval: wf["status"] = "Pendiente de aprobación"; st.success("Enviado.")
+            if schedule: wf["status"] = "Programado" if puede_aprobar else "Pendiente de aprobación"; wf["schedule_at"]=f"{run_date} {run_time:%H:%M}"; st.success("Programado." if puede_aprobar else "Pendiente aprobación.")
             if save_draft: st.success("Borrador guardado.")
             ss.workflows.insert(0, wf); save_workflows(ss.workflows); ss.form_loaded_from_edit=False; st.rerun()
 
-def page_agents(): # Incluida (sin cambios)
+# --- page_agents ---
+def page_agents():
   st.header("Agentes"); st.subheader("Crear / Editar agente"); left, _ = st.columns([0.25, 0.75])
   with left:
     if st.button(("➕ Nuevo" if not ss.new_role_mode else "✖ Cancelar"), key="toggle_new_role"): ss.new_role_mode = not ss.new_role_mode; ss.agent_view_idx = None; ss.agent_edit_idx = None; st.rerun()
@@ -623,7 +645,8 @@ def page_agents(): # Incluida (sin cambios)
       st.text_input("LLM", value=ag.get('llm_model', LLM_IN_USE), disabled=True); img_src=st.text_input("URL imagen", value=ag.get("image","")); perms=st.multiselect("Permisos", ["Colaborador","Supervisor","Admin"], default=ag.get("perms",["Supervisor","Admin"]))
       if st.form_submit_button("Guardar cambios"): ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails, "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms}); save_agents(ss.agents); st.success("Actualizado."); st.rerun()
 
-def page_analytics(): # Incluida (sin cambios)
+# --- page_analytics ---
+def page_analytics():
     st.header("Analytics y KPIs"); st.subheader("Visión General")
     c1, c2, c3, c4 = st.columns(4); c1.metric("Costo/Hire", "S/ 4.2k", "-8%"); c2.metric("Time to Hire (P50)", "28d", "+2d"); c3.metric("Conversión Oferta>Cont.", "81%", "+3%"); c4.metric("Exactitud IA", "92%", "v2.1")
     st.markdown("---"); col_funnel, col_time = st.columns(2)
@@ -633,7 +656,8 @@ def page_analytics(): # Incluida (sin cambios)
     with col_prod: st.subheader("Productividad Reclutador"); df_p = pd.DataFrame({"Rec": ["Ad", "Su", "Co", "Hh"], "Cont.(90d)": [8, 5, 12, 9]}); fig_p = px.bar(df_p, x="Rec", y="Cont.(90d)", color_discrete_sequence=PLOTLY_GREEN_SEQUENCE); fig_p.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK)); st.plotly_chart(fig_p, use_container_width=True)
     with col_cost_ia: st.subheader("Exactitud IA"); df_ia = pd.DataFrame({"Puesto": ["BA", "UX", "Ing", "Enf"], "N": [120, 85, 200, 310], "Fit IA": [82, 75, 88, 79]}); fig_ia = px.scatter(df_ia, x="N", y="Fit IA", size="N", color="Puesto", color_discrete_sequence=PLOTLY_GREEN_SEQUENCE); fig_ia.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK)); st.plotly_chart(fig_ia, use_container_width=True)
 
-def page_create_task(): # Incluida (sin cambios)
+# --- page_create_task ---
+def page_create_task():
     st.header("Todas las Tareas"); with st.expander("➕ Crear Tarea Manual"):
         with st.form("manual_task_form", clear_on_submit=True):
             st.markdown("**Nueva Tarea**"); nt = st.text_input("Título*"); nd = st.text_area("Desc."); c1,c2,c3=st.columns(3); with c1: ndue=st.date_input("Vence", date.today()+timedelta(days=7)); with c2: aa=list(USERS.keys())+DEFAULT_ROLES; nass=st.selectbox("Asignar a", sorted(list(set(aa)))); with c3: npr=st.selectbox("Prio", TASK_PRIORITIES, index=1)
@@ -654,7 +678,7 @@ def page_create_task(): # Incluida (sin cambios)
         t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id; c_cols = st.columns(col_w)
         with c_cols[0]: short = (t_id[:5] + "…") if len(t_id) > 6 else t_id; st.caption(short)
         with c_cols[1]: st.markdown(f"**{task.get('titulo','—')}**")
-        with c_cols[2]: st.caption(task.get("desc","—")[:60]+ ('...' if len(task.get('desc',''))>60 else '')) # Acortar desc
+        with c_cols[2]: st.caption(task.get("desc","—")[:60]+ ('...' if len(task.get('desc',''))>60 else ''))
         with c_cols[3]: st.markdown(f"`{task.get('assigned_to','—')}`")
         with c_cols[4]: st.markdown(task.get("created_at","—"))
         with c_cols[5]: st.markdown(task.get("due","—"))
@@ -672,7 +696,7 @@ def page_create_task(): # Incluida (sin cambios)
             a1, a2, a3, a4, _ = st.columns([1.6, 1.6, 1.2, 1.0, 3.0]); with a1: atyp = st.selectbox("Tipo", ["Espera", "Equipo", "Usuario"], key=f"t_{t_id}", index=2)
             with a2:
                 if atyp=="Espera": nass="En Espera"; st.text_input("Asignado", nass, key=f"ve_{t_id}", disabled=True)
-                elif atyp=="Equipo": nass=st.selectbox("Equipo", HR_ROLES + ["Agente"], key=f"ve_{t_id}")
+                elif atyp=="Equipo": nass=st.selectbox("Equipo", HR_ROLES + ["Agente de Análisis"], key=f"ve_{t_id}")
                 else: nass=st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"vu_{t_id}")
             with a3: curp=task.get("priority","Media"); idxp=TASK_PRIORITIES.index(curp) if curp in TASK_PRIORITIES else 1; nprio=st.selectbox("Prio", TASK_PRIORITIES, key=f"p_{t_id}", index=idxp)
             with a4: if st.button("Guardar", key=f"ba_{t_id}"): task_upd = next((t for t in ss.tasks if t.get("id") == t_id), None); if task_upd: task_upd["assigned_to"]=nass; task_upd["priority"]=nprio; task_upd["status"] = "En Espera" if atyp=="Espera" else ("Pendiente" if task_upd["status"]=="En Espera" else task_upd["status"]); save_tasks(ss.tasks); ss.show_assign_for=None; st.success("Guardado."); st.rerun();
