@@ -46,13 +46,14 @@ PLOTLY_GREEN_SEQUENCE = ["#00CD78", "#00B468", "#33FFAC", "#007F46", "#66FFC2"]
 JOB_BOARDS  = ["laborum.pe","Computrabajo","Bumeran","Indeed","LinkedIn Jobs"]
 PIPELINE_STAGES = ["Recibido", "Screening RRHH", "Entrevista Telefónica", "Entrevista Gerencia", "Oferta", "Contratado", "Descartado"]
 TASK_PRIORITIES = ["Alta", "Media", "Baja"]
-HR_ROLES = ["Coordinador RR.HH.", "Admin RR.HH."] # (Req. 1) Para filtro
+HR_ROLES = ["Coordinador RR.HH.", "Admin RR.HH."] 
 
 EVAL_INSTRUCTION = (
   "Debes analizar los CVs de postulantes y calificarlos de 0% a 100% según el nivel de coincidencia con el JD. "
   "Incluye un análisis breve que explique por qué califica o no el postulante, destacando habilidades must-have, "
   "nice-to-have, brechas y hallazgos relevantes."
 )
+DEFAULT_EXPECTED_OUTPUT = "- Puntuación 0 a 100 según coincidencia con JD\n- Resumen del CV explicando por qué califica o no el postulante."
 
 # ===== Login =====
 USERS = {
@@ -71,37 +72,37 @@ LLM_IN_USE = "gpt-4o-mini" # Modelo real usado en las funciones _extract
 # ===== Presets de puestos =====
 ROLE_PRESETS = {
   "Asistente Administrativo": {
-    "jd": "Brindar soporte administrativo: gestión documental, agenda, compras menores, logística de reuniones y reportes...",
+    "jd": "Brindar soporte administrativo integral a las áreas internas: gestión documental, coordinación con proveedores y compras menores, logística de reuniones y elaboración de reportes ejecutivos. Deberá manejar Excel (tablas dinámicas y gráficos), Word y PowerPoint, y apoyar en facturación y caja chica (según políticas). Se valoran conocimientos de SharePoint/Google Drive y uso básico de ERP (SAP/Oracle/CONCAR).",
     "keywords": "Excel, Word, PowerPoint, gestión documental, atención a proveedores, compras, logística, caja chica, facturación, redacción",
     "must": ["Excel","Gestión documental","Redacción"], "nice": ["Facturación","Caja"],
     "synth_skills": ["Excel","Word","PowerPoint","Gestión documental","Redacción","Facturación","Caja","Atención al cliente"]
   },
   "Business Analytics": {
-    "jd": "Recolectar, transformar y analizar datos para generar insights...",
+    "jd": "Recolectar, transformar y analizar datos para generar insights que apoyen la toma de decisiones. Desarrollar y mantener dashboards en Power BI y Tableau. Realizar consultas complejas en SQL, automatizar reportes (Python deseable) y presentar hallazgos a stakeholders.",
     "keywords": "SQL, Power BI, Tableau, ETL, KPI, storytelling, Excel avanzado, Python, A/B testing, métricas de negocio",
     "must": ["SQL","Power BI"], "nice": ["Tableau","Python","ETL"],
     "synth_skills": ["SQL","Power BI","Tableau","Excel","ETL","KPIs","Storytelling","Python","A/B testing"]
   },
   "Diseñador/a UX": {
-    "jd": "Responsable de research, definición de flujos, wireframes y prototipos...",
+    "jd": "Responsable de research, definición de flujos de usuario, wireframes y prototipos de alta fidelidad en Figma. Deberá conducir pruebas de usabilidad, analizar métricas y colaborar con equipos de Producto y Desarrollo para asegurar la implementación de un Design System coherente.",
     "keywords": "Figma, UX research, prototipado, wireframes, heurísticas, accesibilidad, design system, usabilidad, tests con usuarios",
     "must": ["Figma","UX Research","Prototipado"], "nice":["Heurísticas","Accesibilidad","Design System"],
     "synth_skills":["Figma","UX Research","Prototipado","Wireframes","Accesibilidad","Heurísticas","Design System","Analytics"]
   },
   "Ingeniero/a de Proyectos": {
-    "jd":"Planificar, ejecutar y controlar proyectos de ingeniería...",
+    "jd":"Planificar, ejecutar y controlar proyectos de ingeniería, asegurando el cumplimiento de plazos, costos y calidad. Manejo de MS Project para cronogramas, AutoCAD para revisión de planos y gestión de presupuestos. Deseable conocimiento de metodologías PMBOK o Agile.",
     "keywords":"MS Project, AutoCAD, BIM, presupuestos, cronogramas, control de cambios, riesgos, PMBOK, Agile, KPI, licitaciones",
     "must":["MS Project","AutoCAD","Presupuestos"], "nice":["BIM","PMBOK","Agile"],
     "synth_skills":["MS Project","AutoCAD","BIM","Presupuestos","Cronogramas","Riesgos","PMBOK","Agile","Excel","Power BI"]
   },
   "Enfermera/o Asistencial": {
-    "jd":"Brindar atención segura y de calidad, registrar en HIS/SAP IS-H...",
+    "jd":"Brindar atención segura y de calidad al paciente hospitalizado, administrar tratamientos, y registrar evoluciones en el sistema HIS. Cumplir con protocolos de bioseguridad (IAAS) y soporte vital (BLS, ACLS). Colaborar con el equipo médico y educar al paciente y familia.",
     "keywords":"HIS, SAP IS-H, BLS, ACLS, IAAS, educación al paciente, seguridad del paciente, protocolos...",
     "must":["HIS","BLS","ACLS","IAAS","Seguridad del paciente"], "nice":["SAP IS-H","Educación al paciente","Protocolos"],
     "synth_skills":["HIS","BLS","ACLS","IAAS","Educación al paciente","Seguridad del paciente","Protocolos","Excel"]
   },
   "Recepcionista de Admisión": {
-    "jd": "Recepción de pacientes, registro, coordinación de citas, manejo de caja y facturación...",
+    "jd": "Recepción de pacientes, registro en sistema (HIS o SAP), coordinación de citas, manejo de caja, emisión de facturas y boletas. Brindar excelente atención al cliente, orientar sobre servicios y gestionar la sala de espera. Requiere alta vocación de servicio y orden.",
     "keywords": "admisión, caja, facturación, SAP, HIS, atención al cliente, citas, recepción",
     "must": ["Atención al cliente","Registro","Caja"], "nice": ["Facturación","SAP","HIS"],
     "synth_skills": ["Atención al cliente","Registro","Caja","Facturación","SAP","HIS","Comunicación"]
@@ -145,7 +146,6 @@ header[data-testid="stHeader"] {{ height:0 !important; min-height:0 !important; 
 }}
 .block-container .stButton>button:hover {{ filter: brightness(.96); }}
 
-/* (Req. 3) Botón de eliminar rojo */
 .block-container .stButton>button.delete-eval-btn {{
     background: #D60000 !important; color: white !important;
     padding: .35rem .8rem !important; font-weight: 600 !important;
@@ -239,7 +239,7 @@ AGENTS_FILE = DATA_DIR/"agents.json"
 WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
 TASKS_FILE = DATA_DIR / "tasks.json"
-EVALS_FILE = DATA_DIR / "evaluations.json" # (Req. 3) Nuevo archivo
+EVALS_FILE = DATA_DIR / "evaluations.json"
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
@@ -293,7 +293,6 @@ def load_workflows(): return load_json(WORKFLOWS_FILE, [])
 def save_workflows(wfs): save_json(WORKFLOWS_FILE, wfs)
 def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
 def save_tasks(tasks): save_json(TASKS_FILE, tasks)
-# (Req. 3) Funciones para evaluaciones
 def load_evals(): return load_json(EVALS_FILE, [])
 def save_evals(evals): save_json(EVALS_FILE, evals)
 
@@ -345,15 +344,34 @@ if "confirm_delete_id" not in ss: ss.confirm_delete_id = None
 
 if "editing_flow_id" not in ss: ss.editing_flow_id = None
 
-# (Req. 3) Estado para evaluaciones
 if "all_evaluations" not in ss: 
-    ss.all_evaluations = load_evals() # Historial persistente (solo meta)
+    ss.all_evaluations = load_evals() 
 if "last_llm_batch" not in ss: 
-    ss.last_llm_batch = [] # Batch actual (con bytes) para el visor
+    ss.last_llm_batch = []
+
+# (Req. 1) Nuevos estados para el formulario de flujos
+DEFAULT_FLOW_ROLE = "Asistente Administrativo"
+if "flow_form_name" not in ss: ss.flow_form_name = "Analizar CV"
+if "flow_form_role" not in ss: ss.flow_form_role = DEFAULT_FLOW_ROLE
+if "flow_form_desc" not in ss: ss.flow_form_desc = ROLE_PRESETS[DEFAULT_FLOW_ROLE].get("jd", EVAL_INSTRUCTION)
+if "flow_form_expected" not in ss: ss.flow_form_expected = DEFAULT_EXPECTED_OUTPUT
+if "flow_form_jd" not in ss: ss.flow_form_jd = ROLE_PRESETS[DEFAULT_FLOW_ROLE].get("jd", "")
+if "flow_form_agent_idx" not in ss: ss.flow_form_agent_idx = 0
+if "form_loaded_from_edit" not in ss: ss.form_loaded_from_edit = False
 
 # =========================================================
 # UTILS
 # =========================================================
+
+# (Req. 1) Callback para actualizar formulario de flujos
+def update_flow_fields_from_preset():
+    new_role = ss.flow_form_role
+    if new_role in ROLE_PRESETS:
+        preset = ROLE_PRESETS[new_role]
+        ss.flow_form_desc = preset.get("jd", EVAL_INSTRUCTION)
+        ss.flow_form_expected = DEFAULT_EXPECTED_OUTPUT
+        ss.flow_form_jd = preset.get("jd", "")
+
 SKILL_SYNONYMS = {
   "Excel":["excel","xlsx"], "Gestión documental":["gestión documental","document control"], "Redacción":["redacción","writing"],
   "Facturación":["facturación","billing"], "Caja":["caja","cash"], "SQL":["sql","postgres","mysql"], "Power BI":["power bi"],
@@ -595,7 +613,8 @@ def render_sidebar():
     if st.button("Flujos", key="sb_flows"):
       ss.section = "flows"
       ss.pipeline_filter = None
-      ss.editing_flow_id = None # Limpiar edición al cambiar
+      ss.editing_flow_id = None 
+      ss.form_loaded_from_edit = False
     if st.button("Agentes", key="sb_agents"):
       ss.section = "agents"
       ss.pipeline_filter = None
@@ -633,7 +652,7 @@ def render_sidebar():
       ss.auth = None
       ss.editing_flow_id = None
       ss.last_llm_batch = []
-      # ss.all_evaluations se mantiene, es persistente
+      ss.form_loaded_from_edit = False
       st.rerun()
 
 # =========================================================
@@ -843,7 +862,6 @@ def page_puestos():
 def page_eval():
     st.header("Resultados de evaluación")
 
-    # === Bloque LLM (Req. 3 - Modificado para guardar) ===
     with st.expander("🤖 Evaluación asistida por LLM (Azure/OpenAI)", expanded=True):
         jd_llm = st.text_area("Job Description para el LLM", ss.get("last_jd_text",""), height=120, key="jd_llm")
         up = st.file_uploader("Sube CVs en PDF para evaluarlos con el LLM", type=["pdf"], accept_multiple_files=True, key="pdf_llm")
@@ -852,12 +870,14 @@ def page_eval():
         with c1:
             run_llm = st.button("Ejecutar evaluación LLM", key="btn_llm_eval")
         with c2:
-            if st.button("🗑️ Limpiar Historial de Evaluaciones", key="btn_clear_evals", type="primary", help="Borra todas las evaluaciones guardadas en evaluations.json"):
-                ss.all_evaluations = []
-                ss.last_llm_batch = []
-                save_evals([])
-                st.success("Historial de evaluaciones limpiado.")
-                st.rerun()
+            # (Req. 3) Botón de limpieza
+            st.button("🗑️ Limpiar Historial de Evaluaciones", key="btn_clear_evals", 
+                      help="Borra todas las evaluaciones guardadas en data/evaluations.json",
+                      on_click=lambda: (
+                          ss.update(all_evaluations=[], last_llm_batch=[]),
+                          save_evals([]),
+                          st.success("Historial de evaluaciones limpiado.")
+                      ))
 
         if run_llm and up:
             if not _LC_AVAILABLE:
@@ -865,6 +885,7 @@ def page_eval():
                 ss.last_llm_batch = []
             
             results_with_bytes = []
+            new_meta_to_save = []
             for f in up:
                 f_bytes = f.read(); f.seek(0)
                 text = ""
@@ -892,14 +913,15 @@ def page_eval():
                 meta["file_name"] = f.name
                 
                 results_with_bytes.append({"meta": meta, "_bytes": f_bytes})
+                new_meta_to_save.append(meta)
 
             ss.last_llm_batch = results_with_bytes # Guardar batch actual
             
             # (Req. 3) Guardar meta en el historial persistente
-            new_meta_list = [r['meta'] for r in results_with_bytes]
-            ss.all_evaluations.extend(new_meta_list)
+            ss.all_evaluations.extend(new_meta_to_save)
             save_evals(ss.all_evaluations)
-            st.success(f"Evaluación completada. {len(new_meta_list)} resultados guardados en el historial.")
+            st.success(f"Evaluación completada. {len(new_meta_to_save)} resultados guardados en el historial.")
+            st.rerun() # Rerun para refrescar la UI
 
         # Mostrar resultados si existen en el batch actual
         if ss.last_llm_batch:
@@ -1161,7 +1183,7 @@ def page_agents():
                    "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
         save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
-# ===================== FLUJOS =====================
+# ===================== FLUJOS (Modificado Req. 1) =====================
 def page_flows():
   st.header("Flujos")
   vista_como = ss.auth["role"]
@@ -1200,6 +1222,7 @@ def page_flows():
 
         if st.button("Cargar Flujo para Editar", key="load_flow_edit"):
             ss.editing_flow_id = sel
+            ss.form_loaded_from_edit = False # Marcar para recargar
             st.rerun()
 
         wf = next((w for w in ss.workflows if w["id"]==sel), None)
@@ -1211,12 +1234,15 @@ def page_flows():
               clone["status"]="Borrador"; clone["approved_by"]=""; clone["approved_at"]=""; clone["schedule_at"]=""
               ss.workflows.insert(0, clone); save_workflows(ss.workflows); st.success("Flujo duplicado.")
               ss.editing_flow_id = None
+              ss.form_loaded_from_edit = False
               st.rerun()
           with c2:
             if st.button("🗑 Eliminar"):
               ss.workflows = [w for w in ss.workflows if w["id"]!=wf["id"]]; save_workflows(ss.workflows)
               st.success("Flujo eliminado.")
-              if ss.editing_flow_id == wf["id"]: ss.editing_flow_id = None
+              if ss.editing_flow_id == wf["id"]: 
+                  ss.editing_flow_id = None
+                  ss.form_loaded_from_edit = False
               st.rerun()
           with c3:
             st.markdown(f"<div class='badge'>Estado: <b>{wf.get('status','Borrador')}</b></div>", unsafe_allow_html=True)
@@ -1233,40 +1259,58 @@ def page_flows():
                   save_workflows(ss.workflows); st.warning("Rechazado."); st.rerun()
 
   with right:
+    # (Req. 1) Lógica de carga del formulario
     editing_wf = None
     if ss.editing_flow_id:
         editing_wf = next((w for w in ss.workflows if w["id"] == ss.editing_flow_id), None)
+        if editing_wf and not ss.form_loaded_from_edit:
+            # Cargar datos del flujo a session_state UNA VEZ
+            ss.flow_form_name = editing_wf.get("name", "Analizar CV")
+            ss.flow_form_role = editing_wf.get("role", DEFAULT_FLOW_ROLE)
+            ss.flow_form_desc = editing_wf.get("description", EVAL_INSTRUCTION)
+            ss.flow_form_expected = editing_wf.get("expected_output", DEFAULT_EXPECTED_OUTPUT)
+            ss.flow_form_jd = editing_wf.get("jd_text", "")
+            ss.flow_form_agent_idx = editing_wf.get("agent_idx", 0)
+            ss.form_loaded_from_edit = True # Marcar como cargado
     
     st.subheader("Crear Flujo" if not editing_wf else f"Editando Flujo: {editing_wf.get('name')}")
     
     if editing_wf:
         if st.button("✖ Cancelar Edición"):
             ss.editing_flow_id = None
+            ss.form_loaded_from_edit = False
+            # Resetear a valores por defecto
+            ss.flow_form_name = "Analizar CV"
+            ss.flow_form_role = DEFAULT_FLOW_ROLE
+            ss.flow_form_desc = ROLE_PRESETS[DEFAULT_FLOW_ROLE].get("jd", EVAL_INSTRUCTION)
+            ss.flow_form_expected = DEFAULT_EXPECTED_OUTPUT
+            ss.flow_form_jd = ROLE_PRESETS[DEFAULT_FLOW_ROLE].get("jd", "")
+            ss.flow_form_agent_idx = 0
             st.rerun()
-
-    default_name = editing_wf.get("name", "Analizar CV") if editing_wf else "Analizar CV"
-    default_role = editing_wf.get("role", "Diseñador/a UX") if editing_wf else "Diseñador/a UX"
-    try:
-        role_index = list(ROLE_PRESETS.keys()).index(default_role)
-    except ValueError:
-        role_index = 2 
-    default_desc = editing_wf.get("description", EVAL_INSTRUCTION) if editing_wf else EVAL_INSTRUCTION
-    default_expected = editing_wf.get("expected_output", "- Puntuación 0 a 100\n- Resumen del CV") if editing_wf else "- Puntuación 0 a 100\n- Resumen del CV"
-    default_jd_text = editing_wf.get("jd_text", ROLE_PRESETS[default_role]["jd"]) if editing_wf else ROLE_PRESETS[default_role]["jd"]
-    default_agent_idx = editing_wf.get("agent_idx", 0) if editing_wf else 0
-    
-    if not (0 <= default_agent_idx < len(ss.agents)):
-        default_agent_idx = 0
 
     with st.form("wf_form"):
       st.markdown("<div class='badge'>Task · Describe la tarea</div>", unsafe_allow_html=True)
-      name = st.text_input("Name*", value=default_name)
-      role = st.selectbox("Puesto objetivo", list(ROLE_PRESETS.keys()), index=role_index)
-      desc = st.text_area("Description*", value=default_desc, height=110)
-      expected = st.text_area("Expected output*", value=default_expected, height=80)
+      
+      # (Req. 1) Widgets bindeados a session_state
+      name = st.text_input("Name*", value=ss.flow_form_name, key="flow_form_name_input")
+      
+      role_options = list(ROLE_PRESETS.keys())
+      try:
+          role_index = role_options.index(ss.flow_form_role)
+      except ValueError:
+          role_index = role_options.index(DEFAULT_FLOW_ROLE)
+          
+      role = st.selectbox("Puesto objetivo", 
+                          role_options, 
+                          index=role_index,
+                          key="flow_form_role", # La clave que usa el callback
+                          on_change=update_flow_fields_from_preset) # El callback
+      
+      desc = st.text_area("Description*", value=ss.flow_form_desc, key="flow_form_desc_input", height=110)
+      expected = st.text_area("Expected output*", value=ss.flow_form_expected, key="flow_form_expected_input", height=80)
 
       st.markdown("**Job Description (elige una opción)**")
-      jd_text = st.text_area("JD en texto", value=default_jd_text, height=140)
+      jd_text = st.text_area("JD en texto", value=ss.flow_form_jd, key="flow_form_jd_input", height=140)
       jd_file = st.file_uploader("...o sube/reemplaza JD (PDF/TXT/DOCX)", type=["pdf","txt","docx"], key="wf_jd_file")
       jd_from_file = ""
       if jd_file is not None:
@@ -1278,7 +1322,12 @@ def page_flows():
       st.markdown("<div class='badge'>Staff in charge · Agente asignado</div>", unsafe_allow_html=True)
       if ss.agents:
         agent_opts = [f"{i} — {a.get('rol','Agente')} ({a.get('llm_model',LLM_IN_USE)})" for i,a in enumerate(ss.agents)]
-        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=default_agent_idx)
+        
+        agent_idx_val = ss.flow_form_agent_idx
+        if not (0 <= agent_idx_val < len(ss.agents)):
+            agent_idx_val = 0
+            
+        agent_pick = st.selectbox("Asigna un agente", agent_opts, index=agent_idx_val, key="flow_form_agent_idx_input")
         agent_idx = int(agent_pick.split(" — ")[0])
       else:
         st.info("No hay agentes. Crea uno en la pestaña **Agentes**.")
@@ -1300,13 +1349,18 @@ def page_flows():
           schedule      = col_c.form_submit_button("📅 Guardar y Programar")
 
       if save_draft or send_approval or schedule or update_flow:
-        jd_final = jd_from_file if jd_from_file.strip() else jd_text
+        # (Req. 1) Leer valores desde las claves de los widgets
+        jd_final = jd_from_file if jd_from_file.strip() else ss.flow_form_jd_input
         if not jd_final.strip(): st.error("Debes proporcionar un JD (texto o archivo).")
         elif agent_idx < 0:      st.error("Debes asignar un agente.")
         else:
           wf_data = {
-              "name": name, "role": role, "description": desc, "expected_output": expected,
-              "jd_text": jd_final[:200000], "agent_idx": agent_idx
+              "name": ss.flow_form_name_input,
+              "role": ss.flow_form_role, # Esta clave es la correcta
+              "description": ss.flow_form_desc_input,
+              "expected_output": ss.flow_form_expected_input,
+              "jd_text": jd_final[:200000], 
+              "agent_idx": agent_idx
           }
 
           if update_flow:
@@ -1315,6 +1369,7 @@ def page_flows():
               save_workflows(ss.workflows)
               st.success("Flujo actualizado.")
               ss.editing_flow_id = None
+              ss.form_loaded_from_edit = False
               st.rerun()
           else:
               wf = wf_data.copy()
@@ -1334,7 +1389,9 @@ def page_flows():
               if save_draft:
                 st.success("Borrador guardado.")
               
-              ss.workflows.insert(0, wf); save_workflows(ss.workflows); st.rerun()
+              ss.workflows.insert(0, wf); save_workflows(ss.workflows); 
+              ss.form_loaded_from_edit = False
+              st.rerun()
 
 # ===================== ANALYTICS =====================
 def page_analytics():
@@ -1451,10 +1508,11 @@ def page_create_task():
         filter_category = st.selectbox(
             "Filtrar por", 
             ["Todas las tareas", "Toda la cola (Pendientes)", "Asignadas a HR"],
-            key="task_category_filter"
+            key="task_category_filter",
+            label_visibility="collapsed"
         )
     with fc2:
-        filter_search = st.text_input("Buscar tareas...", key="task_search_filter", placeholder="Escribe un título de tarea...")
+        filter_search = st.text_input("Buscar tareas...", key="task_search_filter", placeholder="Buscar tareas...", label_visibility="collapsed")
     
     # (Req. 1) Lógica de filtrado
     tasks_to_show = tasks_list
