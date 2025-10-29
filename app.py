@@ -1884,6 +1884,7 @@ def page_analytics():
         st.plotly_chart(fig_ia, use_container_width=True)
 
 # ===================== TODAS LAS TAREAS (Req 3, 4 - CORREGIDO) =====================
+# ===================== TODAS LAS TAREAS (Req 3, 4 - CORREGIDO v2) =====================
 def page_create_task():
     st.header("Todas las Tareas")
 
@@ -1922,23 +1923,31 @@ def page_create_task():
         return
 
     tasks_list = ss.tasks
-    
+
     # --- INICIO CAMBIO (Req 4) ---
     # Añadir filtros de Cola (Asignado a) y Búsqueda
-    
+
     # 1. Definir opciones de filtros
+    # (Asegurarse de que los estados posibles incluyan los de las tareas actuales + 'En Espera')
     all_statuses_set = set(t.get('status', 'Pendiente') for t in tasks_list)
-    if "En Espera" not in all_statuses_set: all_statuses_set.add("En Espera")
+    possible_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"]
+    for status in possible_statuses:
+        all_statuses_set.add(status)
     all_statuses = ["Todos los estados"] + sorted(list(all_statuses_set))
+
     prefer_order = ["Pendiente", "En Proceso", "En Espera"]
+    # Encontrar el primer estado preferido que exista en la lista actual, o default a "Todos"
     preferred = next((s for s in prefer_order if s in all_statuses), "Todos los estados")
+    # Asegurar que el índice no falle si 'preferred' es "Todos los estados"
+    preferred_index = all_statuses.index(preferred) if preferred in all_statuses else 0
+
 
     all_assignees = ["Todas las colas"] + sorted(list(set(t.get('assigned_to', 'N/A') for t in tasks_list)))
 
     # 2. Renderizar filtros en 3 columnas
     f1, f2, f3 = st.columns([1, 1, 1.5])
     with f1:
-        selected_status = st.selectbox("Estado", options=all_statuses, index=all_statuses.index(preferred))
+        selected_status = st.selectbox("Estado", options=all_statuses, index=preferred_index) # Usar preferred_index
     with f2:
         selected_queue = st.selectbox("Cola (Asignado a)", options=all_assignees, key="task_queue_filter")
     with f3:
@@ -1952,20 +1961,20 @@ def page_create_task():
         tasks_filtered = [t for t in tasks_filtered if t.get("assigned_to") == selected_queue]
     if search_query:
         tasks_filtered = [t for t in tasks_filtered if search_query.lower() in t.get("titulo", "").lower()]
-    
+
     tasks_to_show = tasks_filtered
     # --- FIN CAMBIO (Req 4) ---
 
 
     if not tasks_to_show:
         st.info(f"No hay tareas que coincidan con los filtros seleccionados.")
-        return
+        # return # No retornar aquí para que el diálogo aún pueda procesarse si está activo
 
     # --- INICIO CAMBIO (Solicitud 3.1) ---
     # Columnas con Descripción: [Nombre, Descripción, Asignado, Vencimiento, Prioridad, Estado, Acciones]
     col_w = [2.0, 2.5, 1.2, 1.2, 1.0, 1.0, 1.5]
     h_nom, h_desc, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
-    
+
     with h_nom:  st.markdown("**Nombre**")
     with h_desc: st.markdown("**Descripción**") # (Req 3.1) Columna añadida
     with h_asg:  st.markdown("**Asignado a**")
@@ -1975,189 +1984,255 @@ def page_create_task():
     with h_acc:  st.markdown("**Acciones**")
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
-    for task in tasks_to_show:
-        t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
-        
-        # Columnas con Descripción
-        c_nom, c_desc, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
-        
-        with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
-        with c_desc: st.caption(task.get("desc","—")) # (Req 3.1) Columna añadida
-        with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
-        with c_due: st.markdown(task.get("due","—"))
-        with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
-        with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
-        # --- FIN CAMBIO (Solicitud 3.1) ---
+    # Solo mostrar tareas si tasks_to_show no está vacío
+    if tasks_to_show:
+        for task in tasks_to_show:
+            t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
 
-        def _handle_action_change(task_id):
-            selectbox_key = f"accion_{task_id}"
-            if selectbox_key not in ss: return
-            action = ss[selectbox_key]
-            task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-            if not task_to_update: return
-            ss.confirm_delete_id = None; ss.show_assign_for = None; ss.expanded_task_id = None
-            if action == "Ver detalle":
-                ss.expanded_task_id = task_id
-            elif action == "Asignar tarea":
-                ss.show_assign_for = task_id
-            elif action == "Tomar tarea":
-                current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-                task_to_update["assigned_to"] = current_user
-                task_to_update["status"] = "En Proceso"
-                save_tasks(ss.tasks); st.toast("Tarea tomada.")
-                # (Req 1) st.rerun() eliminado
-            elif action == "Eliminar":
-                ss.confirm_delete_id = task_id
-            
-            # (Req 1) Resetear selectbox
-            ss[selectbox_key] = "Selecciona…"
+            # Columnas con Descripción
+            c_nom, c_desc, c_asg, c_due, c_pri, c_est, c_acc = st.columns(col_w)
 
-        with c_acc:
-            selectbox_key = f"accion_{t_id}"
-            st.selectbox(
-                "Acciones",
-                ["Selecciona…", "Ver detalle", "Asignar tarea", "Tomar tarea", "Eliminar"],
-                key=selectbox_key, label_visibility="collapsed",
-                on_change=_handle_action_change, args=(t_id,)
-            )
+            with c_nom: st.markdown(f"**{task.get('titulo','—')}**")
+            with c_desc: st.caption(task.get("desc","—")) # (Req 3.1) Columna añadida
+            with c_asg: st.markdown(f"`{task.get('assigned_to','—')}`")
+            with c_due: st.markdown(task.get("due","—"))
+            with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
+            with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
+            # --- FIN CAMBIO (Solicitud 3.1) ---
 
-        if ss.get("confirm_delete_id") == t_id:
-            # (Solicitud 3.1) Ajuste de columnas para el popup de borrado
-            _, col_btn1, col_btn2, _ = st.columns([4.5, 1.2, 1.2, 1.5])
-            with col_btn1:
-                if st.button("Eliminar permanentemente", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
-                    ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
-                    save_tasks(ss.tasks); ss.confirm_delete_id = None
-                    st.warning("Tarea eliminada permanentemente.")
-                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí porque es un botón, no un callback
-            with col_btn2:
-                if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
-                    ss.confirm_delete_id = None
-                    st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
+            def _handle_action_change(task_id):
+                selectbox_key = f"accion_{task_id}"
+                if selectbox_key not in ss: return
+                action = ss[selectbox_key]
+                task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+                if not task_to_update: return
 
-        if ss.show_assign_for == t_id:
-            # (Solicitud 3.1) Ajuste de columnas para el popup de asignación
-            
-            # ======== INICIO DE CORRECCIÓN (ERROR 2) ========
-            # Se ha cambiado el desempaquetado de 6 variables a 5, para coincidir con las 5 columnas definidas
-            _, a1, a2, a3, a4 = st.columns([4.5, 1.2, 1.0, 1.0, 1.7])
-            # ======== FIN DE CORRECCIÓN (ERROR 2) ========
+                # Resetear estados de UI antes de actuar
+                ss.confirm_delete_id = None
+                ss.show_assign_for = None
+                # No resetear expanded_task_id aquí, solo si la acción NO es 'Ver detalle'
 
-            with a1:
-                assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
-            with a2:
-                if assign_type == "En Espera":
-                    nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True)
-                elif assign_type == "Equipo":
-                    nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}")
-                else:
-                    nuevo_assignee = st.selectbox("Usuario", ["Headhunter", "Colab", "Sup", "Admin"], key=f"val_us_{t_id}")
-            with a3:
-                cur_p = task.get("priority", "Media")
-                idx_p = TASK_PRIORITIES.index(cur_p) if cur_p in TASK_PRIORITIES else 1
-                nueva_prio = st.selectbox("Prioridad", TASK_PRIORITIES, key=f"prio_{t_id}", index=idx_p)
-            with a4:
-                if st.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
-                    task_to_update = next((t for t in ss.tasks if t.get("id") == t_id), None)
-                    if task_to_update:
-                        task_to_update["assigned_to"] = nuevo_assignee
-                        task_to_update["priority"] = nueva_prio
-                        if assign_type == "En Espera":
-                            task_to_update["status"] = "En Espera"
-                        else:
-                            if task_to_update["status"] == "En Espera":
-                                task_to_update["status"] = "Pendiente"
-                        save_tasks(ss.tasks); ss.show_assign_for = None
-                        st.success("Cambios guardados.")
-                        st.rerun() # (Req 1) st.rerun() MANTENIDO aquí
+                if action == "Ver detalle":
+                    ss.expanded_task_id = task_id
+                elif action == "Asignar tarea":
+                    ss.expanded_task_id = None # Cerrar detalle si se abre asignar
+                    ss.show_assign_for = task_id
+                elif action == "Tomar tarea":
+                    ss.expanded_task_id = None # Cerrar detalle
+                    current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+                    task_to_update["assigned_to"] = current_user
+                    task_to_update["status"] = "En Proceso"
+                    save_tasks(ss.tasks); st.toast("Tarea tomada.")
+                    st.rerun() # Rerun para refrescar estado
+                elif action == "Eliminar":
+                    ss.expanded_task_id = None # Cerrar detalle
+                    ss.confirm_delete_id = task_id
+                else: # Si es "Selecciona..." u otra acción inesperada
+                     ss.expanded_task_id = None # Asegurar cerrar detalle
 
-        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+                # (Req 1) Resetear selectbox solo si no es 'Ver detalle' que lo mantiene abierto
+                # O resetear siempre para forzar re-render, st.dialog lo manejará
+                if action != "Selecciona…": # Evitar bucle si ya está en default
+                    st.session_state[selectbox_key] = "Selecciona…" # Forzar rerun implícito
 
-    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA)
+
+            with c_acc:
+                selectbox_key = f"accion_{t_id}"
+                st.selectbox(
+                    "Acciones",
+                    ["Selecciona…", "Ver detalle", "Asignar tarea", "Tomar tarea", "Eliminar"],
+                    key=selectbox_key, label_visibility="collapsed",
+                    on_change=_handle_action_change, args=(t_id,)
+                )
+
+            if ss.get("confirm_delete_id") == t_id:
+                # (Solicitud 3.1) Ajuste de columnas para el popup de borrado
+                _, col_btn1, col_btn2, _ = st.columns([col_w[0]+col_w[1]+col_w[2]+col_w[3], col_w[4], col_w[5], col_w[6]]) # Ajustar a layout
+                st.error(f"¿Seguro que quieres eliminar la tarea '{task.get('titulo')}'?") # Mensaje más claro
+                with col_btn1:
+                    if st.button("Sí, Eliminar Ahora", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
+                        ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
+                        save_tasks(ss.tasks); ss.confirm_delete_id = None
+                        st.warning("Tarea eliminada permanentemente.")
+                        st.rerun()
+                with col_btn2:
+                    if st.button("Cancelar", key=f"del_cancel_{t_id}", use_container_width=True):
+                        ss.confirm_delete_id = None
+                        st.rerun()
+
+            if ss.show_assign_for == t_id:
+                # Ajustar columnas para popup de asignación
+                 _, a1, a2, a3, a4 = st.columns([col_w[0]+col_w[1], col_w[2], col_w[3], col_w[4], col_w[5]+col_w[6]]) # Ajustar a layout
+                 st.info(f"Asignando tarea '{task.get('titulo')}'...") # Mensaje contextual
+                 with a1:
+                    assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
+                 with a2:
+                    if assign_type == "En Espera":
+                        nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True, label_visibility="collapsed")
+                    elif assign_type == "Equipo":
+                        nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}", label_visibility="collapsed")
+                    else: # Usuario
+                        user_options = [USERS[u]["name"] for u in USERS] # Mostrar nombres
+                        nuevo_assignee = st.selectbox("Usuario", user_options, key=f"val_us_{t_id}", label_visibility="collapsed")
+                 with a3:
+                    cur_p = task.get("priority", "Media")
+                    idx_p = TASK_PRIORITIES.index(cur_p) if cur_p in TASK_PRIORITIES else 1
+                    nueva_prio = st.selectbox("Prioridad", TASK_PRIORITIES, key=f"prio_{t_id}", index=idx_p, label_visibility="collapsed")
+                 with a4:
+                    b_save, b_cancel = st.columns(2)
+                    if b_save.button("Guardar", key=f"btn_assign_{t_id}", use_container_width=True):
+                        task_to_update = next((t for t in ss.tasks if t.get("id") == t_id), None)
+                        if task_to_update:
+                            task_to_update["assigned_to"] = nuevo_assignee
+                            task_to_update["priority"] = nueva_prio
+                            if assign_type == "En Espera":
+                                task_to_update["status"] = "En Espera"
+                            else:
+                                # Si estaba 'En Espera', pasarla a 'Pendiente' al asignar
+                                if task_to_update["status"] == "En Espera":
+                                    task_to_update["status"] = "Pendiente"
+                                # Si no, mantener el estado actual (podría ser Pendiente o En Proceso)
+                            save_tasks(ss.tasks); ss.show_assign_for = None
+                            st.success("Tarea reasignada.")
+                            st.rerun()
+                    if b_cancel.button("X", key=f"btn_cancel_assign_{t_id}", use_container_width=True, help="Cancelar asignación"):
+                         ss.show_assign_for = None
+                         st.rerun()
+
+
+            st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+
+    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA v2)
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # ======== INICIO DE CORRECCIÓN (ERROR 1) ========
-                # Se ha cambiado 'with st.dialog(...) as dialog:' por 'dialog = st.dialog(...)'
-                # para evitar el error de "content manager protocol".
-                dialog = st.dialog("Detalle de Tarea", width="large")
-                # ======== FIN DE CORRECCIÓN (ERROR 1) ========
+                # ======== INICIO DE CORRECCIÓN v2 (BUG 'function' object) ========
+                # Llamar a st.dialog() directamente. Los comandos st.* siguientes irán dentro.
+                st.dialog("Detalle de Tarea", width="large")
+                # ======== FIN DE CORRECCIÓN v2 (BUG 'function' object) ========
 
-                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
                 context = task_data.get("context", {}) # Cargar contexto
 
                 # --- Mostrar Análisis de IA y PDF si existe ---
                 if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
-                    dialog.markdown("---")
-                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
+                    st.markdown("---")
+                    st.markdown("🤖 **Análisis de IA (LLM)**")
                     analysis_data = context["llm_analysis"]
-                    
-                    d_c1, d_c2, d_c3 = dialog.columns(3)
+
+                    d_c1, d_c2, d_c3 = st.columns(3)
                     d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
                     d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
                     d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
 
-                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                    # (Req 3.3) Traducción
-                    dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
-                    
+                    st.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                    st.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                    st.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+
                     if "pdf_bytes_b64" in context:
                         try:
                             pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                            with dialog.expander("Visualizar CV (PDF)", expanded=True):
-                                # (Req 4) Usar el 'container=dialog'
-                                pdf_viewer_embed(pdf_bytes, height=400, container=dialog) 
+                            # Crear expander *dentro* del diálogo
+                            with st.expander("Visualizar CV (PDF)", expanded=True):
+                                # Usar 'st' como container implícito (ya estamos dentro del dialog)
+                                pdf_viewer_embed(pdf_bytes, height=400, container=st)
                         except Exception as e:
-                            dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
-                    dialog.markdown("---")
+                            st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+
+                    if "jd_text" in context and context["jd_text"]:
+                        with st.expander("Ver Job Description (JD) usado", expanded=False):
+                            st.text(context["jd_text"])
+
+                    st.markdown("---")
+
 
                 # --- Mostrar Información de Tarea (General) ---
-                c1, c2 = dialog.columns(2)
+                c1, c2 = st.columns(2)
                 with c1:
-                    dialog.markdown("**Información Principal**")
-                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    st.markdown("**Información Principal**")
+                    st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                    st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                    st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
                 with c2:
-                    dialog.markdown("**Estado y Prioridad**")
-                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-                
-                # Contexto de Flujo (si no es de IA)
+                    st.markdown("**Estado y Prioridad**")
+                    # Usar st.markdown para renderizar HTML dentro del diálogo
+                    st.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
+                    st.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
+
+
                 if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
-                    dialog.markdown("---")
-                    dialog.markdown("**Contexto del Flujo**")
+                    st.markdown("---")
+                    st.markdown("**Contexto del Flujo**")
                     if "candidate_name" in context:
-                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
+                        st.markdown(f"**Postulante:** {context['candidate_name']}")
                     if "role" in context:
-                        dialog.markdown(f"**Puesto:** {context['role']}")
+                        st.markdown(f"**Puesto:** {context['role']}")
 
-                dialog.markdown("---")
-                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
-                dialog.markdown("---")
-                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
+                st.markdown("---")
+                st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+                st.markdown("---")
+                # Mostrar comentarios si existen
+                comments = task_data.get("comments", [])
+                if comments:
+                     with st.expander("Historial de Comentarios", expanded=False):
+                        for comment in reversed(comments): # Mostrar más recientes primero
+                            st.caption(comment)
+                else:
+                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
 
-                # Usar dialog.form para el formulario dentro del diálogo
-                with dialog.form("comment_form_dialog"):
-                    # Añadir key única
-                    st.text_area("Comentarios", placeholder="Añadir un comentario...", key=f"task_comment_dialog_{task_data.get('id')}")
-                    submitted = st.form_submit_button("Enviar Comentario")
-                    if submitted: st.toast("Comentario (aún no) guardado.")
 
-                if dialog.button("Cerrar", key="close_task_dialog"): # Key única para el botón
-                    ss.expanded_task_id = None
-                    dialog.close() # Usar .close() en el objeto dialog
+                # Formulario de acciones dentro del diálogo
+                with st.form("task_actions_form_dialog"):
+                    st.markdown("**Acciones de Tarea**")
+
+                    current_status = task_data.get("status", "Pendiente")
+                    all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"] # Estados fijos posibles
+                    status_index = all_statuses.index(current_status) if current_status in all_statuses else 0
+
+                    t_id = task_data.get('id')
+
+                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
+                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+
+                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
+
+                    if submitted:
+                        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+                        if task_to_update:
+                            task_to_update["status"] = new_status
+                            if new_comment:
+                                if "comments" not in task_to_update: task_to_update["comments"] = []
+                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
+                                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                                task_to_update["comments"].append(f"{user_name} ({timestamp}): {new_comment}")
+                                # Opcional: Podrías querer solo guardar en comments y no añadir al desc
+                                # task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario {timestamp}: {new_comment}]"
+
+                            save_tasks(ss.tasks)
+                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
+                            ss.expanded_task_id = None # Marcar para cerrar
+                            st.rerun() # Rerun cerrará el dialog porque expanded_task_id es None
+
+                if st.button("Cancelar", key=f"dialog_cancel_{t_id}"):
+                    ss.expanded_task_id = None # Marcar para cerrar
+                    st.rerun() # Rerun cerrará el dialog
+
 
             except Exception as e:
+                # Si ocurre un error DENTRO del dialog, necesitamos cerrarlo manualmente
                 st.error(f"Error al mostrar detalles de la tarea: {e}")
                 print(f"Error detallado en dialog: {e}") # Debug
                 if ss.get("expanded_task_id") == task_id_for_dialog:
-                    ss.expanded_task_id = None
-        else:
-            ss.expanded_task_id = None # Limpiar si la tarea ya no existe
+                    ss.expanded_task_id = None # Asegurar cerrar si hay error
+                    st.rerun() # Forzar rerun para cerrar
+
+        else: # task_data no encontrado (raro, pero posible)
+             if ss.get("expanded_task_id") == task_id_for_dialog:
+                 ss.expanded_task_id = None # Limpiar si la tarea ya no existe
+                 # Podríamos necesitar un rerun aquí si queremos que el diálogo desaparezca inmediatamente
+                 # st.rerun()
     # (FIN REQ 3.3)
 
 
