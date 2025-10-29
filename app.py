@@ -425,17 +425,30 @@ def build_analysis_text(name,ex):
 
 # (INICIO REQ 4) Modificado para aceptar un 'container' (para usar en st.dialog)
 def pdf_viewer_embed(file_bytes: bytes, height=520, container=st):
-  """Muestra un PDF en un container de Streamlit (st o st.dialog)."""
-  try:
-      b64=base64.b64encode(file_bytes).decode("utf-8")
-      # Llama a .components.v1.html en el container provisto
-      container.components.v1.html(
-        f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>',
-        height=height
-      )
-  except Exception as e:
-      container.error(f"Error al mostrar PDF: {e}")
-# (FIN REQ 4)
+    """Muestra un PDF en un container de Streamlit (st o st.dialog)."""
+    try:
+        # Debug: Verificar tipo y longitud antes de codificar
+        if not isinstance(file_bytes, bytes):
+            container.error(f"DEBUG (pdf_viewer_embed): Input is not bytes, it's {type(file_bytes)}")
+            return
+        if len(file_bytes) == 0:
+            container.warning("DEBUG (pdf_viewer_embed): Input bytes are empty.")
+            return
+
+        container.write(f"DEBUG (pdf_viewer_embed): Encoding {len(file_bytes)} bytes to Base64...")
+        b64 = base64.b64encode(file_bytes).decode("utf-8")
+        container.write("DEBUG (pdf_viewer_embed): Base64 encoding successful. Embedding HTML...")
+        container.components.v1.html(
+            f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>',
+            height=height
+        )
+        container.write("DEBUG (pdf_viewer_embed): HTML embed command issued.") # Mensaje final si no hay excepción
+    except Exception as e:
+        # (CORREGIDO) Log the error clearly within the container
+        error_msg = f"Error en pdf_viewer_embed: {e}"
+        print(error_msg) # Also print to console
+        container.error(error_msg) # Mostrar error en la UI
+        container.write("DEBUG (pdf_viewer_embed): Exception caught during embed.") # Mensaje si falla
 
 def _extract_docx_bytes(b: bytes) -> str:
   try:
@@ -2106,90 +2119,109 @@ def page_create_task():
 
             st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA v2)
+    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA v4 - Debugging)
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # ======== INICIO DE CORRECCIÓN v2 (BUG 'function' object) ========
-                # Llamar a st.dialog() directamente. Los comandos st.* siguientes irán dentro.
-                st.dialog("Detalle de Tarea", width="large")
-                # ======== FIN DE CORRECCIÓN v2 (BUG 'function' object) ========
+                # (CORREGIDO) Asignar el diálogo a la variable 'dialog'
+                dialog = st.dialog("Detalle de Tarea", width="large")
 
-                st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                # (CORREGIDO) Usar 'dialog.' para todos los elementos
+                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
                 context = task_data.get("context", {}) # Cargar contexto
 
-                # --- Mostrar Análisis de IA y PDF si existe ---
+                # --- Mostrar Análisis de IA si existe ---
                 if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
-                    st.markdown("---")
-                    st.markdown("🤖 **Análisis de IA (LLM)**")
+                    dialog.markdown("---")
+                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
                     analysis_data = context["llm_analysis"]
 
-                    d_c1, d_c2, d_c3 = st.columns(3)
+                    d_c1, d_c2, d_c3 = dialog.columns(3)
                     d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
                     d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
                     d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
 
-                    st.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                    st.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                    st.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                    dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
 
+                    # --- PDF DEBUGGING ---
+                    dialog.markdown("--- PDF Section ---") # Debug marker
                     if "pdf_bytes_b64" in context:
+                        dialog.write("DEBUG: 'pdf_bytes_b64' found in context.") # Debug message
                         try:
-                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                            # Crear expander *dentro* del diálogo
-                            with st.expander("Visualizar CV (PDF)", expanded=True):
-                                # Usar 'st' como container implícito (ya estamos dentro del dialog)
-                                pdf_viewer_embed(pdf_bytes, height=400, container=st)
-                        except Exception as e:
-                            st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+                            # Asegurarse que el string base64 no esté vacío
+                            b64_string = context["pdf_bytes_b64"]
+                            if not b64_string:
+                                dialog.warning("DEBUG: 'pdf_bytes_b64' is an empty string.")
+                            else:
+                                pdf_bytes = base64.b64decode(b64_string)
+                                dialog.write(f"DEBUG: PDF bytes decoded, length: {len(pdf_bytes)}") # Debug message
+                                if len(pdf_bytes) < 50: # Check if bytes seem too short
+                                    dialog.warning("DEBUG: Decoded PDF bytes seem very short (< 50 bytes). Potential data issue?")
 
+                                # (CORREGIDO) Usar 'dialog.'
+                                with dialog.expander("Visualizar CV (PDF)", expanded=True):
+                                    dialog.write("DEBUG: Attempting to embed PDF...") # Debug message
+                                    # (CORREGIDO) Usar 'container=dialog'
+                                    pdf_viewer_embed(pdf_bytes, height=400, container=dialog)
+                                    dialog.write("DEBUG: PDF embed call finished.") # Debug message
+                        except Exception as e_decode:
+                            # (CORREGIDO) Display decoding error inside dialog
+                            dialog.error(f"DEBUG: Error decoding Base64 PDF: {e_decode}")
+                    else:
+                        dialog.warning("DEBUG: 'pdf_bytes_b64' NOT found in task context.") # Debug message
+                    # --- END PDF DEBUGGING ---
+
+                    # --- JD ---
                     if "jd_text" in context and context["jd_text"]:
-                        with st.expander("Ver Job Description (JD) usado", expanded=False):
-                            st.text(context["jd_text"])
+                         with dialog.expander("Ver Job Description (JD) usado", expanded=False):
+                             dialog.text(context["jd_text"])
 
-                    st.markdown("---")
+                    dialog.markdown("---")
 
 
                 # --- Mostrar Información de Tarea (General) ---
-                c1, c2 = st.columns(2)
+                # (CORREGIDO) Usar 'dialog.'
+                c1, c2 = dialog.columns(2)
                 with c1:
-                    st.markdown("**Información Principal**")
-                    st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    dialog.markdown("**Información Principal**")
+                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
                 with c2:
-                    st.markdown("**Estado y Prioridad**")
-                    # Usar st.markdown para renderizar HTML dentro del diálogo
-                    st.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
-                    st.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
+                    dialog.markdown("**Estado y Prioridad**")
+                    # Usar dialog.markdown para renderizar HTML dentro del diálogo
+                    dialog.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
+                    dialog.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
 
 
                 if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
-                    st.markdown("---")
-                    st.markdown("**Contexto del Flujo**")
+                    dialog.markdown("---")
+                    dialog.markdown("**Contexto del Flujo**")
                     if "candidate_name" in context:
-                        st.markdown(f"**Postulante:** {context['candidate_name']}")
+                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
                     if "role" in context:
-                        st.markdown(f"**Puesto:** {context['role']}")
+                        dialog.markdown(f"**Puesto:** {context['role']}")
 
-                st.markdown("---")
-                st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
-                st.markdown("---")
+                dialog.markdown("---")
+                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
+                dialog.markdown("---")
                 # Mostrar comentarios si existen
                 comments = task_data.get("comments", [])
                 if comments:
-                     with st.expander("Historial de Comentarios", expanded=False):
-                        for comment in reversed(comments): # Mostrar más recientes primero
-                            st.caption(comment)
+                     with dialog.expander("Historial de Comentarios", expanded=False):
+                         for comment in reversed(comments): # Mostrar más recientes primero
+                             dialog.caption(comment)
                 else:
-                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
+                    dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
 
 
-                # Formulario de acciones dentro del diálogo
-                with st.form("task_actions_form_dialog"):
-                    st.markdown("**Acciones de Tarea**")
+                # (CORREGIDO) Usar 'dialog.form'
+                with dialog.form("task_actions_form_dialog"):
+                    dialog.markdown("**Acciones de Tarea (Solo Lectura en esta vista)**") # MODIFICADO - Aclaración
 
                     current_status = task_data.get("status", "Pendiente")
                     all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"] # Estados fijos posibles
@@ -2197,46 +2229,29 @@ def page_create_task():
 
                     t_id = task_data.get('id')
 
-                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
-                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+                    # (CORREGIDO) Usar 'dialog.' y deshabilitar controles
+                    dialog.selectbox("Estado Actual", all_statuses, index=status_index, key=f"dialog_status_{t_id}", disabled=True)
+                    dialog.text_area("Añadir Comentario", placeholder="Los comentarios se añaden en 'Asignado a mi'", key=f"dialog_comment_{t_id}", disabled=True)
 
-                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
-
+                    # (CORREGIDO) Botón solo cierra, no guarda nada aquí
+                    submitted = dialog.form_submit_button("Cerrar Detalle")
                     if submitted:
-                        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
-                        if task_to_update:
-                            task_to_update["status"] = new_status
-                            if new_comment:
-                                if "comments" not in task_to_update: task_to_update["comments"] = []
-                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
-                                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-                                task_to_update["comments"].append(f"{user_name} ({timestamp}): {new_comment}")
-                                # Opcional: Podrías querer solo guardar en comments y no añadir al desc
-                                # task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario {timestamp}: {new_comment}]"
-
-                            save_tasks(ss.tasks)
-                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
-                            ss.expanded_task_id = None # Marcar para cerrar
-                            st.rerun() # Rerun cerrará el dialog porque expanded_task_id es None
-
-                if st.button("Cancelar", key=f"dialog_cancel_{t_id}"):
-                    ss.expanded_task_id = None # Marcar para cerrar
-                    st.rerun() # Rerun cerrará el dialog
+                        ss.expanded_task_id = None # Marcar para cerrar
+                        st.rerun() # Rerun cerrará el dialog
 
 
-            except Exception as e:
+            except Exception as e_dialog:
                 # Si ocurre un error DENTRO del dialog, necesitamos cerrarlo manualmente
-                st.error(f"Error al mostrar detalles de la tarea: {e}")
-                print(f"Error detallado en dialog: {e}") # Debug
+                st.error(f"Error general al mostrar detalles de la tarea: {e_dialog}")
+                print(f"Error detallado en dialog: {e_dialog}") # Debug
                 if ss.get("expanded_task_id") == task_id_for_dialog:
                     ss.expanded_task_id = None # Asegurar cerrar si hay error
                     st.rerun() # Forzar rerun para cerrar
 
-        else: # task_data no encontrado (raro, pero posible)
+        else: # task_data no encontrado
              if ss.get("expanded_task_id") == task_id_for_dialog:
-                 ss.expanded_task_id = None # Limpiar si la tarea ya no existe
-                 # Podríamos necesitar un rerun aquí si queremos que el diálogo desaparezca inmediatamente
-                 # st.rerun()
+                  ss.expanded_task_id = None
+                  st.rerun() # Ensure dialog closes if task disappears
     # (FIN REQ 3.3)
 # =========================================================
 # ROUTER
