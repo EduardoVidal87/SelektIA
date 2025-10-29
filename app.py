@@ -627,6 +627,7 @@ def _handle_position_action_change(pos_id):
 # ===================== NUEVA FUNCIÓN AUXILIAR PARA DETALLE DE TAREA =====================
 def render_task_detail_dialog(task_data, allow_actions=False):
     # ... (resto de la función) ...
+    
 # ===================== FIN FUNCIÓN AUXILIAR =====================
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
