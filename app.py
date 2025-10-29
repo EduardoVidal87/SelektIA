@@ -625,10 +625,146 @@ def _handle_position_action_change(pos_id):
     # (Req 1) st.rerun() eliminado de callback
 
 # ===================== NUEVA FUNCIÓN AUXILIAR PARA DETALLE DE TAREA =====================
+# ===================== NUEVA FUNCIÓN AUXILIAR PARA DETALLE DE TAREA =====================
 def render_task_detail_dialog(task_data, allow_actions=False):
-    # ... (resto de la función) ...
-    
+    """
+    Renderiza el st.dialog con los detalles de la tarea.
+    Incluye análisis de IA, descarga de PDF, JD y, opcionalmente, acciones.
+    """
+    try:
+        # Usar st.dialog como context manager
+        with st.dialog("Detalle de Tarea", width="large"):
+            st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+            context = task_data.get("context", {})
+
+            # --- Mostrar Análisis de IA y PDF si existe ---
+            if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                st.markdown("---")
+                st.markdown("🤖 **Análisis de IA (LLM)**")
+                analysis_data = context["llm_analysis"]
+
+                d_c1, d_c2, d_c3 = st.columns(3)
+                d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+
+                st.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                st.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                st.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+
+                # --- Botón de Descarga PDF ---
+                if "pdf_bytes_b64" in context:
+                    try:
+                        pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                        file_name = analysis_data.get("file_name", task_data.get("titulo", "cv") + ".pdf")
+                        # Limpiar nombre de archivo por si acaso
+                        safe_file_name = re.sub(r'[\\/*?:"<>|]', "", file_name)
+                        st.download_button(
+                            label="📄 Descargar CV (PDF)",
+                            data=pdf_bytes,
+                            file_name=safe_file_name,
+                            mime="application/pdf",
+                            key=f"download_pdf_{task_data.get('id')}" # Key única
+                        )
+                    except Exception as e:
+                        st.error(f"No se pudo preparar la descarga del PDF: {e}")
+                # --- Fin Botón de Descarga PDF ---
+
+                if "jd_text" in context and context["jd_text"]:
+                    with st.expander("Ver Job Description (JD) usado", expanded=False):
+                        st.text(context["jd_text"])
+
+                st.markdown("---")
+
+
+            # --- Mostrar Información de Tarea (General) ---
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Información Principal**")
+                st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+            with c2:
+                st.markdown("**Estado y Prioridad**")
+                st.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
+                st.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
+
+
+            if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
+                st.markdown("---")
+                st.markdown("**Contexto del Flujo**")
+                if "candidate_name" in context:
+                    st.markdown(f"**Postulante:** {context['candidate_name']}")
+                if "role" in context:
+                    st.markdown(f"**Puesto:** {context['role']}")
+
+            st.markdown("---")
+            st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+            st.markdown("---")
+
+            comments = task_data.get("comments", [])
+            if comments:
+                 with st.expander("Historial de Comentarios", expanded=len(comments) < 4): # Expandir si hay pocos
+                    for comment in reversed(comments):
+                        st.caption(comment)
+            else:
+                st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
+
+
+            # --- Acciones de Tarea (Condicional) ---
+            if allow_actions:
+                st.markdown("---") # Separador antes de acciones
+                with st.form("task_actions_form_dialog"):
+                    st.markdown("**Acciones de Tarea**")
+
+                    current_status = task_data.get("status", "Pendiente")
+                    all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"]
+                    status_index = all_statuses.index(current_status) if current_status in all_statuses else 0
+
+                    t_id = task_data.get('id')
+
+                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
+                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+
+                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
+
+                    if submitted:
+                        task_to_update = next((t for t in ss.tasks if t.get("id") == t_id), None)
+                        if task_to_update:
+                            task_to_update["status"] = new_status
+                            if new_comment:
+                                if "comments" not in task_to_update: task_to_update["comments"] = []
+                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
+                                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                                task_to_update["comments"].append(f"{user_name} ({timestamp}): {new_comment}")
+
+                            save_tasks(ss.tasks)
+                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
+                            ss.expanded_task_id = None
+                            st.rerun() # Cierra el dialog al hacer rerun
+                        else:
+                             st.error("No se pudo encontrar la tarea para actualizar.") # Mensaje de error
+
+                # Botón Cancelar fuera del form de acciones
+                if st.button("Cancelar", key=f"dialog_cancel_{t_id}_actions"):
+                    ss.expanded_task_id = None
+                    st.rerun() # Cierra el dialog
+
+            else: # Si no se permiten acciones, solo mostrar botón Cerrar
+                st.markdown("---") # Separador
+                if st.button("Cerrar", key=f"dialog_cancel_{task_data.get('id')}_noactions"):
+                    ss.expanded_task_id = None
+                    # No necesita rerun, el dialog se cierra solo al terminar el 'with'
+
+    except Exception as e:
+        st.error(f"Error al mostrar detalles de la tarea: {e}")
+        print(f"Error detallado en dialog: {e}") # Debug
+        # Intentar cerrar el diálogo si hay error
+        if ss.get("expanded_task_id") == task_data.get('id'):
+            ss.expanded_task_id = None
+            st.rerun() # Forzar rerun para intentar cerrar
 # ===================== FIN FUNCIÓN AUXILIAR =====================
+
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
 # =========================================================
