@@ -2084,123 +2084,122 @@ def page_create_task():
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
             try:
-                # ======== INICIO DE CORRECCIÓN (ERROR 1) ========
-                # Se ha cambiado 'with st.dialog(...) as dialog:' por 'dialog = st.dialog(...)'
-                # para evitar el error de "content manager protocol".
-                dialog = st.dialog("Detalle de Tarea", width="large")
-                # ======== FIN DE CORRECCIÓN (ERROR 1) ========
+                # ======== INICIO DE CORRECCIÓN (BUG 'function' object) ========
+                # Se restaura el uso de 'with st.dialog(...)' que es la forma correcta
+                with st.dialog("Detalle de Tarea", width="large") as dialog:
+                # ======== FIN DE CORRECCIÓN (BUG 'function' object) ========
 
-                dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                context = task_data.get("context", {}) # Cargar contexto
+                    dialog.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
+                    context = task_data.get("context", {}) # Cargar contexto
 
-                # --- Mostrar Análisis de IA y PDF si existe ---
-                if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                    # --- Mostrar Análisis de IA y PDF si existe ---
+                    if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                        dialog.markdown("---")
+                        dialog.markdown("🤖 **Análisis de IA (LLM)**")
+                        analysis_data = context["llm_analysis"]
+                        
+                        d_c1, d_c2, d_c3 = dialog.columns(3)
+                        d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                        d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                        d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+
+                        dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                        # (Req 3.3) Traducción
+                        dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                        dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                        
+                        if "pdf_bytes_b64" in context:
+                            try:
+                                pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+
+                                # ======== INICIO DE CORRECCIÓN (BUG PDF Viewer) ========
+                                # Se crea el expander y se guarda en una variable
+                                expander_pdf = dialog.expander("Visualizar CV (PDF)", expanded=True)
+                                # Se pasa el objeto 'expander_pdf' como el 'container'
+                                # para que el PDF se renderice DENTRO del expander.
+                                pdf_viewer_embed(pdf_bytes, height=400, container=expander_pdf)
+                                # ======== FIN DE CORRECCIÓN (BUG PDF Viewer) ========
+                                    
+                            except Exception as e:
+                                dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
+                        
+                        # ======== INICIO DE MODIFICACIÓN (Req. Video 2.2) ========
+                        # Mostrar el Job Description si existe en el contexto
+                        if "jd_text" in context and context["jd_text"]:
+                            expander_jd = dialog.expander("Ver Job Description (JD) usado", expanded=False)
+                            expander_jd.text(context["jd_text"])
+                        # ======== FIN DE MODIFICACIÓN (Req. Video 2.2) ========
+                        
+                        dialog.markdown("---")
+
+
+                    # --- Mostrar Información de Tarea (General) ---
+                    c1, c2 = dialog.columns(2)
+                    with c1:
+                        dialog.markdown("**Información Principal**")
+                        dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                        dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                        dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+                    with c2:
+                        dialog.markdown("**Estado y Prioridad**")
+                        dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
+                        dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
+                    
+                    # Contexto de Flujo (si no es de IA)
+                    if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
+                        dialog.markdown("---")
+                        dialog.markdown("**Contexto del Flujo**")
+                        if "candidate_name" in context:
+                            dialog.markdown(f"**Postulante:** {context['candidate_name']}")
+                        if "role" in context:
+                            dialog.markdown(f"**Puesto:** {context['role']}")
+
                     dialog.markdown("---")
-                    dialog.markdown("🤖 **Análisis de IA (LLM)**")
-                    analysis_data = context["llm_analysis"]
-                    
-                    d_c1, d_c2, d_c3 = dialog.columns(3)
-                    d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
-                    d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
-                    d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+                    dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
+                    dialog.markdown("---")
+                    dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
 
-                    dialog.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                    # (Req 3.3) Traducción
-                    dialog.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                    dialog.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
-                    
-                    if "pdf_bytes_b64" in context:
-                        try:
-                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
 
-                            # ======== INICIO DE CORRECCIÓN (BUG PDF Viewer) ========
-                            # Se crea el expander y se guarda en una variable
-                            expander_pdf = dialog.expander("Visualizar CV (PDF)", expanded=True)
-                            # Se pasa el objeto 'expander_pdf' como el 'container'
-                            # para que el PDF se renderice DENTRO del expander.
-                            pdf_viewer_embed(pdf_bytes, height=400, container=expander_pdf)
-                            # ======== FIN DE CORRECCIÓN (BUG PDF Viewer) ========
+                    # ======== INICIO DE MODIFICACIÓN (Req. Video 3) ========
+                    # Formulario de acciones (Completar / Reasignar)
+                    with dialog.form("task_actions_form_dialog"):
+                        dialog.markdown("**Acciones de Tarea**")
+                        
+                        # Obtener estado actual
+                        current_status = task_data.get("status", "Pendiente")
+                        all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"]
+                        if current_status not in all_statuses:
+                            all_statuses.append(current_status)
+                        status_index = all_statuses.index(current_status)
+                        
+                        t_id = task_data.get('id') # Obtener t_id
+                        
+                        new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
+                        new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+                        
+                        submitted = st.form_submit_button("Guardar Cambios y Cerrar")
+                        
+                        if submitted:
+                            task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+                            if task_to_update:
+                                task_to_update["status"] = new_status
+                                # (Opcional: guardar comentarios)
+                                if new_comment:
+                                    if "comments" not in task_to_update: task_to_update["comments"] = []
+                                    user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
+                                    task_to_update["comments"].append(f"{user_name} ({datetime.now().strftime('%Y-%m-%d %H:%M')}): {new_comment}")
+                                    task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario: {new_comment}]" # Agregar al desc
                                 
-                        except Exception as e:
-                            dialog.error(f"No se pudo decodificar o mostrar el PDF: {e}")
-                    
-                    # ======== INICIO DE MODIFICACIÓN (Req. Video 2.2) ========
-                    # Mostrar el Job Description si existe en el contexto
-                    if "jd_text" in context and context["jd_text"]:
-                        expander_jd = dialog.expander("Ver Job Description (JD) usado", expanded=False)
-                        expander_jd.text(context["jd_text"])
-                    # ======== FIN DE MODIFICACIÓN (Req. Video 2.2) ========
-                    
-                    dialog.markdown("---")
-
-
-                # --- Mostrar Información de Tarea (General) ---
-                c1, c2 = dialog.columns(2)
-                with c1:
-                    dialog.markdown("**Información Principal**")
-                    dialog.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    dialog.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    dialog.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                with c2:
-                    dialog.markdown("**Estado y Prioridad**")
-                    dialog.markdown(f"**Estado:**"); dialog.markdown(_status_pill(task_data.get('status', 'Pendiente')), unsafe_allow_html=True)
-                    dialog.markdown(f"**Prioridad:**"); dialog.markdown(_priority_pill(task_data.get('priority', 'Media')), unsafe_allow_html=True)
-                
-                # Contexto de Flujo (si no es de IA)
-                if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
-                    dialog.markdown("---")
-                    dialog.markdown("**Contexto del Flujo**")
-                    if "candidate_name" in context:
-                        dialog.markdown(f"**Postulante:** {context['candidate_name']}")
-                    if "role" in context:
-                        dialog.markdown(f"**Puesto:** {context['role']}")
-
-                dialog.markdown("---")
-                dialog.markdown("**Descripción:**"); dialog.markdown(task_data.get('desc', 'Sin descripción.'))
-                dialog.markdown("---")
-                dialog.markdown("**Actividad Reciente:**"); dialog.markdown("- *No hay actividad registrada.*")
-
-
-                # ======== INICIO DE MODIFICACIÓN (Req. Video 3) ========
-                # Formulario de acciones (Completar / Reasignar)
-                with dialog.form("task_actions_form_dialog"):
-                    dialog.markdown("**Acciones de Tarea**")
-                    
-                    # Obtener estado actual
-                    current_status = task_data.get("status", "Pendiente")
-                    all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"]
-                    if current_status not in all_statuses:
-                        all_statuses.append(current_status)
-                    status_index = all_statuses.index(current_status)
-                    
-                    t_id = task_data.get('id') # Obtener t_id
-                    
-                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
-                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
-                    
-                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
-                    
-                    if submitted:
-                        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
-                        if task_to_update:
-                            task_to_update["status"] = new_status
-                            # (Opcional: guardar comentarios)
-                            if new_comment:
-                                if "comments" not in task_to_update: task_to_update["comments"] = []
-                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
-                                task_to_update["comments"].append(f"{user_name} ({datetime.now().strftime('%Y-%m-%d %H:%M')}): {new_comment}")
-                                task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario: {new_comment}]" # Agregar al desc
-                            
-                            save_tasks(ss.tasks)
-                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
-                            ss.expanded_task_id = None
-                            dialog.close()
-                            st.rerun() # Rerun para refrescar la tabla de tareas
-                            
-                if dialog.button("Cancelar", key=f"dialog_cancel_{t_id}"):
-                    ss.expanded_task_id = None
-                    dialog.close()
-                # ======== FIN DE MODIFICACIÓN (Req. Video 3) ========
+                                save_tasks(ss.tasks)
+                                st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
+                                ss.expanded_task_id = None
+                                # dialog.close() no es necesario aquí, st.rerun() lo maneja
+                                st.rerun() # Rerun para refrescar la tabla de tareas
+                                
+                    if dialog.button("Cancelar", key=f"dialog_cancel_{t_id}"):
+                        ss.expanded_task_id = None
+                        # dialog.close() no es necesario aquí
+                    # ======== FIN DE MODIFICACIÓN (Req. Video 3) ========
 
 
             except Exception as e:
@@ -2211,8 +2210,6 @@ def page_create_task():
         else:
             ss.expanded_task_id = None # Limpiar si la tarea ya no existe
     # (FIN REQ 3.3)
-
-
 # =========================================================
 # ROUTER
 # =========================================================
