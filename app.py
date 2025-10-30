@@ -115,7 +115,7 @@ ROLE_PRESETS = {
 
 # Bytes de un PDF de ejemplo mínimo para la previsualización
 DUMMY_PDF_BYTES = base64.b64decode(
-    b'JVBERi0xLjAKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzMCAzMF0vUGFyZW50IDIgMCBSPj5lbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTIgMDAwMDAgbiAKMDAwMDAwMDA5OSAwMDAwMCBuIAp0cmFpbGVyPDwvU2l6ZSA0L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMTQ3CiUlRU9G'
+    b'JVBERi0xLjAKMSAwIG9objw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzMCAzMF0vUGFyZW50IDIgMCBSPj5lbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTIgMDAwMDAgbiAKMDAwMDAwMDA5OSAwMDAwMCBuIAp0cmFpbGVyPDwvU2l6ZSA0L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMTQ3CiUlRU9G'
 )
 
 # =========================================================
@@ -293,7 +293,8 @@ def save_roles(roles: list):
 
 def load_json(path: Path, default):
   if path.exists():
-    try: return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
         print(f"Error reading JSON from {path}: {e}")
         try:
@@ -423,15 +424,32 @@ def build_analysis_text(name,ex):
   extras=", ".join(ex["extras"][:3]) if ex["extras"] else "—"
   return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
 
-# (INICIO REQ 4) Modificado para aceptar un 'container' (para usar en st.dialog)
+# (INICIO REQ 4) ACTUALIZADO: visor PDF estable sin components.v1.html
 def pdf_viewer_embed(file_bytes: bytes, height=520, container=st):
-  """Muestra un PDF en un container de Streamlit (st o st.dialog)."""
+  """
+  Muestra un PDF en Streamlit de forma confiable.
+  1. Intenta usar container.pdf() (Streamlit reciente).
+  2. Fallback a un iframe embebido con base64.
+  """
   try:
-      b64=base64.b64encode(file_bytes).decode("utf-8")
-      # Llama a .components.v1.html en el container provisto
-      container.components.v1.html(
-        f'<embed src="data:application/pdf;base64,{b64}" type="application/pdf" width="100%" height="{height}px"/>',
-        height=height
+      # Streamlit moderno trae st.pdf / container.pdf
+      container.pdf(file_bytes)
+      return
+  except Exception:
+      pass
+  try:
+      b64 = base64.b64encode(file_bytes).decode("utf-8")
+      container.markdown(
+          f"""
+          <iframe
+              src="data:application/pdf;base64,{b64}"
+              width="100%"
+              height="{height}px"
+              style="border:none;"
+              type="application/pdf">
+          </iframe>
+          """,
+          unsafe_allow_html=True
       )
   except Exception as e:
       container.error(f"Error al mostrar PDF: {e}")
@@ -1487,21 +1505,21 @@ def page_agents():
     row_agents = ss.agents[i:i+cols_per_row]
     cols = st.columns(cols_per_row)
     for j, ag in enumerate(row_agents):
-      idx = i + j
-      with cols[j]:
-        img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
-        st.markdown(f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="toolbar">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-          if st.button("👁", key=f"ag_v_{idx}", help="Ver"): ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx); ss.agent_edit_idx = None; st.rerun()
-        with c2:
-          if st.button("✏", key=f"ag_e_{idx}", help="Editar"): ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx); ss.agent_view_idx = None; st.rerun()
-        with c3:
-          if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"): clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"; ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
-        with c4:
-          if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"): ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        idx = i + j
+        with cols[j]:
+          img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
+          st.markdown(f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>', unsafe_allow_html=True)
+          st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+          c1, c2, c3, c4 = st.columns(4)
+          with c1:
+            if st.button("👁", key=f"ag_v_{idx}", help="Ver"): ss.agent_view_idx = (None if ss.agent_view_idx == idx else idx); ss.agent_edit_idx = None; st.rerun()
+          with c2:
+            if st.button("✏", key=f"ag_e_{idx}", help="Editar"): ss.agent_edit_idx = (None if ss.agent_edit_idx == idx else idx); ss.agent_view_idx = None; st.rerun()
+          with c3:
+            if st.button("🧬", key=f"ag_c_{idx}", help="Clonar"): clone = dict(ag); clone["rol"] = f"{ag.get('rol','Agente')} (copia)"; ss.agents.append(clone); save_agents(ss.agents); st.success("Agente clonado."); st.rerun()
+          with c4:
+            if st.button("🗑", key=f"ag_d_{idx}", help="Eliminar"): ss.agents.pop(idx); save_agents(ss.agents); st.success("Agente eliminado."); st.rerun()
+          st.markdown('</div>', unsafe_allow_html=True)
 
   if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
     ag = ss.agents[ss.agent_view_idx]
@@ -1509,36 +1527,32 @@ def page_agents():
     st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
-      raw_img = ag.get("image") or ""
-      safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip() else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
-      st.markdown(f'<div style="text-align:center;margin:6px 0 12px"><img src="{safe_img}" style="width:180px;height:180px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD;"></div>', unsafe_allow_html=True)
-      st.caption("Modelo LLM"); st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model',LLM_IN_USE)}</div>", unsafe_allow_html=True)
+        raw_img = ag.get("image") or ""
+        safe_img = (raw_img.strip() if isinstance(raw_img, str) and raw_img.strip() else AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"), AGENT_DEFAULT_IMAGES["Headhunter"]))
+        st.markdown(f'<div style="text-align:center;margin:6px 0 12px"><img src="{safe_img}" style="width:180px;height:180px;border-radius:999px;object-fit:cover;border:4px solid #F1F7FD;"></div>', unsafe_allow_html=True)
+        st.caption("Modelo LLM"); st.markdown(f"<div class='badge'>🧠 {ag.get('llm_model',LLM_IN_USE)}</div>", unsafe_allow_html=True)
     with c2:
-      st.text_input("Role*", value=ag.get("rol",""), disabled=True)
-      st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
-      st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
-      st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
-      # (Req. 1) Ocultado 'herramientas'
-      # st.caption("Herramientas habilitadas"); st.write(", ".join(ag.get("herramientas",[])) or "—")
-      st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
+        st.text_input("Role*", value=ag.get("rol",""), disabled=True)
+        st.text_input("Objetivo*", value=ag.get("objetivo",""), disabled=True)
+        st.text_area("Backstory*", value=ag.get("backstory",""), height=120, disabled=True)
+        st.text_area("Guardrails", value=ag.get("guardrails",""), height=90, disabled=True)
+        st.caption("Permisos"); st.write(", ".join(ag.get("perms",[])) or "—")
     st.markdown('</div>', unsafe_allow_html=True)
 
   if ss.agent_edit_idx is not None and 0 <= ss.agent_edit_idx < len(ss.agents):
     ag = ss.agents[ss.agent_edit_idx]
     st.markdown("### Editar agente")
     with st.form(f"agent_edit_{ss.agent_edit_idx}"):
-      objetivo   = st.text_input("Objetivo*", value=ag.get("objetivo",""))
-      backstory  = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
-      guardrails = st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
-      # (Req. 1) Eliminado 'herramientas'
-      # (Req. 1) Reemplazado selectbox de LLM
-      st.text_input("Modelo LLM (Evaluación)", value=ag.get('llm_model', LLM_IN_USE), disabled=True)
-      img_src      = st.text_input("URL de imagen", value=ag.get("image",""))
-      perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
-      if st.form_submit_button("Guardar cambios"):
-        ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,
-                   "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
-        save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
+        objetivo   = st.text_input("Objetivo*", value=ag.get("objetivo",""))
+        backstory  = st.text_area("Backstory*", value=ag.get("backstory",""), height=120)
+        guardrails = st.text_area("Guardrails", value=ag.get("guardrails",""), height=90)
+        st.text_input("Modelo LLM (Evaluación)", value=ag.get('llm_model', LLM_IN_USE), disabled=True)
+        img_src      = st.text_input("URL de imagen", value=ag.get("image",""))
+        perms        = st.multiselect("Permisos (quién puede editar)", ["Colaborador","Supervisor","Administrador"], default=ag.get("perms",["Supervisor","Administrador"]))
+        if st.form_submit_button("Guardar cambios"):
+            ag.update({"objetivo":objetivo,"backstory":backstory,"guardrails":guardrails,
+                       "llm_model":ag.get('llm_model', LLM_IN_USE),"image":img_src,"perms":perms})
+            save_agents(ss.agents); st.success("Agente actualizado."); st.rerun()
 
 # ===================== FLUJOS (Req 1, 2, 3 - Modificado) =====================
 # Función para renderizar el formulario de Flujos (Crear/Editar/Ver)
@@ -1853,14 +1867,12 @@ def page_analytics():
         st.subheader("Productividad del Reclutador")
         df_prod = pd.DataFrame({
             "Reclutador": ["Admin", "Sup", "Colab", "Headhunter"],
-            "Contratados (Últ. 90d)": [8, 5, 12, 9], # <-- Nombre de columna correcto
+            "Contratados (Últ. 90d)": [8, 5, 12, 9],
             "CVs Gestionados": [450, 300, 700, 620]
         })
-        # --- (INICIO DE CORRECCIÓN PARA SYNTAX ERROR) ---
-        fig_prod = px.bar(df_prod, x="Reclutador", y="Contratados (Últ. 90d)", # <-- Corregido aquí
+        fig_prod = px.bar(df_prod, x="Reclutador", y="Contratados (Últ. 90d)",
                           title="Contrataciones por Reclutador",
                           color_discrete_sequence=PLOTLY_GREEN_SEQUENCE)
-        # --- (FIN DE CORRECCIÓN PARA SYNTAX ERROR) ---
         fig_prod.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TITLE_DARK))
         st.plotly_chart(fig_prod, use_container_width=True)
 
@@ -1929,18 +1941,15 @@ def page_create_task():
     all_statuses = ["Todos los estados"] + sorted(list(all_statuses_set))
 
     prefer_order = ["Pendiente", "En Proceso", "En Espera"]
-    # Encontrar el primer estado preferido que exista en la lista actual, o default a "Todos"
     preferred = next((s for s in prefer_order if s in all_statuses), "Todos los estados")
-    # Asegurar que el índice no falle si 'preferred' es "Todos los estados"
     preferred_index = all_statuses.index(preferred) if preferred in all_statuses else 0
-
 
     all_assignees = ["Todas las colas"] + sorted(list(set(t.get('assigned_to', 'N/A') for t in tasks_list)))
 
     # 2. Renderizar filtros en 3 columnas
     f1, f2, f3 = st.columns([1, 1, 1.5])
     with f1:
-        selected_status = st.selectbox("Estado", options=all_statuses, index=preferred_index) # Usar preferred_index
+        selected_status = st.selectbox("Estado", options=all_statuses, index=preferred_index)
     with f2:
         selected_queue = st.selectbox("Cola (Asignado a)", options=all_assignees, key="task_queue_filter")
     with f3:
@@ -1961,7 +1970,6 @@ def page_create_task():
 
     if not tasks_to_show:
         st.info(f"No hay tareas que coincidan con los filtros seleccionados.")
-        # return # No retornar aquí para que el diálogo aún pueda procesarse si está activo
 
     # --- INICIO CAMBIO (Solicitud 3.1) ---
     # Columnas con Descripción: [Nombre, Descripción, Asignado, Vencimiento, Prioridad, Estado, Acciones]
@@ -1977,7 +1985,6 @@ def page_create_task():
     with h_acc:  st.markdown("**Acciones**")
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
-    # Solo mostrar tareas si tasks_to_show no está vacío
     if tasks_to_show:
         for task in tasks_to_show:
             t_id = task.get("id") or str(uuid.uuid4()); task["id"] = t_id
@@ -1991,7 +1998,6 @@ def page_create_task():
             with c_due: st.markdown(task.get("due","—"))
             with c_pri: st.markdown(_priority_pill(task.get("priority","Media")), unsafe_allow_html=True)
             with c_est: st.markdown(_status_pill(task.get("status","Pendiente")), unsafe_allow_html=True)
-            # --- FIN CAMBIO (Solicitud 3.1) ---
 
             def _handle_action_change(task_id):
                 selectbox_key = f"accion_{task_id}"
@@ -2003,7 +2009,6 @@ def page_create_task():
                 # Resetear estados de UI antes de actuar
                 ss.confirm_delete_id = None
                 ss.show_assign_for = None
-                # No resetear expanded_task_id aquí, solo si la acción NO es 'Ver detalle'
 
                 if action == "Ver detalle":
                     ss.expanded_task_id = task_id
@@ -2016,18 +2021,16 @@ def page_create_task():
                     task_to_update["assigned_to"] = current_user
                     task_to_update["status"] = "En Proceso"
                     save_tasks(ss.tasks); st.toast("Tarea tomada.")
-                    st.rerun() # Rerun para refrescar estado
+                    st.rerun()
                 elif action == "Eliminar":
                     ss.expanded_task_id = None # Cerrar detalle
                     ss.confirm_delete_id = task_id
-                else: # Si es "Selecciona..." u otra acción inesperada
-                     ss.expanded_task_id = None # Asegurar cerrar detalle
+                else:
+                    ss.expanded_task_id = None # Asegurar cerrar detalle
 
-                # (Req 1) Resetear selectbox solo si no es 'Ver detalle' que lo mantiene abierto
-                # O resetear siempre para forzar re-render, st.dialog lo manejará
-                if action != "Selecciona…": # Evitar bucle si ya está en default
-                    st.session_state[selectbox_key] = "Selecciona…" # Forzar rerun implícito
-
+                # Resetear el selectbox visualmente
+                if action != "Selecciona…":
+                    st.session_state[selectbox_key] = "Selecciona…"
 
             with c_acc:
                 selectbox_key = f"accion_{t_id}"
@@ -2039,9 +2042,8 @@ def page_create_task():
                 )
 
             if ss.get("confirm_delete_id") == t_id:
-                # (Solicitud 3.1) Ajuste de columnas para el popup de borrado
-                _, col_btn1, col_btn2, _ = st.columns([col_w[0]+col_w[1]+col_w[2]+col_w[3], col_w[4], col_w[5], col_w[6]]) # Ajustar a layout
-                st.error(f"¿Seguro que quieres eliminar la tarea '{task.get('titulo')}'?") # Mensaje más claro
+                _, col_btn1, col_btn2, _ = st.columns([col_w[0]+col_w[1]+col_w[2]+col_w[3], col_w[4], col_w[5], col_w[6]])
+                st.error(f"¿Seguro que quieres eliminar la tarea '{task.get('titulo')}'?")
                 with col_btn1:
                     if st.button("Sí, Eliminar Ahora", key=f"del_confirm_{t_id}", type="primary", use_container_width=True):
                         ss.tasks = [t for t in ss.tasks if t.get("id") != t_id]
@@ -2054,9 +2056,8 @@ def page_create_task():
                         st.rerun()
 
             if ss.show_assign_for == t_id:
-                # Ajustar columnas para popup de asignación
-                 _, a1, a2, a3, a4 = st.columns([col_w[0]+col_w[1], col_w[2], col_w[3], col_w[4], col_w[5]+col_w[6]]) # Ajustar a layout
-                 st.info(f"Asignando tarea '{task.get('titulo')}'...") # Mensaje contextual
+                 _, a1, a2, a3, a4 = st.columns([col_w[0]+col_w[1], col_w[2], col_w[3], col_w[4], col_w[5]+col_w[6]])
+                 st.info(f"Asignando tarea '{task.get('titulo')}'...")
                  with a1:
                     assign_type = st.selectbox("Tipo", ["En Espera", "Equipo", "Usuario"], key=f"type_{t_id}", index=2)
                  with a2:
@@ -2064,8 +2065,8 @@ def page_create_task():
                         nuevo_assignee = "En Espera"; st.text_input("Asignado a", "En Espera", key=f"val_esp_{t_id}", disabled=True, label_visibility="collapsed")
                     elif assign_type == "Equipo":
                         nuevo_assignee = st.selectbox("Equipo", ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"], key=f"val_eq_{t_id}", label_visibility="collapsed")
-                    else: # Usuario
-                        user_options = [USERS[u]["name"] for u in USERS] # Mostrar nombres
+                    else:
+                        user_options = [USERS[u]["name"] for u in USERS]
                         nuevo_assignee = st.selectbox("Usuario", user_options, key=f"val_us_{t_id}", label_visibility="collapsed")
                  with a3:
                     cur_p = task.get("priority", "Media")
@@ -2081,10 +2082,8 @@ def page_create_task():
                             if assign_type == "En Espera":
                                 task_to_update["status"] = "En Espera"
                             else:
-                                # Si estaba 'En Espera', pasarla a 'Pendiente' al asignar
                                 if task_to_update["status"] == "En Espera":
                                     task_to_update["status"] = "Pendiente"
-                                # Si no, mantener el estado actual (podría ser Pendiente o En Proceso)
                             save_tasks(ss.tasks); ss.show_assign_for = None
                             st.success("Tarea reasignada.")
                             st.rerun()
@@ -2092,141 +2091,115 @@ def page_create_task():
                          ss.show_assign_for = None
                          st.rerun()
 
-
             st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
-    # (INICIO REQ 3.3) Lógica del diálogo para Tareas (CORREGIDA v2)
+    # --- DETALLE DE TAREA (antes estaba intentando usar st.dialog) ---
+    # Ahora lo mostramos inline para evitar problemas con st.dialog en versiones distintas.
     task_id_for_dialog = ss.get("expanded_task_id")
     if task_id_for_dialog:
         task_data = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
         if task_data:
-            try:
-                # ======== INICIO DE CORRECCIÓN v2 (BUG 'function' object) ========
-                # Llamar a st.dialog() directamente. Los comandos st.* siguientes irán dentro.
-                st.dialog("Detalle de Tarea", width="large")
-                # ======== FIN DE CORRECCIÓN v2 (BUG 'function' object) ========
+            st.markdown("### Detalle de Tarea")
+            context = task_data.get("context", {}) # Cargar contexto
 
-                st.markdown(f"### {task_data.get('titulo', 'Sin Título')}")
-                context = task_data.get("context", {}) # Cargar contexto
+            # --- Mostrar Análisis de IA y PDF si existe ---
+            if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
+                st.markdown("---")
+                st.markdown("🤖 **Análisis de IA (LLM)**")
+                analysis_data = context["llm_analysis"]
 
-                # --- Mostrar Análisis de IA y PDF si existe ---
-                if context.get("source") == "Evaluación LLM" and "llm_analysis" in context:
-                    st.markdown("---")
-                    st.markdown("🤖 **Análisis de IA (LLM)**")
-                    analysis_data = context["llm_analysis"]
+                d_c1, d_c2, d_c3 = st.columns(3)
+                d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
+                d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
+                d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
 
-                    d_c1, d_c2, d_c3 = st.columns(3)
-                    d_c1.metric("Score (Fit)", f"{analysis_data.get('Score', 'N/A')}%")
-                    d_c2.metric("Años Exp.", f"{analysis_data.get('Years_of_Experience', 'N/A')}")
-                    d_c3.metric("Nivel Inglés", f"{analysis_data.get('English_Level', 'N/A')}")
+                st.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
+                st.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
+                st.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
 
-                    st.markdown(f"**Puesto Reciente:** `{analysis_data.get('Last_position', 'N/A')}`")
-                    st.markdown(f"**Habilidades Clave:** {', '.join(analysis_data.get('Key_Skills', ['N/A']))}")
-                    st.markdown(f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*")
+                if "pdf_bytes_b64" in context:
+                    try:
+                        pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                        with st.expander("Visualizar CV (PDF)", expanded=True):
+                            pdf_viewer_embed(pdf_bytes, height=400, container=st)
+                    except Exception as e:
+                        st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
 
-                    if "pdf_bytes_b64" in context:
-                        try:
-                            pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                            # Crear expander *dentro* del diálogo
-                            with st.expander("Visualizar CV (PDF)", expanded=True):
-                                # Usar 'st' como container implícito (ya estamos dentro del dialog)
-                                pdf_viewer_embed(pdf_bytes, height=400, container=st)
-                        except Exception as e:
-                            st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
-
-                    if "jd_text" in context and context["jd_text"]:
-                        with st.expander("Ver Job Description (JD) usado", expanded=False):
-                            st.text(context["jd_text"])
-
-                    st.markdown("---")
-
-
-                # --- Mostrar Información de Tarea (General) ---
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**Información Principal**")
-                    st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
-                    st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
-                    st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
-                with c2:
-                    st.markdown("**Estado y Prioridad**")
-                    # Usar st.markdown para renderizar HTML dentro del diálogo
-                    st.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
-                    st.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
-
-
-                if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
-                    st.markdown("---")
-                    st.markdown("**Contexto del Flujo**")
-                    if "candidate_name" in context:
-                        st.markdown(f"**Postulante:** {context['candidate_name']}")
-                    if "role" in context:
-                        st.markdown(f"**Puesto:** {context['role']}")
+                if "jd_text" in context and context["jd_text"]:
+                    with st.expander("Ver Job Description (JD) usado", expanded=False):
+                        st.text(context["jd_text"])
 
                 st.markdown("---")
-                st.markdown("**Descripción:**"); st.markdown(task_data.get('desc', 'Sin descripción.'))
+
+            # --- Mostrar Información de Tarea (General) ---
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Información Principal**")
+                st.markdown(f"**Asignado a:** `{task_data.get('assigned_to', 'N/A')}`")
+                st.markdown(f"**Vencimiento:** `{task_data.get('due', 'N/A')}`")
+                st.markdown(f"**Creado el:** `{task_data.get('created_at', 'N/A')}`")
+            with c2:
+                st.markdown("**Estado y Prioridad**")
+                st.markdown(f"**Estado:** {_status_pill(task_data.get('status', 'Pendiente'))}", unsafe_allow_html=True)
+                st.markdown(f"**Prioridad:** {_priority_pill(task_data.get('priority', 'Media'))}", unsafe_allow_html=True)
+
+            if context and ("candidate_name" in context) and context.get("source") != "Evaluación LLM":
                 st.markdown("---")
-                # Mostrar comentarios si existen
-                comments = task_data.get("comments", [])
-                if comments:
-                     with st.expander("Historial de Comentarios", expanded=False):
-                        for comment in reversed(comments): # Mostrar más recientes primero
-                            st.caption(comment)
-                else:
-                    st.markdown("**Actividad Reciente:**"); st.markdown("- *No hay actividad registrada.*")
+                st.markdown("**Contexto del Flujo**")
+                if "candidate_name" in context:
+                    st.markdown(f"**Postulante:** {context['candidate_name']}")
+                if "role" in context:
+                    st.markdown(f"**Puesto:** {context['role']}")
 
+            st.markdown("---")
+            st.markdown("**Descripción:**")
+            st.markdown(task_data.get('desc', 'Sin descripción.'))
+            st.markdown("---")
 
-                # Formulario de acciones dentro del diálogo
-                with st.form("task_actions_form_dialog"):
-                    st.markdown("**Acciones de Tarea**")
+            # Mostrar comentarios si existen
+            comments = task_data.get("comments", [])
+            if comments:
+                with st.expander("Historial de Comentarios", expanded=False):
+                    for comment in reversed(comments):
+                        st.caption(comment)
+            else:
+                st.markdown("**Actividad Reciente:**")
+                st.markdown("- *No hay actividad registrada.*")
 
-                    current_status = task_data.get("status", "Pendiente")
-                    all_statuses = ["Pendiente", "En Proceso", "Completada", "En Espera"] # Estados fijos posibles
-                    status_index = all_statuses.index(current_status) if current_status in all_statuses else 0
+            # Formulario de acciones dentro del bloque de detalle
+            with st.form("task_actions_form_dialog"):
+                st.markdown("**Acciones de Tarea**")
 
-                    t_id = task_data.get('id')
+                current_status = task_data.get("status", "Pendiente")
+                all_statuses_dlg = ["Pendiente", "En Proceso", "Completada", "En Espera"]
+                status_index = all_statuses_dlg.index(current_status) if current_status in all_statuses_dlg else 0
 
-                    new_status = st.selectbox("Cambiar Estado", all_statuses, index=status_index, key=f"dialog_status_{t_id}")
-                    new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
+                t_id = task_data.get('id')
 
-                    submitted = st.form_submit_button("Guardar Cambios y Cerrar")
+                new_status = st.selectbox("Cambiar Estado", all_statuses_dlg, index=status_index, key=f"dialog_status_{t_id}")
+                new_comment = st.text_area("Añadir Comentario (Opcional)", placeholder="Ej: Aprobado por Gerencia.", key=f"dialog_comment_{t_id}")
 
-                    if submitted:
-                        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
-                        if task_to_update:
-                            task_to_update["status"] = new_status
-                            if new_comment:
-                                if "comments" not in task_to_update: task_to_update["comments"] = []
-                                user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
-                                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-                                task_to_update["comments"].append(f"{user_name} ({timestamp}): {new_comment}")
-                                # Opcional: Podrías querer solo guardar en comments y no añadir al desc
-                                # task_to_update["desc"] = f"{task_to_update.get('desc', '')}\n[Comentario {timestamp}: {new_comment}]"
+                submitted = st.form_submit_button("Guardar Cambios y Cerrar")
 
-                            save_tasks(ss.tasks)
-                            st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
-                            ss.expanded_task_id = None # Marcar para cerrar
-                            st.rerun() # Rerun cerrará el dialog porque expanded_task_id es None
+                if submitted:
+                    task_to_update = next((t for t in ss.tasks if t.get("id") == task_id_for_dialog), None)
+                    if task_to_update:
+                        task_to_update["status"] = new_status
+                        if new_comment:
+                            if "comments" not in task_to_update: task_to_update["comments"] = []
+                            user_name = ss.auth.get('name', 'User') if ss.get('auth') else 'User'
+                            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                            task_to_update["comments"].append(f"{user_name} ({timestamp}): {new_comment}")
 
-                if st.button("Cancelar", key=f"dialog_cancel_{t_id}"):
-                    ss.expanded_task_id = None # Marcar para cerrar
-                    st.rerun() # Rerun cerrará el dialog
+                        save_tasks(ss.tasks)
+                        st.toast(f"Tarea '{task_to_update['titulo']}' actualizada a '{new_status}'.")
+                        ss.expanded_task_id = None
+                        st.rerun()
 
+            if st.button("Cerrar Detalle", key=f"dialog_cancel_{t_id}"):
+                ss.expanded_task_id = None
+                st.rerun()
 
-            except Exception as e:
-                # Si ocurre un error DENTRO del dialog, necesitamos cerrarlo manualmente
-                st.error(f"Error al mostrar detalles de la tarea: {e}")
-                print(f"Error detallado en dialog: {e}") # Debug
-                if ss.get("expanded_task_id") == task_id_for_dialog:
-                    ss.expanded_task_id = None # Asegurar cerrar si hay error
-                    st.rerun() # Forzar rerun para cerrar
-
-        else: # task_data no encontrado (raro, pero posible)
-             if ss.get("expanded_task_id") == task_id_for_dialog:
-                 ss.expanded_task_id = None # Limpiar si la tarea ya no existe
-                 # Podríamos necesitar un rerun aquí si queremos que el diálogo desaparezca inmediatamente
-                 # st.rerun()
-    # (FIN REQ 3.3)
 # =========================================================
 # ROUTER
 # =========================================================
