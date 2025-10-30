@@ -710,27 +710,16 @@ def render_sidebar():
       ss.pipeline_filter = None
 
     st.markdown("#### PROCESO DE SELECCIÓN")
-    for txt, sec, target_stage in [
-        ("Publicación & Sourcing","publicacion_sourcing", None),
-        ("Puestos","puestos", None),
-        ("Evaluación de CVs","eval", None),
-        ("Pipeline de Candidatos","pipeline", None),
-        ("Entrevista (Gerencia)","pipeline", "Entrevista Gerencia"),
-        ("Oferta","pipeline", "Oferta"),
-        ("Onboarding","pipeline", "Contratado")
-    ]:
-      if txt in ["Entrevista (Gerencia)", "Oferta", "Onboarding"]:
-        if st.button(txt, key=f"sb_{sec}_{txt.replace(' ', '_')}"):
-            ss.section = "pipeline"
-            ss.pipeline_filter = target_stage
-      elif txt == "Pipeline de Candidatos":
-          if st.button(txt, key=f"sb_{sec}"):
-            ss.section = sec
-            ss.pipeline_filter = None
-      else:
-        if st.button(txt, key=f"sb_{sec}"):
-          ss.section = sec
-          ss.pipeline_filter = None
+
+    # ✅ Puestos
+    if st.button("Puestos", key="sb_puestos"):
+        ss.section = "puestos"
+        ss.pipeline_filter = None
+
+    # ✅ Evaluación de CVs
+    if st.button("Evaluación de CVs", key="sb_eval"):
+        ss.section = "eval"
+        ss.pipeline_filter = None
 
     st.markdown("#### TAREAS")
     if st.button("Todas las tareas", key="sb_task_manual"): ss.section = "create_task"
