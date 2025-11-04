@@ -430,26 +430,26 @@ def build_analysis_text(name,ex):
 # =========================================================
 def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
     """
-    CORREGIDO (v4): Retorna el string HTML del iframe.
-    Esto permite llamarlo con st.markdown(..., unsafe_allow_html=True)
-    que es más robusto dentro de st.expander que st.html().
+    CORREGIDO (v5): Usa la etiqueta <embed> en lugar de <iframe>.
+    Chrome (y otros navegadores) a menudo bloquean iframes con data: URI
+    por razones de seguridad (CSP). <embed> es mucho más robusto para este caso.
     """
     try:
         # 1. Convertir los bytes del PDF a base64
         base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
-        # 2. Crear el HTML del iframe
-        # (Se aplica height="{height}px" directamente al iframe)
+        # 2. Crear el HTML usando <embed>
+        # Esta es la etiqueta estándar para incrustar PDFs y evita el bloqueo de Chrome
         pdf_embed_html = f"""
         <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
-            <iframe src="data:application/pdf;base64,{base64_pdf}#toolbar=0"
-                    width="100%"
-                    height="{height}px"
-                    style="border:none;">
-            </iframe>
+            <embed src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0"
+                   type="application/pdf"
+                   width="100%"
+                   height="{height}px" />
         </div>
         """
-        # 3. Retornar el HTML
+        
+        # 3. Retornar el HTML para st.markdown
         return pdf_embed_html
 
     except Exception as e:
