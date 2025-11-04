@@ -430,20 +430,20 @@ def build_analysis_text(name,ex):
 # =========================================================
 def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
     """
-    CORREGIDO: Muestra el PDF en línea (inline) usando un iframe embebido en base64.
-    Esto es más robusto que st.pdf() si hay problemas de CSP o renderizado
-    y evita el botón de descarga.
+    CORREGIDO (v2): Muestra el PDF en línea (inline) usando un iframe embebido en base64.
+    Se elimina el argumento 'height' de la llamada a container.html() que causaba el error.
     """
     try:
         # 1. Convertir los bytes del PDF a base64
         base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
-        # 2. Crear el HTML del iframe usando un data URI
+        # 2. Crear el HTML del iframe
         # Se añade un estilo para que se integre bien con el Look & Feel
         pdf_embed_html = f"""
         <style>
         .pdf-embed-container {{
             width: 100%;
+            /* La altura se controla aquí, desde el CSS */
             height: {height}px;
             border: 1.5px solid #E3EDF6; /* Estilo del borde de la app */
             border-radius: 10px; /* Estilo de borde de la app */
@@ -465,8 +465,8 @@ def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520)
         """
 
         # 3. Mostrar el HTML en el contenedor de Streamlit
-        # Se suma 20px a la altura del HTML para compensar el padding/borde
-        container.html(pdf_embed_html, height=height + 20)
+        # (CORRECCIÓN: Se elimina el argumento 'height' que no es soportado)
+        container.html(pdf_embed_html)
 
     except Exception as e:
         container.error(f"Error al procesar el PDF para visualización: {e}")
