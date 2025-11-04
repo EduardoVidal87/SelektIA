@@ -2655,12 +2655,6 @@ def page_create_task():
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
-                        # --- INICIO DE LA CORRECCIÓN ---
-                       if "pdf_bytes_b64" in context:
-                    try:
-                        pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
-                        display_name = analysis_data.get("file_name", "cv.pdf")
-
                         # --- INICIO DE LA CORRECCIÓN (v6) ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
                             # Volvemos a llamar a la función pasando el 'container' (st)
@@ -2671,10 +2665,6 @@ def page_create_task():
                                 container=st, # Pasamos el contenedor (el expander)
                                 height=400    # Asignamos la altura
                             )
-                        # --- FIN DE LA CORRECCIÓN ---
-
-                    except Exception as e:
-                        st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
                         # --- FIN DE LA CORRECCIÓN ---
 
                     except Exception as e:
