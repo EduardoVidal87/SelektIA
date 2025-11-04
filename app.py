@@ -2655,15 +2655,16 @@ def page_create_task():
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
-                        # --- INICIO DE LA CORRECCIÓN (v6) ---
-                        with st.expander("Visualizar CV (PDF)", expanded=False):
-                            # Volvemos a llamar a la función pasando el 'container' (st)
-                            # La función ahora llama a st.html() internamente.
+                        # --- INICIO DE LA CORRECCIÓN (v7) ---
+                        # Reemplazamos st.expander por st.popover
+                        with st.popover("Visualizar CV (PDF)"):
+                            # La función pdf_viewer_embed (v6) es correcta.
+                            # El popover (st) actúa como el nuevo container.
                             pdf_viewer_embed(
                                 file_bytes=pdf_bytes,
                                 filename=display_name,
-                                container=st, # Pasamos el contenedor (el expander)
-                                height=400    # Asignamos la altura
+                                container=st, 
+                                height=500  # Aumentamos la altura para el popover
                             )
                         # --- FIN DE LA CORRECCIÓN ---
 
