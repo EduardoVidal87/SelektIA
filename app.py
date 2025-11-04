@@ -428,18 +428,18 @@ def build_analysis_text(name,ex):
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
 # =========================================================
-def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
+def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
     """
-    CORREGIDO (v3): Muestra el PDF en línea (inline) usando un iframe embebido en base64.
-    El iframe ahora tiene una altura en px fija (ej: "400px") en lugar de "100%"
-    para asegurar que se renderice correctamente dentro del st.expander.
+    CORREGIDO (v4): Retorna el string HTML del iframe.
+    Esto permite llamarlo con st.markdown(..., unsafe_allow_html=True)
+    que es más robusto dentro de st.expander que st.html().
     """
     try:
         # 1. Convertir los bytes del PDF a base64
         base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
         # 2. Crear el HTML del iframe
-        # (CAMBIO: Se aplica height="{height}px" directamente al iframe)
+        # (Se aplica height="{height}px" directamente al iframe)
         pdf_embed_html = f"""
         <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
             <iframe src="data:application/pdf;base64,{base64_pdf}#toolbar=0"
@@ -449,12 +449,12 @@ def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520)
             </iframe>
         </div>
         """
-
-        # 3. Mostrar el HTML (sin el argumento 'height' en la llamada .html())
-        container.html(pdf_embed_html)
+        # 3. Retornar el HTML
+        return pdf_embed_html
 
     except Exception as e:
-        container.error(f"Error al procesar el PDF para visualización: {e}")
+        # Si falla, retorna un HTML de error
+        return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2653,13 +2653,18 @@ def page_create_task():
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
+                        # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            pdf_viewer_embed(
+                            # 1. Obtenemos el HTML de la función
+                            html_to_render = pdf_viewer_embed(
                                 file_bytes=pdf_bytes,
                                 filename=display_name,
-                                container=st,
-                                height=400,
+                                height=400  # Altura de 400px para el detalle
                             )
+                            # 2. Usamos st.markdown, que funciona mejor en expanders
+                            st.markdown(html_to_render, unsafe_allow_html=True)
+                        # --- FIN DE LA CORRECCIÓN ---
+
                     except Exception as e:
                         st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
 
