@@ -426,38 +426,51 @@ def build_analysis_text(name,ex):
     return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
 
 # =========================================================
-# VISOR DE PDF (ACTUALIZADO)
+# VISOR DE PDF (CORREGIDO CON IFRAME)
 # =========================================================
 def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
     """
-    Entrega el PDF asociado al candidato.
-
-    1. Intentar container.pdf() (Streamlit moderno).
-    2. Si falla (CSP / navegador), mostrar botón de descarga como fallback.
+    CORREGIDO: Muestra el PDF en línea (inline) usando un iframe embebido en base64.
+    Esto es más robusto que st.pdf() si hay problemas de CSP o renderizado
+    y evita el botón de descarga.
     """
-    # Intento inline nativo
     try:
-        container.pdf(file_bytes)
-        return
-    except Exception:
-        pass
+        # 1. Convertir los bytes del PDF a base64
+        base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
-    # Fallback seguro: descarga
-    try:
-        container.download_button(
-            label="⬇ Descargar CV (PDF)",
-            data=file_bytes,
-            file_name=filename if filename else "cv.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-        container.info(
-            "Haz clic en '⬇ Descargar CV (PDF)' para abrirlo. "
-            "El visor embebido del navegador está bloqueado, "
-            "pero el archivo sí está guardado."
-        )
+        # 2. Crear el HTML del iframe usando un data URI
+        # Se añade un estilo para que se integre bien con el Look & Feel
+        pdf_embed_html = f"""
+        <style>
+        .pdf-embed-container {{
+            width: 100%;
+            height: {height}px;
+            border: 1.5px solid #E3EDF6; /* Estilo del borde de la app */
+            border-radius: 10px; /* Estilo de borde de la app */
+            overflow: hidden; /* Asegura que el iframe no se desborde */
+        }}
+        .pdf-embed-iframe {{
+            width: 100%;
+            height: 100%;
+            border: none; /* Sin borde para el iframe mismo */
+        }}
+        </style>
+        <div class="pdf-embed-container">
+            <iframe src="data:application/pdf;base64,{base64_pdf}#toolbar=0"
+                    type="application/pdf"
+                    class="pdf-embed-iframe">
+                Este navegador no soporta PDFs embebidos.
+            </iframe>
+        </div>
+        """
+
+        # 3. Mostrar el HTML en el contenedor de Streamlit
+        # Se suma 20px a la altura del HTML para compensar el padding/borde
+        container.html(pdf_embed_html, height=height + 20)
+
     except Exception as e:
-        container.error(f"No se pudo preparar el PDF: {e}")
+        container.error(f"Error al procesar el PDF para visualización: {e}")
+
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -656,10 +669,10 @@ def _handle_position_action_change(pos_id):
 # =========================================================
 if "candidate_init" not in ss:
     initial_candidates = [
-        {"Name": "CV_AnaLopez.pdf",   "Score": 85, "Role": "Business Analytics",                "source": "LinkedIn Jobs"},
-        {"Name": "CV_LuisGomez.pdf",  "Score": 42, "Role": "Business Analytics",                "source": "Computrabajo"},
+        {"Name": "CV_AnaLopez.pdf",    "Score": 85, "Role": "Business Analytics",             "source": "LinkedIn Jobs"},
+        {"Name": "CV_LuisGomez.pdf",  "Score": 42, "Role": "Business Analytics",             "source": "Computrabajo"},
         {"Name": "CV_MartaDiaz.pdf",  "Score": 91, "Role": "Desarrollador/a Backend (Python)",  "source": "Indeed"},
-        {"Name": "CV_JaviRuiz.pdf",   "Score": 30, "Role": "Diseñador/a UX",                    "source": "laborum.pe"},
+        {"Name": "CV_JaviRuiz.pdf",    "Score": 30, "Role": "Diseñador/a UX",                 "source": "laborum.pe"},
     ]
     candidates_list = []
     for i, c in enumerate(initial_candidates):
@@ -838,8 +851,8 @@ def page_def_carga():
 
     st.subheader("3. Sourcing desde Portales")
     with st.expander("🔌 Integración con Portales de Empleo"):
-        srcs     = st.multiselect("Portales", JOB_BOARDS, default=["laborum.pe"], key="portal_srcs")
-        qty      = st.number_input("Cantidad por portal",1,30,6, key="portal_qty")
+        srcs      = st.multiselect("Portales", JOB_BOARDS, default=["laborum.pe"], key="portal_srcs")
+        qty       = st.number_input("Cantidad por portal",1,30,6, key="portal_qty")
         search_q = st.text_input("Búsqueda", value=puesto, key="portal_search_q")
         location = st.text_input("Ubicación", value="Lima, Perú", key="portal_location")
 
@@ -1367,9 +1380,9 @@ def page_eval():
                                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                                     tmp.write(f_bytes)
                                     tmp.flush()
-                                    loader = PyPDFLoader(tmp.name)
-                                    pages = loader.load()
-                                    text = "\n".join([p.page_content for p in pages])
+                                loader = PyPDFLoader(tmp.name)
+                                pages = loader.load()
+                                text = "\n".join([p.page_content for p in pages])
                             else:
                                 reader = PdfReader(io.BytesIO(f_bytes))
                                 for p in reader.pages:
