@@ -428,18 +428,20 @@ def build_analysis_text(name,ex):
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
 # =========================================================
-def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
+def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
     """
-    CORREGIDO (v5): Usa la etiqueta <embed> en lugar de <iframe>.
-    Chrome (y otros navegadores) a menudo bloquean iframes con data: URI
-    por razones de seguridad (CSP). <embed> es mucho más robusto para este caso.
+    CORREGIDO (v6): Volvemos a st.html() pero usando <embed>
+    st.markdown() parece estar sanitizando/bloqueando el <embed> tag.
+    st.html() es la forma correcta de renderizar HTML complejo.
+    El error original (unexpected keyword 'height') se soluciona NO pasando
+    height a st.html(), sino poniéndolo DENTRO del string HTML.
     """
     try:
         # 1. Convertir los bytes del PDF a base64
         base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
         # 2. Crear el HTML usando <embed>
-        # Esta es la etiqueta estándar para incrustar PDFs y evita el bloqueo de Chrome
+        # Esta es la etiqueta estándar para incrustar PDFs
         pdf_embed_html = f"""
         <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
             <embed src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0"
@@ -449,12 +451,12 @@ def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
         </div>
         """
         
-        # 3. Retornar el HTML para st.markdown
-        return pdf_embed_html
+        # 3. Llamar a container.html() SIN el argumento height
+        container.html(pdf_embed_html)
 
     except Exception as e:
         # Si falla, retorna un HTML de error
-        return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
+        container.error(f"Error al procesar el PDF: {e}")
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2654,15 +2656,25 @@ def page_create_task():
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
                         # --- INICIO DE LA CORRECCIÓN ---
+                       if "pdf_bytes_b64" in context:
+                    try:
+                        pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
+                        display_name = analysis_data.get("file_name", "cv.pdf")
+
+                        # --- INICIO DE LA CORRECCIÓN (v6) ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            # 1. Obtenemos el HTML de la función
-                            html_to_render = pdf_viewer_embed(
+                            # Volvemos a llamar a la función pasando el 'container' (st)
+                            # La función ahora llama a st.html() internamente.
+                            pdf_viewer_embed(
                                 file_bytes=pdf_bytes,
                                 filename=display_name,
-                                height=400  # Altura de 400px para el detalle
+                                container=st, # Pasamos el contenedor (el expander)
+                                height=400    # Asignamos la altura
                             )
-                            # 2. Usamos st.markdown, que funciona mejor en expanders
-                            st.markdown(html_to_render, unsafe_allow_html=True)
+                        # --- FIN DE LA CORRECCIÓN ---
+
+                    except Exception as e:
+                        st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
                         # --- FIN DE LA CORRECCIÓN ---
 
                     except Exception as e:
