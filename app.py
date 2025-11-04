@@ -426,37 +426,29 @@ def build_analysis_text(name,ex):
     return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
 
 # =========================================================
-# VISOR DE PDF (ACTUALIZADO)
+# VISOR DE PDF (CORREGIDO - V8 - NATIVO)
 # =========================================================
 def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
     """
-    CORREGIDO (v6): Volvemos a st.html() pero usando <embed>
-    st.markdown() parece estar sanitizando/bloqueando el <embed> tag.
-    st.html() es la forma correcta de renderizar HTML complejo.
-    El error original (unexpected keyword 'height') se soluciona NO pasando
-    height a st.html(), sino poniéndolo DENTRO del string HTML.
+    CORREGIDO (v8): Volvemos al st.pdf() nativo.
+    El bug de la "línea" es causado por st.html() dentro de st.expander().
+    El componente nativo st.pdf() está diseñado para manejar esto.
+    
+    El error original fue que no se pasaba el argumento 'height'
+    correctamente a la función container.pdf().
     """
     try:
-        # 1. Convertir los bytes del PDF a base64
-        base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
-
-        # 2. Crear el HTML usando <embed>
-        # Esta es la etiqueta estándar para incrustar PDFs
-        pdf_embed_html = f"""
-        <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
-            <embed src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0"
-                   type="application/pdf"
-                   width="100%"
-                   height="{height}px" />
-        </div>
-        """
-        
-        # 3. Llamar a container.html() SIN el argumento height
-        container.html(pdf_embed_html)
-
+        # El 'container' (que será el st.expander) llama a .pdf()
+        # y ahora SÍ le pasamos la altura (height) directamente.
+        container.pdf(file_bytes, height=height)
+    
     except Exception as e:
-        # Si falla, retorna un HTML de error
-        container.error(f"Error al procesar el PDF: {e}")
+        # Si el PDF es inválido, st.pdf() puede fallar.
+        container.error(f"Error al procesar el PDF nativo: {e}")
+        container.info(
+            "No se pudo mostrar el PDF en línea. Intenta descargarlo "
+            "o revisa si el archivo está dañado."
+        )
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2650,21 +2642,20 @@ def page_create_task():
                     f"**Notas IA:** *{analysis_data.get('Additional_Notes', 'N/A')}*"
                 )
 
-                if "pdf_bytes_b64" in context:
+               if "pdf_bytes_b64" in context:
                     try:
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
-                        # --- INICIO DE LA CORRECCIÓN (v7) ---
-                        # Reemplazamos st.expander por st.popover
-                        with st.popover("Visualizar CV (PDF)"):
-                            # La función pdf_viewer_embed (v6) es correcta.
-                            # El popover (st) actúa como el nuevo container.
+                        # --- INICIO DE LA CORRECCIÓN (v8) ---
+                        # Volvemos a st.expander (como querías)
+                        with st.expander("Visualizar CV (PDF)", expanded=False):
+                            # Llamamos a la nueva función (v8) que usa st.pdf()
                             pdf_viewer_embed(
                                 file_bytes=pdf_bytes,
                                 filename=display_name,
-                                container=st, 
-                                height=500  # Aumentamos la altura para el popover
+                                container=st, # Pasa el expander como contenedor
+                                height=400    # Pasa la altura
                             )
                         # --- FIN DE LA CORRECCIÓN ---
 
