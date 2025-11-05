@@ -2734,6 +2734,46 @@ def page_create_task():
 
     tasks_to_show = tasks_filtered
 
+    # --- Acción del select (función anidada dentro de page_create_task) ---
+    def _handle_action_change(task_id):
+        selectbox_key = f"accion_{task_id}"
+        if selectbox_key not in ss:
+            return
+        action = ss[selectbox_key]
+        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+        if not task_to_update:
+            return
+
+        # Reset de modales/paneles
+        ss.confirm_delete_id = None
+        ss.show_assign_for = None
+
+        if action == "Ver detalle":
+            ss.expanded_task_id = task_id
+
+        elif action == "Asignar tarea":
+            ss.expanded_task_id = None
+            ss.show_assign_for = task_id
+
+        elif action == "Tomar tarea":
+            ss.expanded_task_id = None
+            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+            task_to_update["assigned_to"] = current_user
+            task_to_update["status"] = "En Proceso"
+            save_tasks(ss.tasks)
+            st.toast("Tarea tomada ✅")
+
+        elif action == "Eliminar":
+            ss.expanded_task_id = None
+            ss.confirm_delete_id = task_id
+
+        else:
+            ss.expanded_task_id = None
+
+        # Devuelve el select a estado neutro y pide rerun fuera de la callback
+        ss[selectbox_key] = "Selecciona…"
+        request_rerun()
+        
     col_w = [2.0, 2.5, 1.2, 1.2, 1.0, 1.0, 1.5]
     h_nom, h_desc, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
 
@@ -3131,11 +3171,10 @@ ROUTES = {
 if __name__ == "__main__":
     if require_auth():
         render_sidebar()
-
-        # Si algún callback pidió un rerun, hazlo aquí (ya fuera de callbacks)
+        # 1) Renderiza la página actual
+        ROUTES.get(ss.section, page_def_carga)()
+        # 2) Si alguna callback pidió rerun, hazlo aquí (fuera de callbacks)
         if ss.get("_needs_rerun"):
             ss._needs_rerun = False
             st.rerun()
-
-        ROUTES.get(ss.section, page_def_carga)()
 
