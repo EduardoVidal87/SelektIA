@@ -1032,52 +1032,21 @@ def _extract_with_azure(job_description: str, resume_content: str, flow_desc: st
     if not _LC_AVAILABLE:
         return {}
     _llm_setup_credentials()
-    
-    json_string = "" # Variable para depurar en caso de error
     try:
         llm = AzureChatOpenAI(
             azure_deployment=st.secrets["llm"]["azure_deployment"],
             api_version=st.secrets["llm"]["azure_api_version"],
             temperature=0
         )
-        
+        parser = JsonOutputParser()
         prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
-        
         if prompt is None:
             return {}
-            
-        chain = prompt | llm 
-        resp = chain.invoke({"job_description": job_description})
-
-        # --- INICIO DE LA NUEVA CORRECCIÓN ---
-        raw_text = resp.content.strip()
-        
-        # 1. Buscar el bloque de texto que empieza con { y termina con }
-        # re.DOTALL hace que el "." incluya saltos de línea
-        json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-        
-        if not json_match:
-            # 2. Soluciona el error "Expecting value" (respuesta vacía)
-            st.warning(f"Azure LLM no retornó un JSON válido. Respuesta (parcial): {raw_text[:200]}...")
-            return {} 
-
-        # 3. Extraer solo el texto del JSON
-        # Esto soluciona el error "Extra data"
-        json_string = json_match.group(0)
-
-        # 4. Parsear solo el string extraído
-        out = json.loads(json_string)
-        # --- FIN DE LA NUEVA CORRECCIÓN ---
-        
+        chain = prompt | llm | parser
+        out = chain.invoke({"job_description": job_description})
         return out if isinstance(out, dict) else {}
-        
-    except json.JSONDecodeError as json_err:
-        # Error específico si el string extraído SIGUE estando mal
-        st.warning(f"Azure LLM: Error de parseo JSON: {json_err}. Texto extraído (parcial): {json_string[:200]}...")
-        return {}
     except Exception as e:
-        # Captura general
-        st.warning(f"Azure LLM no disponible o error inesperado: {e}") 
+        st.warning(f"Azure LLM no disponible: {e}")
         return {}
 
 def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
