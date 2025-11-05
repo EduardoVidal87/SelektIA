@@ -2140,11 +2140,15 @@ def page_calls_view():
                 key=act_key,
                 label_visibility="collapsed"
             )
+
             if action == "Ver":
                 ss.selected_transcript_id = tid
+                st.session_state[act_key] = "Selecciona…"   # reset para evitar loop
                 st.rerun()
+
             elif action == "Eliminar":
                 ss.confirm_delete_transcript_id = tid
+                st.session_state[act_key] = "Selecciona…"   # reset para evitar loop
                 st.rerun()
 
         # Confirmación de eliminación
