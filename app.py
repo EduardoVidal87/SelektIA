@@ -2772,38 +2772,43 @@ def page_create_task():
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
     def _handle_action_change(task_id):
-        selectbox_key = f"accion_{task_id}"
-        if selectbox_key not in ss:
-            return
-        action = ss[selectbox_key]
-        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-        if not task_to_update:
-            return
+    selectbox_key = f"accion_{task_id}"
+    if selectbox_key not in ss:
+        return
+    action = ss[selectbox_key]
+    task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+    if not task_to_update:
+        return
 
-        ss.confirm_delete_id = None
-        ss.show_assign_for = None
+    # Reset de modales/paneles
+    ss.confirm_delete_id = None
+    ss.show_assign_for = None
 
-        if action == "Ver detalle":
-            ss.expanded_task_id = task_id
-        elif action == "Asignar tarea":
-            ss.expanded_task_id = None
-            ss.show_assign_for = task_id
-        elif action == "Tomar tarea":
-            ss.expanded_task_id = None
-            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-            task_to_update["assigned_to"] = current_user
-            task_to_update["status"] = "En Proceso"
-            save_tasks(ss.tasks)
-            st.toast("Tarea tomada.")
-            st.rerun()
-        elif action == "Eliminar":
-            ss.expanded_task_id = None
-            ss.confirm_delete_id = task_id
-        else:
-            ss.expanded_task_id = None
+    if action == "Ver detalle":
+        ss.expanded_task_id = task_id
 
-        if action != "Selecciona…":
-            st.session_state[selectbox_key] = "Selecciona…"
+    elif action == "Asignar tarea":
+        ss.expanded_task_id = None
+        ss.show_assign_for = task_id
+
+    elif action == "Tomar tarea":
+        ss.expanded_task_id = None
+        current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+        task_to_update["assigned_to"] = current_user
+        task_to_update["status"] = "En Proceso"
+        save_tasks(ss.tasks)
+        st.toast("Tarea tomada ✅")
+        # ⛔️ Importante: sin st.rerun() dentro del callback
+
+    elif action == "Eliminar":
+        ss.expanded_task_id = None
+        ss.confirm_delete_id = task_id
+
+    else:
+        ss.expanded_task_id = None
+
+    # Resetea el select para que vuelva a “Selecciona…”
+    ss[selectbox_key] = "Selecciona…"
 
     if tasks_to_show:
         for task in tasks_to_show:
