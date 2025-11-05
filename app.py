@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
 import streamlit.components.v1 as components 
+import unicodedata
 
 
 # ====== Paquetes de LLM para la sección de 'Evaluación de CVs' ======
@@ -705,6 +706,45 @@ def _safe_json_loads(raw: str) -> dict:
         return json.loads(s)
     except Exception:
         return {}
+
+# ----------------- Helpers para checklist desde JD -----------------
+def _norm_txt(s: str) -> str:
+    s = s or ""
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = re.sub(r"[^a-zA-Z0-9áéíóúñü\s]", " ", s)
+    s = re.sub(r"\s+", " ", s)
+    return s.strip().lower()
+
+def extract_jd_items(jd_text: str):
+    """Intenta sacar bullets/acciones del JD; ignora encabezados."""
+    items = []
+    skip = re.compile(r"^(resumen|objetivo|rol|responsab|tareas|expected output)", re.I)
+    for raw in (jd_text or "").splitlines():
+        l = raw.strip().lstrip("•*-–· ").rstrip()
+        if not l or skip.match(l):
+            continue
+        if re.match(r"^(brindar|escuchar|mantener|realizar|reportar|cumplir|asegurar|ofrecer|sugerir|atender)\b", l, re.I) or raw[:1] in {"•", "*", "-", "–"}:
+            items.append(l)
+    # dedupe y sanea
+    out, seen = [], set()
+    for it in items:
+        k = _norm_txt(it)
+        if len(k.split()) > 2 and k not in seen:
+            seen.add(k); out.append(it)
+    # límite razonable
+    return out[:30]
+
+def soft_match(item: str, transcript: str):
+    """Match suave por superposición de tokens; devuelve (ok, hits_tokens)."""
+    ni = _norm_txt(item)
+    nt = _norm_txt(transcript)
+    toks = [t for t in ni.split() if len(t) > 3]
+    hits = [t for t in toks if t in nt]
+    ok = (len(hits) >= 2) or (len(hits) / max(1, len(toks)) >= 0.4)
+    return ok, hits
+# -------------------------------------------------------------------
+
 
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
@@ -2501,15 +2541,67 @@ def page_calls_view():
                 st.metric("Fit vs JD", f"{score}%")
                 st.progress(score/100)
 
-                cA, cB = st.columns(2)
-                with cA:
-                    st.markdown("**Evidencias halladas en la transcripción**")
-                    evidencias = detail.get("matched_must", []) + detail.get("matched_nice", []) + detail.get("extras", [])
-                    st.write(", ".join(evidencias) if evidencias else "—")
-                with cB:
-                    st.markdown("**Brechas (faltantes)**")
-                    gaps = detail.get("gaps_must", []) + detail.get("gaps_nice", [])
-                    st.write(", ".join(gaps) if gaps else "—")
+                # === CHECKLIST DETALLADO SEGÚN JD ===
+st.markdown("**Checklist (según JD)**")
+
+# 1) Lista de criterios (obligatorios/deseables)
+items_must = [s for s in (must_list or []) if s.strip()]
+items_nice = [s for s in (nice_list or []) if s.strip()]
+
+# Fallback: si no hay presets, parsear bullets del JD como obligatorios
+if not items_must and not items_nice:
+    items_must = extract_jd_items(jd_text_eval)
+
+rows = []
+ok_must = ok_nice = 0
+
+for tipo, lista in (("Obligatorio", items_must), ("Deseable", items_nice)):
+    for it in lista:
+        ok, hits = soft_match(it, tx_text)
+        if tipo == "Obligatorio":
+            ok_must += int(ok)
+        else:
+            ok_nice += int(ok)
+        rows.append({
+            "Tipo": tipo,
+            "Criterio": it,
+            "Cumple": "✅" if ok else "❌",
+            "Evidencia (palabras clave)": ", ".join(hits) if hits else "—"
+        })
+
+if rows:
+    df_chk = pd.DataFrame(rows)
+    st.dataframe(df_chk, use_container_width=True, hide_index=True)
+
+# 2) Resumen / Justificación (por qué pasa o no)
+tot_must, tot_nice = len(items_must), len(items_nice)
+miss_must = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="❌"][:3]
+hit_must  = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="✅"][:3]
+hit_nice  = [r["Criterio"] for r in rows if r["Tipo"]=="Deseable" and r["Cumple"]=="✅"][:2]
+
+# Regla de decisión (ajústala si quieres)
+PASS_THRESHOLD = 70  # ya la usas para el %; mantenemos consistencia
+must_ratio_ok = (ok_must / max(1, tot_must)) * 100
+passes = (score >= PASS_THRESHOLD) and (must_ratio_ok >= 70) and (len(miss_must) <= 2)
+
+st.markdown("**Resumen / Justificación**")
+if passes:
+    st.markdown(
+        "- ✅ **Recomiendo pasar a 2da etapa.**\n"
+        f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
+        + (f"  - Fortalezas: {', '.join(hit_must)}.\n" if hit_must else "")
+        + (f"  - Extras relevantes: {', '.join(hit_nice)}.\n" if hit_nice else "")
+        + "  - El desempeño en la transcripción se alinea con los comportamientos esperados del JD."
+    )
+else:
+    st.markdown(
+        "- ❌ **Recomiendo no pasar por ahora.**\n"
+        f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
+        + (f"  - Principales brechas: {', '.join(miss_must)}.\n" if miss_must else "")
+        + "  - Sugiero reforzar estos puntos y re-evaluar."
+    )
+# === FIN CHECKLIST ===
+
 
                 st.markdown(
                     "**Decisión sugerida:** " +
