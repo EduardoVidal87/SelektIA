@@ -11,22 +11,212 @@ from PyPDF2 import PdfReader
 import streamlit.components.v1 as components 
 
 
-# ====== Paquetes de LLM para la sección de 'Evaluación de CVs' ======
-# Se importan de forma segura; si no están instalados, la app no se rompe.
+# >>>>>>>>>>>>>>>>>>>>>>>>>> LLM BLOCK BEGIN <<<<<<<<<<<<<<<<<<<<<<<<<<
+# Bloque robusto para evaluación de CVs (Azure/OpenAI + parseo seguro)
+
+# Imports mínimos (idempotentes si ya existen arriba)
+import os, re, json
+import streamlit as st
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
     load_dotenv = lambda: None
 
+# LangChain (opcional; la app no se cae si no está)
 try:
-    from langchain_core.output_parsers import JsonOutputParser
-    from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+    from langchain_core.prompts import (
+        ChatPromptTemplate,
+        SystemMessagePromptTemplate,
+        HumanMessagePromptTemplate,
+    )
+    # Parser JSON opcional
+    try:
+        from langchain_core.output_parsers import JsonOutputParser
+        _HAS_LC_JSON_PARSER = True
+    except Exception:
+        _HAS_LC_JSON_PARSER = False
+
     from langchain_community.document_loaders import PyPDFLoader
     from langchain_openai import ChatOpenAI, AzureChatOpenAI
     _LC_AVAILABLE = True
 except Exception:
     _LC_AVAILABLE = False
+    _HAS_LC_JSON_PARSER = False
+
+
+# ================= Helpers comunes =================
+def _safe_json_loads(txt: str) -> dict:
+    """Acepta respuestas con ```json / ```markdown o texto plano y devuelve dict."""
+    try:
+        if not txt:
+            return {}
+        t = txt.strip()
+        # quitar fences
+        t = re.sub(r"^```(?:json|JSON|markdown)?\s*", "", t)
+        t = re.sub(r"\s*```$", "", t)
+        # tomar el primer objeto { ... }
+        m = re.search(r"\{.*\}", t, flags=re.S)
+        if m:
+            t = m.group(0)
+        try:
+            return json.loads(t)
+        except Exception:
+            # arreglos de comas colgantes
+            t2 = re.sub(r",\s*}", "}", t)
+            t2 = re.sub(r",\s*]", "]", t2)
+            return json.loads(t2)
+    except Exception:
+        return {}
+
+
+def _llm_setup_credentials():
+    """Carga credenciales desde st.secrets si existen."""
+    try:
+        if "AZURE_OPENAI_API_KEY" not in os.environ and "llm" in st.secrets and "azure_openai_api_key" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_API_KEY"] = st.secrets["llm"]["azure_openai_api_key"]
+        if "AZURE_OPENAI_ENDPOINT" not in os.environ and "llm" in st.secrets and "azure_openai_endpoint" in st.secrets["llm"]:
+            os.environ["AZURE_OPENAI_ENDPOINT"] = st.secrets["llm"]["azure_openai_endpoint"]
+    except Exception:
+        pass
+
+
+def _llm_prompt_for_resume(resume_content: str, flow_desc: str, flow_expected: str):
+    """Construye prompt estructurado que PIDE SOLO JSON (sin fences)."""
+    if not _LC_AVAILABLE:
+        return None
+
+    json_object_structure = """{
+        "Name": "Full Name",
+        "Last_position": "The most recent position in which the candidate worked",
+        "Years_of_Experience": "Number (in years)",
+        "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+        "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+        "Certifications": ["Certification 1", "Certification 2"],
+        "Additional_Notes": "Optional details inferred or contextually relevant information.",
+        "Score": "0-100"
+    }"""
+
+    system_template = f"""
+    ### Objective
+    You are an AI assistant executing a recruitment task.
+    Task Description: {flow_desc}
+    Expected Output: {flow_expected}
+
+    Extract structured data from the CV (below) and compute a 0-100 match vs the JD.
+
+    Return ONLY a valid JSON object exactly matching this schema
+    (no markdown code fences, no extra text):
+    {json_object_structure}
+
+    CV Content:
+    {resume_content}
+    """
+
+    return ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("Job description:\n{job_description}")
+    ])
+
+
+# ================= Extractores (Azure y OpenAI) =================
+def _extract_with_azure(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
+    """AzureChatOpenAI con response_format=json_object y fallback robusto."""
+    if not _LC_AVAILABLE:
+        return {}
+
+    _llm_setup_credentials()
+    try:
+        model_kwargs = {"response_format": {"type": "json_object"}}
+        llm = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
+            temperature=0,
+            model_kwargs=model_kwargs
+        )
+
+        prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
+        if prompt is None:
+            return {}
+
+        # 1) Con parser de LangChain si está disponible
+        if _HAS_LC_JSON_PARSER:
+            try:
+                parser = JsonOutputParser()
+                chain = prompt | llm | parser
+                out = chain.invoke({"job_description": job_description})
+                if isinstance(out, dict):
+                    return out
+            except Exception as e:
+                st.warning(f"Azure LLM: parser JSON falló, usando fallback. Detalle: {e}")
+
+        # 2) Fallback: invocar y parsear a mano
+        msgs = prompt.format_messages(job_description=job_description)
+        resp = llm.invoke(msgs)
+        txt = getattr(resp, "content", "") if resp else ""
+        return _safe_json_loads(txt)
+
+    except Exception as e:
+        st.warning(f"Azure LLM no disponible: {e}")
+        return {}
+
+
+def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
+    """ChatOpenAI (OpenAI) con response_format=json_object y parseo robusto."""
+    if not _LC_AVAILABLE:
+        return {}
+
+    try:
+        api_key = st.secrets["llm"]["openai_api_key"]
+    except Exception:
+        return {}
+
+    try:
+        model_name = st.secrets["llm"].get("openai_model", "gpt-4o-mini")
+        chat = ChatOpenAI(
+            temperature=0,
+            model=model_name,
+            openai_api_key=api_key,
+            model_kwargs={"response_format": {"type": "json_object"}}
+        )
+
+        json_object_structure = """{
+            "Name": "Full Name",
+            "Last_position": "The most recent position in which the candidate worked",
+            "Years_of_Experience": "Number (in years)",
+            "English_Level": "Beginner/Intermediate/Advanced/Fluent/Native",
+            "Key_Skills": ["Skill 1", "Skill 2", "Skill 3"],
+            "Certifications": ["Certification 1", "Certification 2"],
+            "Additional_Notes": "Optional details inferred or contextually relevant information.",
+            "Score": "0-100"
+        }"""
+
+        prompt = f"""
+        You are an AI assistant. Execute the following task:
+        Task Description: {flow_desc}
+        Expected Output: {flow_expected}
+
+        Extract structured JSON from the following CV and compute a 0-100 match vs the JD.
+
+        Return ONLY a valid JSON object (no markdown fences, no explanations) with this structure:
+        {json_object_structure}
+
+        Job description:
+        {job_description}
+
+        CV Content:
+        {resume_content}
+        """
+
+        resp = chat.invoke(prompt)
+        txt = (resp.content or "").strip()
+        return _safe_json_loads(txt)
+
+    except Exception as e:
+        st.warning(f"OpenAI LLM no disponible: {e}")
+        return {}
+# >>>>>>>>>>>>>>>>>>>>>>>>>>> LLM BLOCK END <<<<<<<<<<<<<<<<<<<<<<<<<<<
+
 
 # =========================================================
 # PALETA / CONST
