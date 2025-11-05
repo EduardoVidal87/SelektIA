@@ -2461,70 +2461,67 @@ def page_calls_view():
                     file_name=it.get("file_name","transcripcion"),
                     type="secondary"
                 )
-# === EVALUACIÓN SEGÚN JD (debajo del visor) ===
-st.markdown("#### Evaluación — Fit con JD")
 
-# 1) Tomar JD desde el flujo más reciente que coincida con el Puesto de la transcripción.
-jd_text_eval = ""
-role_name = it.get("role", "")
-wf_for_role = next((w for w in ss.workflows if w.get("role") == role_name and (w.get("jd_text") or "").strip()), None)
-if wf_for_role and wf_for_role.get("jd_text"):
-    jd_text_eval = wf_for_role["jd_text"]
-else:
-    # 2) Fallback: tomar JD desde Puestos
-    pos = next((p for p in ss.positions if p.get("Puesto") == role_name), None)
-    jd_text_eval = (pos or {}).get("JD", "")
+            # === EVALUACIÓN SEGÚN JD (debajo del visor) ===
+            st.markdown("#### Evaluación — Fit con JD")
 
-# 3) Extraer texto de la transcripción si el campo .text está vacío
-tx_text = it.get("text") or ""
-if not tx_text and (it.get("file_type","").lower() == "pdf") and raw:
-    try:
-        reader = PdfReader(io.BytesIO(raw))
-        for p in reader.pages:
-            tx_text += (p.extract_text() or "") + "\n"
-    except Exception:
-        pass
+            # 1) Traer JD desde el flujo asociado al Puesto de la transcripción; si no, desde Puestos.
+            jd_text_eval = ""
+            role_name = it.get("role", "")
+            wf_for_role = next((w for w in ss.workflows if w.get("role") == role_name and (w.get("jd_text") or "").strip()), None)
+            if wf_for_role and wf_for_role.get("jd_text"):
+                jd_text_eval = wf_for_role["jd_text"]
+            else:
+                pos = next((p for p in ss.positions if p.get("Puesto") == role_name), None)
+                jd_text_eval = (pos or {}).get("JD", "")
 
-if jd_text_eval.strip() and tx_text.strip():
-    # 4) Si existe preset para ese rol, usamos must/nice; si no, el scorer ya cae a skills inferidos del JD
-    preset = ROLE_PRESETS.get(role_name, {})
-    must_list = preset.get("must", []) or []
-    nice_list = preset.get("nice", []) or []
+            # 2) Texto de la transcripción (si no vino en .text, lo extraemos del PDF)
+            tx_text = it.get("text") or ""
+            if not tx_text and (it.get("file_type","").lower() == "pdf") and raw:
+                try:
+                    reader = PdfReader(io.BytesIO(raw))
+                    for p in reader.pages:
+                        tx_text += (p.extract_text() or "") + "\n"
+                except Exception:
+                    pass
 
-    score, detail = score_fit_by_skills(
-        jd_text_eval,
-        [s for s in must_list if s.strip()],
-        [s for s in nice_list if s.strip()],
-        tx_text
-    )
+            if jd_text_eval.strip() and tx_text.strip():
+                preset = ROLE_PRESETS.get(role_name, {})
+                must_list = [s for s in (preset.get("must", []) or []) if s.strip()]
+                nice_list = [s for s in (preset.get("nice", []) or []) if s.strip()]
 
-    PASS_THRESHOLD = 70  # puedes ajustar tu umbral aquí
-    st.metric("Fit vs JD", f"{score}%")
-    st.progress(score/100)
+                score, detail = score_fit_by_skills(
+                    jd_text_eval,
+                    must_list,
+                    nice_list,
+                    tx_text
+                )
 
-    cA, cB = st.columns(2)
-    with cA:
-        st.markdown("**Evidencias halladas en la transcripción**")
-        evidencias = detail.get("matched_must", []) + detail.get("matched_nice", []) + detail.get("extras", [])
-        st.write(", ".join(evidencias) if evidencias else "—")
+                PASS_THRESHOLD = 70
+                st.metric("Fit vs JD", f"{score}%")
+                st.progress(score/100)
 
-    with cB:
-        st.markdown("**Brechas (faltantes)**")
-        gaps = detail.get("gaps_must", []) + detail.get("gaps_nice", [])
-        st.write(", ".join(gaps) if gaps else "—")
+                cA, cB = st.columns(2)
+                with cA:
+                    st.markdown("**Evidencias halladas en la transcripción**")
+                    evidencias = detail.get("matched_must", []) + detail.get("matched_nice", []) + detail.get("extras", [])
+                    st.write(", ".join(evidencias) if evidencias else "—")
+                with cB:
+                    st.markdown("**Brechas (faltantes)**")
+                    gaps = detail.get("gaps_must", []) + detail.get("gaps_nice", [])
+                    st.write(", ".join(gaps) if gaps else "—")
 
-    st.markdown(
-        "**Decisión sugerida:** " +
-        ("✅ Pasar a 2da etapa" if score >= PASS_THRESHOLD else "❌ No pasar")
-    )
+                st.markdown(
+                    "**Decisión sugerida:** " +
+                    ("✅ Pasar a 2da etapa" if score >= PASS_THRESHOLD else "❌ No pasar")
+                )
 
-    # (Opcional) mostrar JD resumido para referencia rápida
-    with st.expander("Ver JD utilizado para esta evaluación", expanded=False):
-        st.text(jd_text_eval[:8000])
-else:
-    st.info("No se encontró JD o texto de transcripción suficiente para evaluar. Completa el JD en **Puestos** o en el **Flujo**.")
-# === FIN EVALUACIÓN SEGÚN JD ===
-        
+                with st.expander("Ver JD utilizado para esta evaluación", expanded=False):
+                    st.text(jd_text_eval[:8000])
+            else:
+                st.info("No se encontró JD o texto de transcripción suficiente para evaluar. Completa el JD en **Puestos** o en el **Flujo**.")
+            # === FIN EVALUACIÓN SEGÚN JD ===
+     
             st.markdown("---")
             if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
                 ss.selected_transcript_id = None
