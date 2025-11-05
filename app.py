@@ -2076,6 +2076,17 @@ def page_calls_upload():
             st.success(f"Se guardaron {len(new_items)} transcripción(es).")
             st.rerun()
 
+# --- Callback seguro para el select de Acciones en “Resultados de llamadas”
+def _on_tx_action_change(tid: str, act_key: str):
+    action = st.session_state.get(act_key, "Selecciona…")
+    if action == "Ver":
+        st.session_state.selected_transcript_id = tid
+    elif action == "Eliminar":
+        st.session_state.confirm_delete_transcript_id = tid
+    # reset del select (evita el error de Streamlit)
+    st.session_state[act_key] = "Selecciona…"
+    st.rerun()
+
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
     st.header("Resultados de llamadas")
@@ -2134,22 +2145,14 @@ def page_calls_view():
             st.markdown((it.get("file_type","—").upper()))
         with c_acc:
             act_key = f"tx_action_{tid}"
-            action = st.selectbox(
+            st.selectbox(
                 "Acciones",
                 ["Selecciona…", "Ver", "Eliminar"],
                 key=act_key,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                on_change=_on_tx_action_change,
+                args=(tid, act_key)
             )
-
-            if action == "Ver":
-                ss.selected_transcript_id = tid
-                st.session_state[act_key] = "Selecciona…"   # reset para evitar loop
-                st.rerun()
-
-            elif action == "Eliminar":
-                ss.confirm_delete_transcript_id = tid
-                st.session_state[act_key] = "Selecciona…"   # reset para evitar loop
-                st.rerun()
 
         # Confirmación de eliminación
         if ss.get("confirm_delete_transcript_id") == tid:
