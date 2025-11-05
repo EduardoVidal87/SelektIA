@@ -18,6 +18,38 @@ try:
     load_dotenv()
 except Exception:
     load_dotenv = lambda: None
+# ===== JD GLOBAL (compartido entre páginas) =====
+_JD_STATE_PATH = os.path.join("data", "_jd_current.json")
+
+def _ensure_data_dir():
+    os.makedirs("data", exist_ok=True)
+
+def set_current_jd(jd_text: str):
+    """Guarda el JD actual en disco y en session_state."""
+    jd_text = (jd_text or "").strip()
+    _ensure_data_dir()
+    try:
+        with open(_JD_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"jd": jd_text}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    st.session_state["jd_current"] = jd_text
+
+def get_current_jd() -> str:
+    """Obtiene el JD actual; primero session_state y si no, disco."""
+    jd = (st.session_state.get("jd_current", "") if "jd_current" in st.session_state else "").strip()
+    if jd:
+        return jd
+    try:
+        with open(_JD_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            jd = (data.get("jd", "") or "").strip()
+            if jd:
+                st.session_state["jd_current"] = jd
+            return jd
+    except Exception:
+        return ""
+# ===== FIN JD GLOBAL =====  
 
 try:
     from langchain_core.output_parsers import JsonOutputParser
@@ -1124,17 +1156,135 @@ def _create_llm_bar(df: pd.DataFrame):
     )
     return fig
 
-def _results_to_df(results: list) -> pd.DataFrame:
-    if not results:
-        return pd.DataFrame()
-    df = pd.DataFrame(results).copy()
-    if "Score" in df.columns:
-        try:
-            df["Score"] = df["Score"].astype(int)
-        except:
-            pass
-        df = df.sort_values(by="Score", ascending=False)
-    return df
+# ========= LLM: evaluación de TRANSCRIPCIONES vs JD =========
+
+def _get_jd_for_role(role_name: str) -> str:
+    """
+    Busca primero en ss.workflows el JD más reciente para ese 'role'.
+    Si no hay, usa el JD de 'Puestos'. Si tampoco hay, devuelve "".
+    """
+    try:
+        # 1) workflow más nuevo con mismo role
+        wfs = [w for w in ss.workflows if w.get("role") == role_name and w.get("jd_text")]
+        wfs.sort(key=lambda w: w.get("created_at",""), reverse=True)
+        if wfs:
+            return (wfs[0].get("jd_text") or "").strip()
+    except Exception:
+        pass
+
+    # 2) JD desde Puestos
+    try:
+        pos = next((p for p in ss.positions if p.get("Puesto") == role_name), None)
+        if pos and pos.get("JD"):
+            return (pos["JD"] or "").strip()
+    except Exception:
+        pass
+
+    return ""
+
+def _tx_eval_prompt(jd_text: str, transcript_text: str):
+    """
+    Prompt estructurado con parser JSON para evitar el error de '```markdown'.
+    """
+    if not _LC_AVAILABLE:
+        return None, None
+    parser = JsonOutputParser()
+    fmt = parser.get_format_instructions()
+
+    system_tmpl = (
+        "Eres un evaluador de entrevistas/llamadas para reclutamiento. "
+        "Debes decidir si el/la postulante pasa a la siguiente etapa, comparando "
+        "la TRANSCRIPCIÓN con el JD. Devuelve SOLO JSON válido, sin Markdown, sin fences.\n\n"
+        f"{fmt}"
+    )
+    human_tmpl = (
+        "JD:\n{jd}\n\n"
+        "TRANSCRIPCIÓN:\n{tx}\n\n"
+        "Devuelve un JSON con:\n"
+        '{\n'
+        '  "Pass": true|false,\n'
+        '  "Overall_Score": 0-100,\n'
+        '  "Decision": "Pasa" | "No pasa",\n'
+        '  "Summary": "2-4 líneas con la justificación",\n'
+        '  "Checklist": [\n'
+        '     {"criterion": "texto del criterio", "evidence_found": true|false, "evidence": "frase o referencia breve"},\n'
+        '     ...\n'
+        '  ]\n'
+        '}\n'
+        "Reglas: Si falta evidencia para un criterio, marca 'evidence_found': false y explica en 'evidence'."
+    )
+
+    prompt = ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_tmpl),
+        HumanMessagePromptTemplate.from_template(human_tmpl),
+    ])
+    return prompt, parser
+
+def _eval_transcript_with_azure(jd_text: str, transcript_text: str) -> dict:
+    if not _LC_AVAILABLE:
+        return {}
+    _llm_setup_credentials()
+    try:
+        prompt, parser = _tx_eval_prompt(jd_text, transcript_text)
+        if prompt is None:
+            return {}
+        llm = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
+            temperature=0
+        )
+        chain = prompt | llm | parser
+        out = chain.invoke({"jd": jd_text, "tx": transcript_text})
+        return out if isinstance(out, dict) else {}
+    except Exception as e:
+        # Evita romper la UI si Azure devuelve fences
+        st.warning(f"Azure (Transcripción) no disponible: {e}")
+        return {}
+
+def _eval_transcript_with_openai(jd_text: str, transcript_text: str) -> dict:
+    if not _LC_AVAILABLE:
+        return {}
+    try:
+        api_key = st.secrets["llm"]["openai_api_key"]
+    except Exception:
+        return {}
+    try:
+        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key)
+        prompt = (
+            "Eres un evaluador de entrevistas/llamadas. Devuelve SOLO JSON válido, sin ```.\n\n"
+            "Estructura:\n"
+            '{ "Pass": true|false, "Overall_Score": 0-100, "Decision": "Pasa"|"No pasa", '
+            '"Summary": "…", "Checklist":[{"criterion":"…","evidence_found":true|false,"evidence":"…"}] }\n\n'
+            f"JD:\n{jd_text}\n\nTRANSCRIPCIÓN:\n{transcript_text}\n"
+        )
+        resp = chat.invoke(prompt)
+        txt = resp.content.strip().replace("```json","").replace("```","")
+        return json.loads(txt)
+    except Exception as e:
+        st.warning(f"OpenAI (Transcripción) no disponible: {e}")
+        return {}
+
+def eval_transcript_any(jd_text: str, transcript_text: str) -> dict:
+    """
+    Wrapper: intenta Azure primero, luego OpenAI. Devuelve dict con claves
+    'Pass', 'Overall_Score', 'Decision', 'Summary', 'Checklist'.
+    """
+    meta = _eval_transcript_with_azure(jd_text, transcript_text)
+    if not meta:
+        meta = _eval_transcript_with_openai(jd_text, transcript_text)
+    if not meta:
+        meta = {
+            "Pass": False, "Overall_Score": 0, "Decision": "No pasa",
+            "Summary": "La IA no pudo evaluar la transcripción.",
+            "Checklist": []
+        }
+    # Normaliza campos mínimos
+    meta["Pass"] = bool(meta.get("Pass", False))
+    if "Decision" not in meta:
+        meta["Decision"] = "Pasa" if meta["Pass"] else "No pasa"
+    return meta
+# ========= FIN LLM: evaluación de TRANSCRIPCIONES =========
+
 
 # ===================== PUESTOS =====================
 def render_position_form():
@@ -1328,6 +1478,24 @@ def page_puestos():
                     on_change=_handle_position_action_change,
                     args=(pos_id,)
                 )
+                # --- Evaluación IA inline (lista) ---
+                if st.button("Evaluar IA", key=f"tx_eval_{tid}"):
+                    role_name = it.get("role", "")
+                    jd_text = _get_jd_for_role(role_name)
+                    if not jd_text.strip():
+                        st.warning("No se encontró un JD para este puesto.")
+                    else:
+                        res = eval_transcript_any(jd_text, it.get("text", ""))
+                        it["llm_tx_eval"] = res
+                        # guarda en storage
+                        for k, x in enumerate(ss.call_results):
+                            if x["id"] == tid:
+                                ss.call_results[k] = it
+                                save_call_results(ss.call_results)
+                                break
+                        msg = "✅ Pasa" if res.get("Pass") else "⛔ No pasa"
+                        st.success(f"{msg} · Score: {res.get('Overall_Score', 0)}%")
+
 
             # Confirmación de eliminación
             if ss.get("confirm_delete_position_id") == pos_id:
@@ -1434,6 +1602,9 @@ def page_eval():
             ss.eval_flow_desc     = selected_flow_data.get("description", "")
             ss.eval_flow_expected = selected_flow_data.get("expected_output", "")
             ss.eval_jd_llm        = selected_flow_data.get("jd_text", "JD no encontrado.")
+            # ↙ Guarda el JD vigente para usarlo luego en Transcripciones
+            set_current_jd(ss.eval_jd_llm)
+
         else:
             ss.eval_flow_puesto   = "N/A"
             ss.eval_flow_desc     = "N/A"
@@ -2209,6 +2380,33 @@ def page_calls_view():
                     file_name=it.get("file_name","transcripcion"),
                     type="secondary"
                 )
+# --- Resultado IA en el detalle ---
+st.markdown("### Evaluación IA vs JD")
+# Botón también desde el panel de detalle
+if st.button("Evaluar esta transcripción", key=f"eval_now_{sel_id}"):
+    jd_text = _get_jd_for_role(it.get("role",""))
+    if not jd_text.strip():
+        st.warning("No se encontró un JD para este puesto.")
+    else:
+        res = eval_transcript_any(jd_text, it.get("text",""))
+        it["llm_tx_eval"] = res
+        for k, x in enumerate(ss.call_results):
+            if x["id"] == sel_id:
+                ss.call_results[k] = it
+                save_call_results(ss.call_results)
+                break
+
+# Mostrar si ya hay resultado
+if it.get("llm_tx_eval"):
+    ev = it["llm_tx_eval"]
+    cols = st.columns(3)
+    cols[0].metric("Decisión", "Pasa" if ev.get("Pass") else "No pasa")
+    cols[1].metric("Score", f"{ev.get('Overall_Score', 0)}%")
+    cols[2].write(ev.get("Summary",""))
+    with st.expander("Checklist (evidencias)"):
+        for ch in ev.get("Checklist", []):
+            ok = "✅" if ch.get("evidence_found") else "❌"
+            st.write(f"{ok} **{ch.get('criterion','')}** — {ch.get('evidence','—')}")
 
             st.markdown("---")
             if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
