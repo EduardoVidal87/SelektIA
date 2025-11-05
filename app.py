@@ -216,7 +216,30 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .pos-badge-Cerrado {{ border-color: #D1D5DB; background: #F3F4F6; color: #6B7280; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
-st.html(f"<style>{CSS}</style>")
+
+# === (Req 1) Alias seguro para HTML crudo — PÉGALO AQUÍ ===
+def _st_html(raw_html: str, height=None, scrolling=False):
+    """
+    HTML crudo:
+    - Si contiene <script>/<iframe>/<embed>/<object>/<canvas>, usa components.html (iframe).
+    - Si no, usa st.markdown (afecta DOM principal).
+    """
+    try:
+        # Detecta contenido "activo" que requiere iframe
+        if re.search(r"<\s*(script|iframe|embed|object|canvas)\b", raw_html, re.I):
+            if height is None:
+                components.html(raw_html, scrolling=bool(scrolling))
+            else:
+                components.html(raw_html, height=height, scrolling=bool(scrolling))
+        else:
+            st.markdown(raw_html, unsafe_allow_html=True)
+    except Exception:
+        st.markdown(raw_html, unsafe_allow_html=True)
+
+setattr(st, "html", _st_html)
+# === Fin (Req 1) ===
+
+st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # Powered by size
 st.html("""
@@ -544,7 +567,6 @@ def render_pdf_viewer(file_bytes: bytes, height: int = 650, max_css_width: int =
         }})();
         </script>
         """
-        import streamlit.components.v1 as components  # asegura el import
         components.html(html, height=height+2, scrolling=False)
     except Exception as e:
         st.error(f"Error al preparar el visor PDF: {e}")
