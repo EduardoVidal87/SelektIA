@@ -2726,40 +2726,40 @@ def page_create_task():
     with h_acc:  st.markdown("**Acciones**")
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
-    def _handle_action_change(task_id):
-    selectbox_key = f"accion_{task_id}"
-    if selectbox_key not in ss:
-        return
-    action = ss[selectbox_key]
-    task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-    if not task_to_update:
-        return
+        def _handle_action_change(task_id):
+        selectbox_key = f"accion_{task_id}"
+        if selectbox_key not in st.session_state:
+            return
 
-    # Reset de estados de UI asociados
-    ss.confirm_delete_id = None
-    ss.show_assign_for = None
-    ss.expanded_task_id = None
+        action = st.session_state[selectbox_key]
+        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+        if not task_to_update:
+            return
 
-    if action == "Ver detalle":
-        ss.expanded_task_id = task_id
+        # Reset de estados de UI
+        ss.confirm_delete_id = None
+        ss.show_assign_for = None
+        ss.expanded_task_id = None
 
-    elif action == "Asignar tarea":
-        ss.show_assign_for = task_id
+        if action == "Ver detalle":
+            ss.expanded_task_id = task_id
 
-    elif action == "Tomar tarea":
-        current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-        task_to_update["assigned_to"] = current_user
-        task_to_update["status"] = "En Proceso"
-        save_tasks(ss.tasks)
-        st.toast("Tarea tomada.")  # Streamlit re-ejecuta automáticamente tras el callback
+        elif action == "Asignar tarea":
+            ss.show_assign_for = task_id
 
-    elif action == "Eliminar":
-        ss.confirm_delete_id = task_id
+        elif action == "Tomar tarea":
+            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+            task_to_update["assigned_to"] = current_user
+            task_to_update["status"] = "En Proceso"
+            save_tasks(ss.tasks)
+            st.toast("Tarea tomada.")
 
-    # Devolver el select al valor neutro
-    if action != "Selecciona...":
-        st.session_state[selectbox_key] = "Selecciona..."
+        elif action == "Eliminar":
+            ss.confirm_delete_id = task_id
 
+        # Volver el select a “Selecciona…”
+        if action != "Selecciona…":
+            st.session_state[selectbox_key] = "Selecciona…"
 
     if tasks_to_show:
         for task in tasks_to_show:
