@@ -2382,19 +2382,39 @@ def page_calls_view():
                 )
 # --- Resultado IA en el detalle ---
 st.markdown("### Evaluación IA vs JD")
-# Botón también desde el panel de detalle
-if st.button("Evaluar esta transcripción", key=f"eval_now_{sel_id}"):
-    jd_text = _get_jd_for_role(it.get("role",""))
+
+# ID del item seleccionado (con fallbacks comunes)
+detail_id = it.get("id") or it.get("tid") or it.get("uid")
+
+# Botón para evaluar desde el panel de detalle
+if st.button("Evaluar esta transcripción", key=f"eval_now_{str(detail_id)}"):
+    jd_text = _get_jd_for_role(it.get("role", ""))
     if not jd_text.strip():
         st.warning("No se encontró un JD para este puesto.")
     else:
-        res = eval_transcript_any(jd_text, it.get("text",""))
+        res = eval_transcript_any(jd_text, it.get("text", ""))
         it["llm_tx_eval"] = res
+
+        # Persistir cambio en storage
         for k, x in enumerate(ss.call_results):
-            if x["id"] == sel_id:
+            xid = x.get("id") or x.get("tid") or x.get("uid")
+            if xid == detail_id:
                 ss.call_results[k] = it
                 save_call_results(ss.call_results)
                 break
+
+# Mostrar si ya hay resultado
+if it.get("llm_tx_eval"):
+    ev = it["llm_tx_eval"]
+    cols = st.columns(3)
+    cols[0].metric("Decisión", "Pasa" if ev.get("Pass") else "No pasa")
+    cols[1].metric("Score", f"{ev.get('Overall_Score', 0)}%")
+    cols[2].write(ev.get("Summary", ""))
+    with st.expander("Checklist (evidencias)"):
+        for ch in ev.get("Checklist", []):
+            ok = "✅" if ch.get("evidence_found") else "❌"
+            st.write(f"{ok} **{ch.get('criterion','')}** — {ch.get('evidence','—')}")
+
 
 # Mostrar si ya hay resultado
 if it.get("llm_tx_eval"):
