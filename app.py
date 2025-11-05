@@ -1038,15 +1038,33 @@ def _extract_with_azure(job_description: str, resume_content: str, flow_desc: st
             api_version=st.secrets["llm"]["azure_api_version"],
             temperature=0
         )
-        parser = JsonOutputParser()
+        
+        # ELIMINAMOS el parser de LangChain
+        # parser = JsonOutputParser() 
+        
         prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
+        
         if prompt is None:
             return {}
-        chain = prompt | llm | parser
-        out = chain.invoke({"job_description": job_description})
+            
+        # CAMBIAMOS la cadena para obtener la respuesta de texto cruda
+        # chain = prompt | llm | parser 
+        chain = prompt | llm 
+        
+        # Invocamos la cadena
+        resp = chain.invoke({"job_description": job_description})
+
+        # AÑADIMOS la limpieza manual (igual que en la función _extract_with_openai)
+        txt = resp.content.strip().replace('```json','').replace('```','')
+        
+        # Usamos json.loads() sobre el texto limpio
+        out = json.loads(txt)
+        
         return out if isinstance(out, dict) else {}
+        
     except Exception as e:
-        st.warning(f"Azure LLM no disponible: {e}")
+        # El error ahora será más claro si el JSON sigue estando mal
+        st.warning(f"Azure LLM no disponible o error de parseo: {e}") 
         return {}
 
 def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
