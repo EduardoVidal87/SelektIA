@@ -458,16 +458,16 @@ def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
         # Si falla, retorna un HTML de error
         return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
 
-def render_pdf_viewer(file_bytes: bytes, height: int = 650):
+def render_pdf_viewer(file_bytes: bytes, height: int = 650, max_css_width: int = 900):
     """
-    Visor inline con pdf.js (sin iframes ni blob:), compatible con el sandbox de Streamlit.
-    Renderiza todas las páginas en <canvas>.
+    Visor inline con pdf.js (sin iframes). Renderiza páginas en <canvas>
+    con un ANCHO CSS fijo (max_css_width) centrado, para que no se vea gigante.
     """
     try:
         b64 = base64.b64encode(file_bytes).decode("utf-8")
         html = f"""
         <div id="pdfjs_container" style="width:100%;height:{height}px;overflow:auto;border:1.5px solid #E3EDF6;border-radius:10px;background:#fff">
-          <div id="pdfjs_pages" style="display:flex;flex-direction:column;gap:12px;padding:8px 12px;"></div>
+          <div id="pdfjs_pages" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 12px;"></div>
         </div>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
         <script>
@@ -479,8 +479,8 @@ def render_pdf_viewer(file_bytes: bytes, height: int = 650):
 
           const container = document.getElementById("pdfjs_pages");
           const DPR = window.devicePixelRatio || 1;
+          const MAX_W = {max_css_width};
 
-          // worker de pdf.js
           pdfjsLib.GlobalWorkerOptions.workerSrc =
             "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -488,27 +488,31 @@ def render_pdf_viewer(file_bytes: bytes, height: int = 650):
           loadingTask.promise.then(function(pdf) {{
             function renderPage(n) {{
               pdf.getPage(n).then(function(page) {{
-                // Escala dinámica al ancho del contenedor
+                // Escala para obtener un ANCHO CSS constante (centrado).
                 const baseViewport = page.getViewport({{ scale: 1 }});
-                const maxWidth = Math.max(container.clientWidth - 24, 320);
-                const scale = Math.min(1.6, Math.max(0.8, maxWidth / baseViewport.width));
-                const vpCSS = page.getViewport({{ scale }});
-                const vp = page.getViewport({{ scale: scale * DPR }});
+                const targetCSSWidth = Math.min(MAX_W, Math.max(320, (container.clientWidth - 24)));
+                const scaleCSS = targetCSSWidth / baseViewport.width;   // escala "visual"
+                const vpCSS = page.getViewport({{ scale: scaleCSS }});  // tamaño CSS
+                const vp    = page.getViewport({{ scale: scaleCSS * DPR }}); // tamaño real canvas
+
+                const wrap = document.createElement('div');
+                wrap.style.width = targetCSSWidth + 'px';
+                wrap.style.display = 'flex';
+                wrap.style.justifyContent = 'center';
 
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.style.width = '100%';
+                canvas.style.width  = targetCSSWidth + 'px';
                 canvas.style.height = vpCSS.height + 'px';
-                canvas.width = Math.floor(vp.width);
+                canvas.width  = Math.floor(vp.width);
                 canvas.height = Math.floor(vp.height);
                 canvas.style.border = '1px solid #E3EDF6';
                 canvas.style.borderRadius = '6px';
-                container.appendChild(canvas);
 
-                const renderContext = {{
-                  canvasContext: ctx,
-                  viewport: vp
-                }};
+                wrap.appendChild(canvas);
+                container.appendChild(wrap);
+
+                const renderContext = {{ canvasContext: ctx, viewport: vp }};
                 page.render(renderContext);
               }});
             }}
@@ -520,9 +524,11 @@ def render_pdf_viewer(file_bytes: bytes, height: int = 650):
         }})();
         </script>
         """
+        import streamlit.components.v1 as components  # asegura el import
         components.html(html, height=height+2, scrolling=False)
     except Exception as e:
         st.error(f"Error al preparar el visor PDF: {e}")
+
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2723,10 +2729,7 @@ def page_create_task():
 
                         # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            render_pdf_viewer(
-                                file_bytes=pdf_bytes,
-                                height=600
-                           )
+                            render_pdf_viewer(pdf_bytes, height=600, max_css_width=880)
 
                         # --- FIN DE LA CORRECCIÓN ---
 
