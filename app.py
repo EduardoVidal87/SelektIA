@@ -20,7 +20,7 @@ except Exception:
     load_dotenv = lambda: None
 
 try:
-    from langchain_core.output_parsers import JsonOutputParser
+    # (Mantenemos estos imports; ya no usamos JsonOutputParser)
     from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
     from langchain_community.document_loaders import PyPDFLoader
     from langchain_openai import ChatOpenAI, AzureChatOpenAI
