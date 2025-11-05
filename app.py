@@ -216,19 +216,19 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .pos-badge-Cerrado {{ border-color: #D1D5DB; background: #F3F4F6; color: #6B7280; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
-st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
+st.html(f"<style>{CSS}</style>")
 
 # Powered by size
-st.markdown("""
+st.html("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
   font-size: 12px !important; line-height: 1.2 !important; margin-top: 4px !important; opacity: .95 !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 # Sidebar spacing compact
-st.markdown("""
+st.html("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand{ margin-top:0 !important; padding-bottom:0 !important; margin-bottom:55px !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap:2px !important; }
@@ -238,7 +238,7 @@ st.markdown("""
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton>button{ margin:0 8px 6px 0 !important; padding-left:8px !important; line-height:1.05 !important; gap:6px !important; }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 # =========================================================
 # Persistencia (Agentes / Flujos / Roles / Tareas / Puestos)
@@ -779,14 +779,14 @@ def asset_logo_wayki():
     return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
 
 def login_screen():
-    st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
+    st.html('<div class="login-bg"><div class="login-card">')
     try:
-        st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
+        st.html('<div class="login-logo-wrap">')
         st.image(asset_logo_wayki(), width=120)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.html("</div>")
     except:
         pass
-    st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
+    st.html('<div class="login-sub">Acceso a SelektIA</div>')
 
     with st.form("login_form", clear_on_submit=False):
         u = st.text_input("Usuario")
@@ -803,7 +803,7 @@ def login_screen():
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos.")
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    st.html("</div></div>")
 
 def require_auth():
     if ss.auth is None:
@@ -813,14 +813,12 @@ def require_auth():
 
 def render_sidebar():
     with st.sidebar:
-        st.markdown(
-            """
-            <div class="sidebar-brand">
-              <div class="brand-title">SelektIA</div>
-              <div class="brand-sub">Powered by Wayki Consulting</div>
-            </div>
-            """, unsafe_allow_html=True
-        )
+        st.html("""
+    <div class="sidebar-brand">
+      <div class="brand-title">SelektIA</div>
+      <div class="brand-sub">Powered by Wayki Consulting</div>
+    </div>
+    """)
 
         st.markdown("#### DASHBOARD")
         if st.button("Analytics", key="sb_analytics"):
@@ -1275,7 +1273,7 @@ def page_puestos():
         with h_leads:  st.markdown("**Leads (Nuevos)**")
         with h_estado: st.markdown("**Estado**")
         with h_acc:    st.markdown("**Acciones**")
-        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+        st.html("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>")
 
         positions_list = ss.positions.copy()
         
@@ -1314,7 +1312,7 @@ def page_puestos():
                     )
                 st.markdown(f"**{leads_count}** ({nuevos_count})")
             with c_estado:
-                st.markdown(_position_status_pill(pos.get('Estado', 'Abierto')), unsafe_allow_html=True)
+                st.html(_position_status_pill(pos.get('Estado', 'Abierto')))
             with c_acc:
                 st.selectbox(
                     "Acciones",
@@ -1351,7 +1349,7 @@ def page_puestos():
                         ss.confirm_delete_position_id = None
                         st.rerun()
 
-            st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
+            st.html("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>")
 
         st.markdown("---")
         st.subheader("Candidatos por Puesto")
@@ -1600,14 +1598,12 @@ def page_pipeline():
                     .replace('.pdf', '')
                     .replace('.txt', '')
                 )
-                st.markdown(f"""
+                st.html(f"""
                 <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
-                    <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
-                    <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
-                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
-                    <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
+                    ...
                 </div>
-                """, unsafe_allow_html=True)
+                """)
+
 
                 with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
                     current_stage_index = PIPELINE_STAGES.index(stage)
@@ -1662,7 +1658,7 @@ def page_pipeline():
                             )
                         st.rerun()
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                st.html("<br>")
 
 def page_interview():
     st.header("Entrevista (Gerencia)")
@@ -1861,11 +1857,12 @@ def page_agents():
             idx = i + j
             with cols[j]:
                 img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
-                st.markdown(
-                    f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>',
-                    unsafe_allow_html=True
+                st.html(
+                    f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>'
                 )
-                st.markdown('<div class="toolbar">', unsafe_allow_html=True)
+                st.html('<div class="toolbar">')
+                ...
+                st.html('</div>')
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
@@ -1896,7 +1893,9 @@ def page_agents():
     if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
         ag = ss.agents[ss.agent_view_idx]
         st.markdown("### Detalle del agente")
-        st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
+        st.html('<div class="agent-detail">')
+        ...
+        st.html('</div>')
         c1, c2 = st.columns([0.42, 0.58])
         with c1:
             raw_img = ag.get("image") or ""
