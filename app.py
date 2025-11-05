@@ -249,6 +249,11 @@ WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
 TASKS_FILE = DATA_DIR / "tasks.json"
 POSITIONS_FILE = DATA_DIR / "positions.json" # (Req 3)
+# === BEGIN NUEVO: transcripciones (constantes/paths) ===
+TRANSCRIPTS_FILE = DATA_DIR / "transcripts.json"
+TRANSCRIPTS_DIR  = DATA_DIR / "transcripts"
+TRANSCRIPTS_DIR.mkdir(exist_ok=True)
+# === END NUEVO: transcripciones (constantes/paths) ===
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
@@ -324,6 +329,12 @@ def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
 def save_tasks(tasks): save_json(TASKS_FILE, tasks)
 def load_positions(): return load_json(POSITIONS_FILE, DEFAULT_POSITIONS)
 def save_positions(positions): save_json(POSITIONS_FILE, positions)
+def load_call_results():
+    return load_json(TRANSCRIPTS_FILE, [])
+
+def save_call_results(items):
+    save_json(TRANSCRIPTS_FILE, items)
+    
 
 # =========================================================
 # ESTADO
@@ -363,7 +374,16 @@ if "positions_loaded" not in ss:
             p["JD"] = "Por favor, define el Job Description."
     save_positions(ss.positions)
     ss.positions_loaded = True
-
+# === NUEVO: estado transcripciones ===
+if "call_results_loaded" not in ss:
+    ss.call_results = load_call_results()
+    ss.call_results_loaded = True
+if "selected_transcript_id" not in ss:
+    ss.selected_transcript_id = None
+if "confirm_delete_transcript_id" not in ss:
+    ss.confirm_delete_transcript_id = None
+# === FIN NUEVO ===
+   
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
 if "expanded_task_id" not in ss: ss.expanded_task_id = None
 if "show_assign_for" not in ss: ss.show_assign_for = None
@@ -825,6 +845,18 @@ def render_sidebar():
         if st.button("Evaluación de CVs", key="sb_eval"):
             ss.section = "eval"
             ss.pipeline_filter = None
+
+        # Botón visible para todos
+        if st.button("Resultados de llamadas", key="sb_calls_view"):
+            ss.section = "calls_view"
+            ss.pipeline_filter = None
+
+        # Uploader solo visible para Supervisor/Administrador (queda “oculto” para Colaborador)
+        if ss.auth and ss.auth.get("role") in ("Supervisor", "Administrador"):
+            if st.button("Cargar transcripciones", key="sb_calls_upload"):
+                ss.section = "calls_upload"
+                ss.pipeline_filter = None
+
 
         st.markdown("#### TAREAS")
         if st.button("Todas las tareas", key="sb_task_manual"):
@@ -1924,7 +1956,254 @@ def page_agents():
                 save_agents(ss.agents)
                 st.success("Agente actualizado.")
                 st.rerun()
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
 
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
+
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
+
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
+
+# ===================== TRANSCRIPCIONES — VER =====================
+def page_calls_view():
+    st.header("Resultados de llamadas")
+
+    if not ss.call_results:
+        st.info("Aún no hay transcripciones guardadas. (Si tienes rol de Supervisor/Administrador, usa **Cargar transcripciones** para subir archivos).")
+        return
+
+    # Filtros
+    roles = ["Todos"] + sorted(list({r.get("role","—") for r in ss.call_results}))
+    col_f1, col_f2, col_f3 = st.columns([1, 1, 1.2])
+    with col_f1:
+        sel_role = st.selectbox("Filtrar por Puesto", roles, index=0)
+    with col_f2:
+        q = st.text_input("Buscar (candidato, título o texto)…")
+    with col_f3:
+        order = st.selectbox("Orden", ["Más recientes", "Más antiguos"], index=0)
+
+    items = ss.call_results.copy()
+    if sel_role != "Todos":
+        items = [i for i in items if i.get("role") == sel_role]
+    if q:
+        ql = q.lower()
+        items = [
+            i for i in items
+            if ql in (i.get("title","").lower())
+            or ql in (i.get("candidate","").lower())
+            or ql in (i.get("text","").lower())
+        ]
+
+    items.sort(key=lambda x: x.get("created_at",""), reverse=(order=="Más recientes"))
+
+    # Cabecera
+    col_w = [2.0, 1.2, 1.2, 1.0, 1.2]
+    h_t, h_p, h_f, h_tipo, h_acc = st.columns(col_w)
+    with h_t:   st.markdown("**Candidato / Título**")
+    with h_p:   st.markdown("**Puesto**")
+    with h_f:   st.markdown("**Fecha llamada**")
+    with h_tipo:st.markdown("**Tipo**")
+    with h_acc: st.markdown("**Acciones**")
+    st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+
+    for it in items:
+        tid = it["id"]
+        c_t, c_p, c_f, c_tipo, c_acc = st.columns(col_w)
+        with c_t:
+            title = it.get("title") or "Sin título"
+            cand  = it.get("candidate") or "—"
+            st.markdown(f"**{title}**")
+            st.caption(f"`{cand}`")
+        with c_p:
+            st.markdown(it.get("role","—"))
+        with c_f:
+            st.markdown(it.get("call_date","—"))
+        with c_tipo:
+            st.markdown((it.get("file_type","—").upper()))
+        with c_acc:
+            act_key = f"tx_action_{tid}"
+            action = st.selectbox(
+                "Acciones",
+                ["Selecciona…", "Ver", "Eliminar"],
+                key=act_key,
+                label_visibility="collapsed"
+            )
+            if action == "Ver":
+                ss.selected_transcript_id = tid
+                st.rerun()
+            elif action == "Eliminar":
+                ss.confirm_delete_transcript_id = tid
+                st.rerun()
+
+        # Confirmación de eliminación
+        if ss.get("confirm_delete_transcript_id") == tid:
+            st.error(f"¿Eliminar '{it.get('file_name')}'?")
+            b1, b2, _ = st.columns([1, 1, 6])
+            with b1:
+                if st.button("Sí, eliminar", key=f"tx_del_yes_{tid}", type="primary", use_container_width=True):
+                    ss.call_results = [x for x in ss.call_results if x["id"] != tid]
+                    save_call_results(ss.call_results)
+                    ss.confirm_delete_transcript_id = None
+                    st.warning("Transcripción eliminada.")
+                    st.rerun()
+            with b2:
+                if st.button("Cancelar", key=f"tx_del_no_{tid}", use_container_width=True):
+                    ss.confirm_delete_transcript_id = None
+                    st.rerun()
+
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.3;'/>", unsafe_allow_html=True)
+
+    # Panel de detalle (inline)
+    sel_id = ss.get("selected_transcript_id")
+    if sel_id:
+        it = next((x for x in ss.call_results if x["id"] == sel_id), None)
+        if it:
+            st.subheader("Detalle de transcripción")
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Candidato", it.get("candidate") or "—")
+            d2.metric("Puesto", it.get("role") or "—")
+            d3.metric("Fecha", it.get("call_date") or "—")
+
+            st.caption(f"Archivo: `{it.get('file_name','—')}`")
+            # Visor (respetando tu look & feel)
+            ext = (it.get("file_type","") or "").lower()
+            try:
+                raw = base64.b64decode(it.get("bytes_b64",""))
+            except Exception:
+                raw = b""
+
+            if ext == "pdf" and raw:
+                with st.expander("Ver PDF", expanded=True):
+                    render_pdf_viewer(raw, height=600, max_css_width=880)
+            else:
+                with st.expander("Ver texto extraído", expanded=True):
+                    st.text_area("Contenido", value=(it.get("text") or "—"), height=240, disabled=True)
+
+            if raw:
+                st.download_button(
+                    "Descargar archivo",
+                    data=raw,
+                    file_name=it.get("file_name","transcripcion"),
+                    type="secondary"
+                )
+
+            st.markdown("---")
+            if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
+                ss.selected_transcript_id = None
+                st.rerun()
+        
 # ===================== FLUJOS =====================
 def render_flow_form():
     """Renderiza el formulario de creación/edición/vista de flujos."""
@@ -2854,6 +3133,8 @@ ROUTES = {
   "agent_tasks": page_agent_tasks,
   "analytics": page_analytics,
   "create_task": page_create_task,
+  "calls_view": page_calls_view,
+  "calls_upload": page_calls_upload,
 }
 
 # =========================================================
