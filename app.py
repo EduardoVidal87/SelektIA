@@ -365,6 +365,15 @@ def save_call_results(items):
 ss = st.session_state
 if "auth" not in ss: ss.auth = None
 if "section" not in ss:  ss.section = "publicacion_sourcing"
+# === RERUN SEGURO, FUERA DE CALLBACKS ===
+if "_needs_rerun" not in ss:
+    ss._needs_rerun = False
+
+def request_rerun():
+    """Marca que queremos un st.rerun(), pero se ejecutará al final del script."""
+    ss._needs_rerun = True
+# ========================================
+
 
 if "tasks_loaded" not in ss:
     ss.tasks = load_tasks()
@@ -745,6 +754,7 @@ def _handle_flow_action_change(wf_id):
         ss.confirm_delete_flow_id = wf_id
 
     ss[action_key] = "Selecciona..."
+    request_rerun()
 
 def _handle_position_action_change(pos_id):
     action_key = f"pos_action_{pos_id}"
@@ -763,6 +773,7 @@ def _handle_position_action_change(pos_id):
         ss.confirm_delete_position_id = pos_id
 
     ss[action_key] = "Selecciona..."
+    request_rerun()
 
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
@@ -1977,65 +1988,6 @@ def page_agents():
                 save_agents(ss.agents)
                 st.success("Agente actualizado.")
                 st.rerun()
-# ===================== TRANSCRIPCIONES — SUBIR =====================
-def page_calls_upload():
-    st.header("Cargar transcripciones de llamadas")
-
-    # Contexto: puesto (desde 'Puestos') para etiquetar
-    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
-    if not pos_list:
-        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
-        return
-
-    with st.form("upload_call_tx_form", clear_on_submit=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
-            candidate = st.text_input("Nombre del candidato (opcional)")
-        with c2:
-            phone = st.text_input("Teléfono (opcional)")
-            call_dt = st.date_input("Fecha de la llamada", value=date.today())
-
-        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
-
-        files = st.file_uploader(
-            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
-            type=["pdf", "docx", "txt"],
-            accept_multiple_files=True
-        )
-
-        submitted = st.form_submit_button("Guardar transcripciones")
-        if submitted:
-            if not files:
-                st.error("Debes adjuntar al menos un archivo.")
-                return
-
-            new_items = []
-            for f in files:
-                raw = f.read(); f.seek(0)
-                suffix = Path(f.name).suffix.lower()
-                text = extract_text_from_file(f)  # ya existente en tu app
-                item = {
-                    "id": str(uuid.uuid4()),
-                    "title": (candidate or Path(f.name).stem),
-                    "candidate": candidate or "",
-                    "phone": phone or "",
-                    "role": sel_role,
-                    "call_date": call_dt.isoformat(),
-                    "file_name": f.name,
-                    "file_type": suffix.replace(".", ""),
-                    "text": text or "",
-                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
-                    "notes": notes or "",
-                    "created_at": datetime.now().isoformat(),
-                    "source": "Manual"
-                }
-                new_items.append(item)
-
-            ss.call_results = (ss.call_results or []) + new_items
-            save_call_results(ss.call_results)
-            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
-            st.rerun()
 
 # ===================== TRANSCRIPCIONES — SUBIR =====================
 def page_calls_upload():
@@ -2101,11 +2053,13 @@ def page_calls_upload():
 def _on_tx_action_change(tid: str, act_key: str):
     action = st.session_state.get(act_key, "Selecciona…")
     if action == "Ver":
-        st.session_state.selected_transcript_id = tid
+        ss.selected_transcript_id = tid
     elif action == "Eliminar":
-        st.session_state.confirm_delete_transcript_id = tid
-    # reset del select para que vuelva a “Selecciona…”
+        ss.confirm_delete_transcript_id = tid
+    # reset del select
     st.session_state[act_key] = "Selecciona…"
+    # pedir rerun al final (no aquí)
+    request_rerun()
 
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
@@ -2819,7 +2773,6 @@ def page_create_task():
         task_to_update["status"] = "En Proceso"
         save_tasks(ss.tasks)
         st.toast("Tarea tomada ✅")
-        # ⛔️ Importante: sin st.rerun() dentro del callback
 
     elif action == "Eliminar":
         ss.expanded_task_id = None
@@ -2828,8 +2781,11 @@ def page_create_task():
     else:
         ss.expanded_task_id = None
 
-    # Resetea el select para que vuelva a “Selecciona…”
+    # Devuelve el select a estado neutro
     ss[selectbox_key] = "Selecciona…"
+
+    # Pedimos el rerun al final del script
+    request_rerun()
 
     if tasks_to_show:
         for task in tasks_to_show:
@@ -3175,4 +3131,11 @@ ROUTES = {
 if __name__ == "__main__":
     if require_auth():
         render_sidebar()
+
+        # Si algún callback pidió un rerun, hazlo aquí (ya fuera de callbacks)
+        if ss.get("_needs_rerun"):
+            ss._needs_rerun = False
+            st.rerun()
+
         ROUTES.get(ss.section, page_def_carga)()
+
