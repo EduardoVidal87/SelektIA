@@ -428,33 +428,36 @@ def build_analysis_text(name,ex):
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
 # =========================================================
-def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
+def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
     """
-    CORREGIDO (v5): Usa la etiqueta <embed> en lugar de <iframe>.
-    Chrome (y otros navegadores) a menudo bloquean iframes con data: URI
-    por razones de seguridad (CSP). <embed> es mucho más robusto para este caso.
+    Entrega el PDF asociado al candidato.
+
+    1. Intentar container.pdf() (Streamlit moderno).
+    2. Si falla (CSP / navegador), mostrar botón de descarga como fallback.
     """
+    # Intento inline nativo
     try:
-        # 1. Convertir los bytes del PDF a base64
-        base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
+        container.pdf(file_bytes)
+        return
+    except Exception:
+        pass
 
-        # 2. Crear el HTML usando <embed>
-        # Esta es la etiqueta estándar para incrustar PDFs y evita el bloqueo de Chrome
-        pdf_embed_html = f"""
-        <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
-            <embed src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0"
-                   type="application/pdf"
-                   width="100%"
-                   height="{height}px" />
-        </div>
-        """
-        
-        # 3. Retornar el HTML para st.markdown
-        return pdf_embed_html
-
+    # Fallback seguro: descarga
+    try:
+        container.download_button(
+            label="⬇ Descargar CV (PDF)",
+            data=file_bytes,
+            file_name=filename if filename else "cv.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+        container.info(
+            "Haz clic en '⬇ Descargar CV (PDF)' para abrirlo. "
+            "El visor embebido del navegador está bloqueado, "
+            "pero el archivo sí está guardado."
+        )
     except Exception as e:
-        # Si falla, retorna un HTML de error
-        return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
+        container.error(f"No se pudo preparar el PDF: {e}")
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2653,18 +2656,13 @@ def page_create_task():
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
-                        # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            # 1. Obtenemos el HTML de la función
-                            html_to_render = pdf_viewer_embed(
+                            pdf_viewer_embed(
                                 file_bytes=pdf_bytes,
                                 filename=display_name,
-                                height=400  # Altura de 400px para el detalle
+                                container=st,
+                                height=400,
                             )
-                            # 2. Usamos st.markdown, que funciona mejor en expanders
-                            st.markdown(html_to_render, unsafe_allow_html=True)
-                        # --- FIN DE LA CORRECCIÓN ---
-
                     except Exception as e:
                         st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
 
