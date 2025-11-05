@@ -216,42 +216,19 @@ h1 strong, h2 strong, h3 strong {{ color: var(--green); }}
 .pos-badge-Cerrado {{ border-color: #D1D5DB; background: #F3F4F6; color: #6B7280; }}
 """
 st.set_page_config(page_title="SelektIA", page_icon="🧠", layout="wide")
-
-# === (Req 1) Alias seguro para HTML crudo — PÉGALO AQUÍ ===
-def _st_html(raw_html: str, height=None, scrolling=False):
-    """
-    HTML crudo:
-    - Si contiene <script>/<iframe>/<embed>/<object>/<canvas>, usa components.html (iframe).
-    - Si no, usa st.markdown (afecta DOM principal).
-    """
-    try:
-        # Detecta contenido "activo" que requiere iframe
-        if re.search(r"<\s*(script|iframe|embed|object|canvas)\b", raw_html, re.I):
-            if height is None:
-                components.html(raw_html, scrolling=bool(scrolling))
-            else:
-                components.html(raw_html, height=height, scrolling=bool(scrolling))
-        else:
-            st.markdown(raw_html, unsafe_allow_html=True)
-    except Exception:
-        st.markdown(raw_html, unsafe_allow_html=True)
-
-setattr(st, "html", _st_html)
-# === Fin (Req 1) ===
-
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
 # Powered by size
-st.html("""
+st.markdown("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand .brand-sub{
   font-size: 12px !important; line-height: 1.2 !important; margin-top: 4px !important; opacity: .95 !important;
 }
 </style>
-""")
+""", unsafe_allow_html=True)
 
 # Sidebar spacing compact
-st.html("""
+st.markdown("""
 <style>
 [data-testid="stSidebar"] .sidebar-brand{ margin-top:0 !important; padding-bottom:0 !important; margin-bottom:55px !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{ gap:2px !important; }
@@ -261,7 +238,7 @@ st.html("""
 [data-testid="stSidebar"] .stButton{ margin:0 !important; padding:0 !important; }
 [data-testid="stSidebar"] .stButton>button{ margin:0 8px 6px 0 !important; padding-left:8px !important; line-height:1.05 !important; gap:6px !important; }
 </style>
-""")
+""", unsafe_allow_html=True)
 
 # =========================================================
 # Persistencia (Agentes / Flujos / Roles / Tareas / Puestos)
@@ -365,15 +342,6 @@ def save_call_results(items):
 ss = st.session_state
 if "auth" not in ss: ss.auth = None
 if "section" not in ss:  ss.section = "publicacion_sourcing"
-# === RERUN SEGURO, FUERA DE CALLBACKS ===
-if "_needs_rerun" not in ss:
-    ss._needs_rerun = False
-
-def request_rerun():
-    """Marca que queremos un st.rerun(), pero se ejecutará al final del script."""
-    ss._needs_rerun = True
-# ========================================
-
 
 if "tasks_loaded" not in ss:
     ss.tasks = load_tasks()
@@ -576,6 +544,7 @@ def render_pdf_viewer(file_bytes: bytes, height: int = 650, max_css_width: int =
         }})();
         </script>
         """
+        import streamlit.components.v1 as components  # asegura el import
         components.html(html, height=height+2, scrolling=False)
     except Exception as e:
         st.error(f"Error al preparar el visor PDF: {e}")
@@ -754,7 +723,6 @@ def _handle_flow_action_change(wf_id):
         ss.confirm_delete_flow_id = wf_id
 
     ss[action_key] = "Selecciona..."
-    request_rerun()
 
 def _handle_position_action_change(pos_id):
     action_key = f"pos_action_{pos_id}"
@@ -773,7 +741,6 @@ def _handle_position_action_change(pos_id):
         ss.confirm_delete_position_id = pos_id
 
     ss[action_key] = "Selecciona..."
-    request_rerun()
 
 # =========================================================
 # INICIALIZACIÓN DE CANDIDATOS
@@ -812,14 +779,14 @@ def asset_logo_wayki():
     return "https://raw.githubusercontent.com/wayki-consulting/.dummy/main/logo-wayki.png"
 
 def login_screen():
-    st.html('<div class="login-bg"><div class="login-card">')
+    st.markdown('<div class="login-bg"><div class="login-card">', unsafe_allow_html=True)
     try:
-        st.html('<div class="login-logo-wrap">')
+        st.markdown('<div class="login-logo-wrap">', unsafe_allow_html=True)
         st.image(asset_logo_wayki(), width=120)
-        st.html("</div>")
+        st.markdown("</div>", unsafe_allow_html=True)
     except:
         pass
-    st.html('<div class="login-sub">Acceso a SelektIA</div>')
+    st.markdown('<div class="login-sub">Acceso a SelektIA</div>', unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
         u = st.text_input("Usuario")
@@ -836,7 +803,7 @@ def login_screen():
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos.")
-    st.html("</div></div>")
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 def require_auth():
     if ss.auth is None:
@@ -846,12 +813,14 @@ def require_auth():
 
 def render_sidebar():
     with st.sidebar:
-        st.html("""
-    <div class="sidebar-brand">
-      <div class="brand-title">SelektIA</div>
-      <div class="brand-sub">Powered by Wayki Consulting</div>
-    </div>
-    """)
+        st.markdown(
+            """
+            <div class="sidebar-brand">
+              <div class="brand-title">SelektIA</div>
+              <div class="brand-sub">Powered by Wayki Consulting</div>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
         st.markdown("#### DASHBOARD")
         if st.button("Analytics", key="sb_analytics"):
@@ -1306,7 +1275,7 @@ def page_puestos():
         with h_leads:  st.markdown("**Leads (Nuevos)**")
         with h_estado: st.markdown("**Estado**")
         with h_acc:    st.markdown("**Acciones**")
-        st.html("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>")
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
         positions_list = ss.positions.copy()
         
@@ -1345,7 +1314,7 @@ def page_puestos():
                     )
                 st.markdown(f"**{leads_count}** ({nuevos_count})")
             with c_estado:
-                st.html(_position_status_pill(pos.get('Estado', 'Abierto')))
+                st.markdown(_position_status_pill(pos.get('Estado', 'Abierto')), unsafe_allow_html=True)
             with c_acc:
                 st.selectbox(
                     "Acciones",
@@ -1382,7 +1351,7 @@ def page_puestos():
                         ss.confirm_delete_position_id = None
                         st.rerun()
 
-            st.html("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>")
+            st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.35;'/>", unsafe_allow_html=True)
 
         st.markdown("---")
         st.subheader("Candidatos por Puesto")
@@ -1631,12 +1600,14 @@ def page_pipeline():
                     .replace('.pdf', '')
                     .replace('.txt', '')
                 )
-                st.html(f"""
+                st.markdown(f"""
                 <div class="k-card" style="margin-bottom: 10px; border-left: 4px solid {PRIMARY if c['Score'] >= 70 else ('#FFA500' if c['Score'] >= 40 else '#D60000')}">
-                    ...
+                    <div style="font-weight:700; color:{TITLE_DARK};">{card_name}</div>
+                    <div style="font-size:12px; opacity:.8;">{c.get("Role", "Puesto Desconocido")}</div>
+                    <div style="font-size:14px; font-weight:700; margin-top:8px;">Fit: <span style="color:{PRIMARY};">{c["Score"]}%</span></div>
+                    <div style="font-size:10px; opacity:.6; margin-top:4px;">Fuente: {c.get("source", "N/A")}</div>
                 </div>
-                """)
-
+                """, unsafe_allow_html=True)
 
                 with st.form(key=f"form_move_{c['id']}", clear_on_submit=False):
                     current_stage_index = PIPELINE_STAGES.index(stage)
@@ -1691,7 +1662,7 @@ def page_pipeline():
                             )
                         st.rerun()
 
-                st.html("<br>")
+                st.markdown("<br>", unsafe_allow_html=True)
 
 def page_interview():
     st.header("Entrevista (Gerencia)")
@@ -1890,12 +1861,11 @@ def page_agents():
             idx = i + j
             with cols[j]:
                 img = ag.get("image") or AGENT_DEFAULT_IMAGES.get(ag.get("rol","Headhunter"))
-                st.html(
-                    f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>'
+                st.markdown(
+                    f'<div class="agent-card"><img src="{img}"><div class="agent-title">{ag.get("rol","—")}</div><div class="agent-sub">{ag.get("objetivo","—")}</div></div>',
+                    unsafe_allow_html=True
                 )
-                st.html('<div class="toolbar">')
-                ...
-                st.html('</div>')
+                st.markdown('<div class="toolbar">', unsafe_allow_html=True)
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     if st.button("👁", key=f"ag_v_{idx}", help="Ver"):
@@ -1926,9 +1896,7 @@ def page_agents():
     if ss.agent_view_idx is not None and 0 <= ss.agent_view_idx < len(ss.agents):
         ag = ss.agents[ss.agent_view_idx]
         st.markdown("### Detalle del agente")
-        st.html('<div class="agent-detail">')
-        ...
-        st.html('</div>')
+        st.markdown('<div class="agent-detail">', unsafe_allow_html=True)
         c1, c2 = st.columns([0.42, 0.58])
         with c1:
             raw_img = ag.get("image") or ""
@@ -1988,6 +1956,65 @@ def page_agents():
                 save_agents(ss.agents)
                 st.success("Agente actualizado.")
                 st.rerun()
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
+
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
 
 # ===================== TRANSCRIPCIONES — SUBIR =====================
 def page_calls_upload():
@@ -2053,13 +2080,12 @@ def page_calls_upload():
 def _on_tx_action_change(tid: str, act_key: str):
     action = st.session_state.get(act_key, "Selecciona…")
     if action == "Ver":
-        ss.selected_transcript_id = tid
+        st.session_state.selected_transcript_id = tid
     elif action == "Eliminar":
-        ss.confirm_delete_transcript_id = tid
-    # reset del select
+        st.session_state.confirm_delete_transcript_id = tid
+    # reset del select para que vuelva a “Selecciona…”
     st.session_state[act_key] = "Selecciona…"
-    # pedir rerun al final (no aquí)
-    request_rerun()
+    # st.rerun()  # <- quitar esta línea
 
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
@@ -2734,46 +2760,6 @@ def page_create_task():
 
     tasks_to_show = tasks_filtered
 
-        # --- Acción del select (función anidada dentro de page_create_task) ---
-    def _handle_action_change(task_id):
-        selectbox_key = f"accion_{task_id}"
-        if selectbox_key not in ss:
-            return
-        action = ss[selectbox_key]
-        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-        if not task_to_update:
-            return
-
-        # Reset de modales/paneles
-        ss.confirm_delete_id = None
-        ss.show_assign_for = None
-
-        if action == "Ver detalle":
-            ss.expanded_task_id = task_id
-
-        elif action == "Asignar tarea":
-            ss.expanded_task_id = None
-            ss.show_assign_for = task_id
-
-        elif action == "Tomar tarea":
-            ss.expanded_task_id = None
-            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-            task_to_update["assigned_to"] = current_user
-            task_to_update["status"] = "En Proceso"
-            save_tasks(ss.tasks)
-            st.toast("Tarea tomada ✅")
-
-        elif action == "Eliminar":
-            ss.expanded_task_id = None
-            ss.confirm_delete_id = task_id
-
-        else:
-            ss.expanded_task_id = None
-
-        # Devuelve el select a estado neutro y pide rerun fuera de la callback
-        ss[selectbox_key] = "Selecciona…"
-        request_rerun()
-        
     col_w = [2.0, 2.5, 1.2, 1.2, 1.0, 1.0, 1.5]
     h_nom, h_desc, h_asg, h_due, h_pri, h_est, h_acc = st.columns(col_w)
 
@@ -2787,45 +2773,38 @@ def page_create_task():
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
     def _handle_action_change(task_id):
-    selectbox_key = f"accion_{task_id}"
-    if selectbox_key not in ss:
-        return
-    action = ss[selectbox_key]
-    task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-    if not task_to_update:
-        return
+        selectbox_key = f"accion_{task_id}"
+        if selectbox_key not in ss:
+            return
+        action = ss[selectbox_key]
+        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+        if not task_to_update:
+            return
 
-    # Reset de modales/paneles
-    ss.confirm_delete_id = None
-    ss.show_assign_for = None
+        ss.confirm_delete_id = None
+        ss.show_assign_for = None
 
-    if action == "Ver detalle":
-        ss.expanded_task_id = task_id
+        if action == "Ver detalle":
+            ss.expanded_task_id = task_id
+        elif action == "Asignar tarea":
+            ss.expanded_task_id = None
+            ss.show_assign_for = task_id
+        elif action == "Tomar tarea":
+            ss.expanded_task_id = None
+            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+            task_to_update["assigned_to"] = current_user
+            task_to_update["status"] = "En Proceso"
+            save_tasks(ss.tasks)
+            st.toast("Tarea tomada.")
+            st.rerun()
+        elif action == "Eliminar":
+            ss.expanded_task_id = None
+            ss.confirm_delete_id = task_id
+        else:
+            ss.expanded_task_id = None
 
-    elif action == "Asignar tarea":
-        ss.expanded_task_id = None
-        ss.show_assign_for = task_id
-
-    elif action == "Tomar tarea":
-        ss.expanded_task_id = None
-        current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-        task_to_update["assigned_to"] = current_user
-        task_to_update["status"] = "En Proceso"
-        save_tasks(ss.tasks)
-        st.toast("Tarea tomada ✅")
-
-    elif action == "Eliminar":
-        ss.expanded_task_id = None
-        ss.confirm_delete_id = task_id
-
-    else:
-        ss.expanded_task_id = None
-
-    # Devuelve el select a estado neutro
-    ss[selectbox_key] = "Selecciona…"
-
-    # Pedimos el rerun al final del script
-    request_rerun()
+        if action != "Selecciona…":
+            st.session_state[selectbox_key] = "Selecciona…"
 
     if tasks_to_show:
         for task in tasks_to_show:
@@ -3171,10 +3150,4 @@ ROUTES = {
 if __name__ == "__main__":
     if require_auth():
         render_sidebar()
-        # 1) Renderiza la página actual
         ROUTES.get(ss.section, page_def_carga)()
-        # 2) Si alguna callback pidió rerun, hazlo aquí (fuera de callbacks)
-        if ss.get("_needs_rerun"):
-            ss._needs_rerun = False
-            st.rerun()
-
