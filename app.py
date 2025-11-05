@@ -2592,29 +2592,47 @@ def page_create_task():
                         st.rerun()
 
             if ss.show_assign_for == t_id:
-                # Layout más simple: Asignar a  |  Prioridad  |  Botones
-                _, a_asg, a_pri, a_btns = st.columns([
+                _, a1, a2, a3, a4 = st.columns([
                     col_w[0]+col_w[1],
-                    col_w[2]+col_w[3],
+                    col_w[2],
+                    col_w[3],
                     col_w[4],
                     col_w[5]+col_w[6]
                 ])
                 st.info(f"Asignando tarea '{task.get('titulo')}'...")
-
-                # (A) Un único selector "Asignar a" sin el campo "Tipo"
-                with a_asg:
-                opciones_equipo = ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"]
-                opciones_usuarios = [USERS[u]["name"] for u in USERS]
-                opciones = ["En Espera"] + opciones_equipo + opciones_usuarios
-                nuevo_assignee = st.selectbox(
-                    "Asignar a",
-                    opciones,
-                    key=f"assign_to_{t_id}",
-                    label_visibility="collapsed"
-                )
-
-                # (B) Prioridad
-                with a_pri:
+                with a1:
+                    assign_type = st.selectbox(
+                        "Tipo",
+                        ["En Espera", "Equipo", "Usuario"],
+                        key=f"type_{t_id}",
+                        index=2
+                    )
+                with a2:
+                    if assign_type == "En Espera":
+                        nuevo_assignee = "En Espera"
+                        st.text_input(
+                            "Asignado a",
+                            "En Espera",
+                            key=f"val_esp_{t_id}",
+                            disabled=True,
+                            label_visibility="collapsed"
+                        )
+                    elif assign_type == "Equipo":
+                        nuevo_assignee = st.selectbox(
+                            "Equipo",
+                            ["Coordinador RR.HH.", "Admin RR.HH.", "Agente de Análisis"],
+                            key=f"val_eq_{t_id}",
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        user_options = [USERS[u]["name"] for u in USERS]
+                        nuevo_assignee = st.selectbox(
+                            "Usuario",
+                            user_options,
+                            key=f"val_us_{t_id}",
+                            label_visibility="collapsed"
+                        )
+                with a3:
                     cur_p = task.get("priority", "Media")
                     idx_p = TASK_PRIORITIES.index(cur_p) if cur_p in TASK_PRIORITIES else 1
                     nueva_prio = st.selectbox(
@@ -2624,12 +2642,9 @@ def page_create_task():
                         index=idx_p,
                         label_visibility="collapsed"
                     )
-
-                # (C) Botones (Guardar / Cancelar)
-                with a_btns:
-                    col_save, col_cancel = st.columns(2)
-            
-                    if col_save.button(
+                with a4:
+                    b_save, b_cancel = st.columns(2)
+                    if b_save.button(
                         "Guardar",
                         key=f"btn_assign_{t_id}",
                         use_container_width=True
@@ -2641,7 +2656,7 @@ def page_create_task():
                         if task_to_update:
                             task_to_update["assigned_to"] = nuevo_assignee
                             task_to_update["priority"] = nueva_prio
-                            if nuevo_assignee == "En Espera":
+                            if assign_type == "En Espera":
                                 task_to_update["status"] = "En Espera"
                             else:
                                 if task_to_update["status"] == "En Espera":
@@ -2650,9 +2665,8 @@ def page_create_task():
                             ss.show_assign_for = None
                             st.success("Tarea reasignada.")
                             st.rerun()
-
-                    if col_cancel.button(
-                        "Cancelar",   # ← antes era "X"
+                    if b_cancel.button(
+                        "X",
                         key=f"btn_cancel_assign_{t_id}",
                         use_container_width=True,
                         help="Cancelar asignación"
