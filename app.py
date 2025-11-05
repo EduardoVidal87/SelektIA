@@ -2734,7 +2734,7 @@ def page_create_task():
 
     tasks_to_show = tasks_filtered
 
-    # --- Acción del select (función anidada dentro de page_create_task) ---
+        # --- Acción del select (función anidada dentro de page_create_task) ---
     def _handle_action_change(task_id):
         selectbox_key = f"accion_{task_id}"
         if selectbox_key not in ss:
