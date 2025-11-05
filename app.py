@@ -2542,65 +2542,65 @@ def page_calls_view():
                 st.progress(score/100)
 
                 # === CHECKLIST DETALLADO SEGÚN JD ===
-st.markdown("**Checklist (según JD)**")
+                st.markdown("**Checklist (según JD)**")
 
-# 1) Lista de criterios (obligatorios/deseables)
-items_must = [s for s in (must_list or []) if s.strip()]
-items_nice = [s for s in (nice_list or []) if s.strip()]
+                # 1) Lista de criterios (obligatorios/deseables)
+                items_must = [s for s in (must_list or []) if s.strip()]
+                items_nice = [s for s in (nice_list or []) if s.strip()]
 
-# Fallback: si no hay presets, parsear bullets del JD como obligatorios
-if not items_must and not items_nice:
-    items_must = extract_jd_items(jd_text_eval)
+                # Fallback: si no hay presets, parsear bullets del JD como obligatorios
+                if not items_must and not items_nice:
+                    items_must = extract_jd_items(jd_text_eval)
 
-rows = []
-ok_must = ok_nice = 0
+                rows = []
+                ok_must = ok_nice = 0
 
-for tipo, lista in (("Obligatorio", items_must), ("Deseable", items_nice)):
-    for it in lista:
-        ok, hits = soft_match(it, tx_text)
-        if tipo == "Obligatorio":
-            ok_must += int(ok)
-        else:
-            ok_nice += int(ok)
-        rows.append({
-            "Tipo": tipo,
-            "Criterio": it,
-            "Cumple": "✅" if ok else "❌",
-            "Evidencia (palabras clave)": ", ".join(hits) if hits else "—"
-        })
+                for tipo, lista in (("Obligatorio", items_must), ("Deseable", items_nice)):
+                    for it in lista:
+                        ok, hits = soft_match(it, tx_text)
+                        if tipo == "Obligatorio":
+                            ok_must += int(ok)
+                        else:
+                            ok_nice += int(ok)
+                        rows.append({
+                            "Tipo": tipo,
+                            "Criterio": it,
+                            "Cumple": "✅" if ok else "❌",
+                            "Evidencia (palabras clave)": ", ".join(hits) if hits else "—"
+                        })
 
-if rows:
-    df_chk = pd.DataFrame(rows)
-    st.dataframe(df_chk, use_container_width=True, hide_index=True)
+                if rows:
+                    df_chk = pd.DataFrame(rows)
+                    st.dataframe(df_chk, use_container_width=True, hide_index=True)
 
-# 2) Resumen / Justificación (por qué pasa o no)
-tot_must, tot_nice = len(items_must), len(items_nice)
-miss_must = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="❌"][:3]
-hit_must  = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="✅"][:3]
-hit_nice  = [r["Criterio"] for r in rows if r["Tipo"]=="Deseable" and r["Cumple"]=="✅"][:2]
+                # 2) Resumen / Justificación (por qué pasa o no)
+                tot_must, tot_nice = len(items_must), len(items_nice)
+                miss_must = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="❌"][:3]
+                hit_must  = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="✅"][:3]
+                hit_nice  = [r["Criterio"] for r in rows if r["Tipo"]=="Deseable" and r["Cumple"]=="✅"][:2]
 
-# Regla de decisión (ajústala si quieres)
-PASS_THRESHOLD = 70  # ya la usas para el %; mantenemos consistencia
-must_ratio_ok = (ok_must / max(1, tot_must)) * 100
-passes = (score >= PASS_THRESHOLD) and (must_ratio_ok >= 70) and (len(miss_must) <= 2)
+                # Regla de decisión (ajústala si quieres)
+                PASS_THRESHOLD = 70  # ya la usas para el %; mantenemos consistencia
+                must_ratio_ok = (ok_must / max(1, tot_must)) * 100
+                passes = (score >= PASS_THRESHOLD) and (must_ratio_ok >= 70) and (len(miss_must) <= 2)
 
-st.markdown("**Resumen / Justificación**")
-if passes:
-    st.markdown(
-        "- ✅ **Recomiendo pasar a 2da etapa.**\n"
-        f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
-        + (f"  - Fortalezas: {', '.join(hit_must)}.\n" if hit_must else "")
-        + (f"  - Extras relevantes: {', '.join(hit_nice)}.\n" if hit_nice else "")
-        + "  - El desempeño en la transcripción se alinea con los comportamientos esperados del JD."
-    )
-else:
-    st.markdown(
-        "- ❌ **Recomiendo no pasar por ahora.**\n"
-        f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
-        + (f"  - Principales brechas: {', '.join(miss_must)}.\n" if miss_must else "")
-        + "  - Sugiero reforzar estos puntos y re-evaluar."
-    )
-# === FIN CHECKLIST ===
+                st.markdown("**Resumen / Justificación**")
+                if passes:
+                    st.markdown(
+                        "- ✅ **Recomiendo pasar a 2da etapa.**\n"
+                        f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
+                        + (f"  - Fortalezas: {', '.join(hit_must)}.\n" if hit_must else "")
+                        + (f"  - Extras relevantes: {', '.join(hit_nice)}.\n" if hit_nice else "")
+                        + "  - El desempeño en la transcripción se alinea con los comportamientos esperados del JD."
+                    )
+                else:
+                    st.markdown(
+                    "- ❌ **Recomiendo no pasar por ahora.**\n"
+                    f"  - Cumple {ok_must}/{tot_must} criterios **obligatorios** ({must_ratio_ok:.0f}%).\n"
+                    + (f"  - Principales brechas: {', '.join(miss_must)}.\n" if miss_must else "")
+                    + "  - Sugiero reforzar estos puntos y re-evaluar."
+                )
+                # === FIN CHECKLIST ===
 
 
                 st.markdown(
