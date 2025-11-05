@@ -426,6 +426,258 @@ def infer_skills(text:str)->set:
         if any(s in t for s in syns):
             out.add(k)
     return out
+# === NUEVO: helpers de evaluación de transcripciones ===
+
+def _find_flow_for_role(role_name: str):
+    """Devuelve el flujo más reciente para un puesto dado. Prioriza Programado/Aprobado."""
+    try:
+        flows = [w for w in ss.workflows if (w.get("role") == role_name)]
+        if not flows:
+            return None
+        # priorizar por estado y luego por fecha de creación
+        def _prio(w):
+            stt = (w.get("status") or "").lower()
+            score = 0
+            if "programado" in stt: score = 3
+            elif "aprobado" in stt: score = 2
+            elif "pendiente" in stt: score = 1
+            return (score, w.get("created_at",""))
+        flows.sort(key=_prio, reverse=True)
+        return flows[0]
+    except Exception:
+        return None
+
+def _find_jd_for_role(role_name: str) -> tuple[str, str]:
+    """Busca primero en Flujos y luego en Puestos. Retorna (jd_text, source_label)."""
+    # 1) Flujos
+    wf = _find_flow_for_role(role_name)
+    if wf and wf.get("jd_text"):
+        return wf["jd_text"], f"Flujo: {wf.get('name','(sin nombre)')}"
+    # 2) Puestos
+    pos = next((p for p in ss.positions if p.get("Puesto") == role_name), None)
+    if pos and pos.get("JD"):
+        return pos["JD"], "Puestos"
+    return "", ""
+
+def _jd_to_checklist(jd_text: str, max_items: int = 10) -> list[str]:
+    """
+    Extrae posibles ítems de checklist desde un JD libre.
+    - Toma bullets, líneas numeradas o frases con verbos de acción típicos.
+    - Devuelve de 6 a 10 puntos cortos.
+    """
+    try:
+        raw = (jd_text or "").strip()
+        if not raw:
+            return []
+        lines = []
+        # 1) Intentar bullets comunes
+        for ln in raw.splitlines():
+            s = re.sub(r"^\s*[\-\•\*\u2022]?\s*", "", ln.strip())
+            s = re.sub(r"^\s*\d+[\.)]\s*", "", s)
+            if len(s) >= 6 and any(c.isalpha() for c in s):
+                lines.append(s)
+
+        # 2) Si no hay suficientes, partir por puntos finales como respaldo
+        if len(lines) < 6:
+            sentences = re.split(r"[;\.]\s+", raw)
+            for s in sentences:
+                s2 = s.strip()
+                if len(s2) >= 6 and any(v in s2.lower() for v in [
+                    "brindar","mantener","cumplir","gestionar","coordinar","reportar",
+                    "analizar","ofrecer","escalar","escucha","atender","limpieza",
+                    "orden","imagen","promociones","ventas","procedimientos"
+                ]):
+                    lines.append(s2)
+
+        # 3) Limpieza final y recorte
+        clean = []
+        seen = set()
+        for s in lines:
+            s = re.sub(r"\s+", " ", s)
+            s = s.strip(" -•*")
+            if 6 <= len(s) <= 160 and s.lower() not in seen:
+                clean.append(s)
+                seen.add(s.lower())
+            if len(clean) >= max_items:
+                break
+        return clean[:max_items]
+    except Exception:
+        return []
+
+def _find_evidence(haystack: str, needle_words: list[str], window: int = 70) -> str:
+    """
+    Busca evidencia textual simple en la transcripción.
+    Retorna un snippet corto con contexto si coincide alguna palabra relevante.
+    """
+    try:
+        h = (haystack or "").lower()
+        idxs = []
+        for w in needle_words:
+            w2 = w.lower().strip()
+            if not w2 or len(w2) < 3:
+                continue
+            i = h.find(w2)
+            if i != -1:
+                idxs.append(i)
+        if not idxs:
+            return ""
+        i = min(idxs)
+        start = max(0, i - window)
+        end = min(len(h), i + len(needle_words[0]) + window)
+        snippet = haystack[start:end].replace("\n"," ")
+        return f"...{snippet}..."
+    except Exception:
+        return ""
+
+def _evaluate_transcript_rule_based(jd_text: str, transcript_text: str) -> dict:
+    """
+    Fallback sin LLM: genera un checklist desde el JD y marca si hay evidencia
+    (match de palabras clave) en la transcripción.
+    """
+    items = _jd_to_checklist(jd_text, max_items=10)
+    h = (transcript_text or "").lower()
+    out_rows = []
+    hits = 0
+
+    # Palabras de acción y del JD para buscar evidencia
+    for it in items:
+        # Palabras relevantes (>=4 chars), excluyendo stopwords sencillas
+        words = [w for w in re.findall(r"[A-Za-zÁÉÍÓÚáéíóúñÑ]{3,}", it) if w.lower() not in {
+            "para","con","del","los","las","por","una","uno","unos","unas","que",
+            "de","la","el","en","y","o","u","al","lo","su","sus","se","es","ser"
+        }]
+        found = any(w.lower() in h for w in words[:5])  # primeras 5 palabras “fuertes”
+        if found:
+            hits += 1
+        evidence = _find_evidence(transcript_text, words[:3])
+        out_rows.append({
+            "check": it,
+            "cumple": bool(found),
+            "evidencia": evidence
+        })
+
+    score = int(round((hits / max(1, len(items))) * 100))
+    verdict = "PASA a siguiente etapa" if score >= 70 else "NO pasa"
+    rationale = (
+        f"{hits}/{len(items)} ítems del JD con evidencia literal en la transcripción. "
+        f"Umbral de aprobación: 70%."
+    )
+    return {
+        "mode": "rule_based",
+        "score": score,
+        "verdict": verdict,
+        "rationale": rationale,
+        "rows": out_rows
+    }
+
+def _evaluate_transcript_with_llm(jd_text: str, transcript_text: str) -> dict:
+    """
+    Usa AzureChatOpenAI (si está disponible) para producir una evaluación estructurada.
+    Nunca rompe si faltan credenciales: retorna {} y el caller hace fallback.
+    """
+    if not _LC_AVAILABLE:
+        return {}
+
+    _llm_setup_credentials()
+    try:
+        llm = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
+            temperature=0,
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+        schema = {
+            "score": "0-100 entero",
+            "verdict": "PASA a siguiente etapa / NO pasa",
+            "rationale": "Texto corto",
+            "rows": [
+                {
+                    "check": "string (ítem del JD)",
+                    "cumple": "boolean",
+                    "evidencia": "string corto"
+                }
+            ]
+        }
+        prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "Eres un evaluador de selección. Devuelve SOLO un JSON válido (sin markdown) "
+                    "con el siguiente esquema. No agregues texto extra ni explicaciones fuera del JSON."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Esquema JSON:\n"
+                    + json.dumps(schema, ensure_ascii=False)
+                    + "\n\nInstrucciones:\n"
+                      "- Genera una checklist de 6 a 10 ítems a partir del JD (no inventes fuera del JD).\n"
+                      "- Marca cada ítem como cumple/no, con evidencia literal (frase breve) si existe.\n"
+                      "- Calcula score = porcentaje de ítems con evidencia (0-100) y verdict con umbral 70%.\n\n"
+                      f"JD:\n{jd_text}\n\n"
+                      f"Transcripción:\n{transcript_text}"
+                ),
+            },
+        ]
+        resp = llm.invoke(prompt)
+        data = _safe_json_loads(getattr(resp, "content", "") if resp else "")
+        # Validación mínima
+        if not isinstance(data, dict) or "rows" not in data:
+            return {}
+        # Sanitizar tipos
+        try:
+            data["score"] = int(data.get("score", 0))
+        except Exception:
+            data["score"] = 0
+        if data["score"] < 0 or data["score"] > 100:
+            data["score"] = max(0, min(100, data["score"]))
+        return {"mode":"llm", **data}
+    except Exception:
+        return {}
+
+def _evaluate_transcript(jd_text: str, transcript_text: str) -> dict:
+    """Intenta LLM; si falla o no hay credenciales, usa rule-based."""
+    data = _evaluate_transcript_with_llm(jd_text, transcript_text)
+    return data or _evaluate_transcript_rule_based(jd_text, transcript_text)
+
+def _render_transcript_eval_panel(result: dict, jd_source_label: str):
+    """UI compacto (coherente con tu estética) para mostrar la evaluación."""
+    if not result:
+        st.info("No se pudo generar la evaluación en este entorno.")
+        return
+
+    score = result.get("score", 0)
+    verdict = result.get("verdict", "—")
+    rationale = result.get("rationale", "—")
+    rows = result.get("rows", [])
+
+    st.markdown("### Evaluación vs JD del flujo")
+    st.caption(f"JD de **{jd_source_label}** · Método: {'IA' if result.get('mode')=='llm' else 'Reglas'}")
+
+    c1, c2, c3 = st.columns([1, 1, 4])
+    with c1:
+        st.metric("Score (fit)", f"{score}%")
+    with c2:
+        st.metric("Veredicto", verdict)
+    with c3:
+        st.write(rationale)
+
+    if rows:
+        # Checklist visual
+        st.markdown("**Checklist (según JD)**")
+        for r in rows:
+            check = r.get("check","")
+            ok = r.get("cumple", False)
+            evid = r.get("evidencia", "")
+            icon = "✅" if ok else "❌"
+            st.markdown(
+                f"<div class='k-card' style='margin:6px 0; border-left:4px solid {PRIMARY if ok else '#D60000'}'>"
+                f"<div style='font-weight:700;color:{TITLE_DARK}'>{icon} {check}</div>"
+                f"<div style='font-size:12px;opacity:.8;margin-top:4px'>{evid or '—'}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
 
 def score_fit_by_skills(jd_text, must_list, nice_list, cv_text):
     jd_skills = infer_skills(jd_text)
@@ -2214,6 +2466,23 @@ def page_calls_view():
             if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
                 ss.selected_transcript_id = None
                 st.rerun()
+
+    # === NUEVO: Evaluación vs JD del flujo ===
+    try:
+        role_for_tx = it.get("role", "")
+        jd_text, jd_src = _find_jd_for_role(role_for_tx)
+        if not jd_text.strip():
+            st.info("No se encontró un JD para este puesto/flujo. Define el JD en **Puestos** o **Flujos** para habilitar la evaluación.")
+        else:
+            tx_text = it.get("text", "") or ""
+            if not tx_text.strip():
+                st.warning("No hay texto extraído de la transcripción (puede ser un PDF escaneado). Carga una versión con texto para evaluar.")
+            else:
+                with st.spinner("Evaluando transcripción vs JD..."):
+                    _res = _evaluate_transcript(jd_text, tx_text)
+                _render_transcript_eval_panel(_res, jd_src)
+    except Exception as e:
+        st.error(f"No se pudo ejecutar la evaluación: {e}")
         
 # ===================== FLUJOS =====================
 def render_flow_form():
