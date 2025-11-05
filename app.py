@@ -2085,7 +2085,6 @@ def _on_tx_action_change(tid: str, act_key: str):
         st.session_state.confirm_delete_transcript_id = tid
     # reset del select para que vuelva a “Selecciona…”
     st.session_state[act_key] = "Selecciona…"
-    # st.rerun()  # <- quitar esta línea
 
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
