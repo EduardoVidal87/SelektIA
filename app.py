@@ -8,6 +8,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
+import streamlit.components.v1 as components 
+
 
 # ====== Paquetes de LLM para la sección de 'Evaluación de CVs' ======
 # Se importan de forma segura; si no están instalados, la app no se rompe.
@@ -247,6 +249,11 @@ WORKFLOWS_FILE = DATA_DIR/"workflows.json"
 ROLES_FILE = DATA_DIR / "roles.json"
 TASKS_FILE = DATA_DIR / "tasks.json"
 POSITIONS_FILE = DATA_DIR / "positions.json" # (Req 3)
+# === BEGIN NUEVO: transcripciones (constantes/paths) ===
+TRANSCRIPTS_FILE = DATA_DIR / "transcripts.json"
+TRANSCRIPTS_DIR  = DATA_DIR / "transcripts"
+TRANSCRIPTS_DIR.mkdir(exist_ok=True)
+# === END NUEVO: transcripciones (constantes/paths) ===
 
 DEFAULT_ROLES = ["Headhunter", "Coordinador RR.HH.", "Admin RR.HH."]
 
@@ -322,6 +329,12 @@ def load_tasks(): return load_json(TASKS_FILE, DEFAULT_TASKS)
 def save_tasks(tasks): save_json(TASKS_FILE, tasks)
 def load_positions(): return load_json(POSITIONS_FILE, DEFAULT_POSITIONS)
 def save_positions(positions): save_json(POSITIONS_FILE, positions)
+def load_call_results():
+    return load_json(TRANSCRIPTS_FILE, [])
+
+def save_call_results(items):
+    save_json(TRANSCRIPTS_FILE, items)
+    
 
 # =========================================================
 # ESTADO
@@ -361,7 +374,16 @@ if "positions_loaded" not in ss:
             p["JD"] = "Por favor, define el Job Description."
     save_positions(ss.positions)
     ss.positions_loaded = True
-
+# === NUEVO: estado transcripciones ===
+if "call_results_loaded" not in ss:
+    ss.call_results = load_call_results()
+    ss.call_results_loaded = True
+if "selected_transcript_id" not in ss:
+    ss.selected_transcript_id = None
+if "confirm_delete_transcript_id" not in ss:
+    ss.confirm_delete_transcript_id = None
+# === FIN NUEVO ===
+   
 if "pipeline_filter" not in ss: ss.pipeline_filter = None
 if "expanded_task_id" not in ss: ss.expanded_task_id = None
 if "show_assign_for" not in ss: ss.show_assign_for = None
@@ -428,36 +450,105 @@ def build_analysis_text(name,ex):
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
 # =========================================================
-def pdf_viewer_embed(file_bytes: bytes, filename: str, container=st, height=520):
+def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
     """
-    Entrega el PDF asociado al candidato.
-
-    1. Intentar container.pdf() (Streamlit moderno).
-    2. Si falla (CSP / navegador), mostrar botón de descarga como fallback.
+    CORREGIDO (v5): Usa la etiqueta <embed> en lugar de <iframe>.
+    Chrome (y otros navegadores) a menudo bloquean iframes con data: URI
+    por razones de seguridad (CSP). <embed> es mucho más robusto para este caso.
     """
-    # Intento inline nativo
     try:
-        container.pdf(file_bytes)
-        return
-    except Exception:
-        pass
+        # 1. Convertir los bytes del PDF a base64
+        base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
 
-    # Fallback seguro: descarga
-    try:
-        container.download_button(
-            label="⬇ Descargar CV (PDF)",
-            data=file_bytes,
-            file_name=filename if filename else "cv.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-        container.info(
-            "Haz clic en '⬇ Descargar CV (PDF)' para abrirlo. "
-            "El visor embebido del navegador está bloqueado, "
-            "pero el archivo sí está guardado."
-        )
+        # 2. Crear el HTML usando <embed>
+        # Esta es la etiqueta estándar para incrustar PDFs y evita el bloqueo de Chrome
+        pdf_embed_html = f"""
+        <div style="border: 1.5px solid #E3EDF6; border-radius: 10px; overflow: hidden; width: 100%;">
+            <embed src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0"
+                   type="application/pdf"
+                   width="100%"
+                   height="{height}px" />
+        </div>
+        """
+        
+        # 3. Retornar el HTML para st.markdown
+        return pdf_embed_html
+
     except Exception as e:
-        container.error(f"No se pudo preparar el PDF: {e}")
+        # Si falla, retorna un HTML de error
+        return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
+
+def render_pdf_viewer(file_bytes: bytes, height: int = 650, max_css_width: int = 900):
+    """
+    Visor inline con pdf.js (sin iframes). Renderiza páginas en <canvas>
+    con un ANCHO CSS fijo (max_css_width) centrado, para que no se vea gigante.
+    """
+    try:
+        b64 = base64.b64encode(file_bytes).decode("utf-8")
+        html = f"""
+        <div id="pdfjs_container" style="width:100%;height:{height}px;overflow:auto;border:1.5px solid #E3EDF6;border-radius:10px;background:#fff">
+          <div id="pdfjs_pages" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 12px;"></div>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script>
+        (function(){{
+          const raw = atob("{b64}");
+          const len = raw.length;
+          const bytes = new Uint8Array(len);
+          for (let i=0;i<len;i++) bytes[i] = raw.charCodeAt(i);
+
+          const container = document.getElementById("pdfjs_pages");
+          const DPR = window.devicePixelRatio || 1;
+          const MAX_W = {max_css_width};
+
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+          const loadingTask = pdfjsLib.getDocument({{ data: bytes }});
+          loadingTask.promise.then(function(pdf) {{
+            function renderPage(n) {{
+              pdf.getPage(n).then(function(page) {{
+                // Escala para obtener un ANCHO CSS constante (centrado).
+                const baseViewport = page.getViewport({{ scale: 1 }});
+                const targetCSSWidth = Math.min(MAX_W, Math.max(320, (container.clientWidth - 24)));
+                const scaleCSS = targetCSSWidth / baseViewport.width;   // escala "visual"
+                const vpCSS = page.getViewport({{ scale: scaleCSS }});  // tamaño CSS
+                const vp    = page.getViewport({{ scale: scaleCSS * DPR }}); // tamaño real canvas
+
+                const wrap = document.createElement('div');
+                wrap.style.width = targetCSSWidth + 'px';
+                wrap.style.display = 'flex';
+                wrap.style.justifyContent = 'center';
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.style.width  = targetCSSWidth + 'px';
+                canvas.style.height = vpCSS.height + 'px';
+                canvas.width  = Math.floor(vp.width);
+                canvas.height = Math.floor(vp.height);
+                canvas.style.border = '1px solid #E3EDF6';
+                canvas.style.borderRadius = '6px';
+
+                wrap.appendChild(canvas);
+                container.appendChild(wrap);
+
+                const renderContext = {{ canvasContext: ctx, viewport: vp }};
+                page.render(renderContext);
+              }});
+            }}
+            for (let n=1; n<=pdf.numPages; n++) renderPage(n);
+          }}).catch(function(err){{
+            container.innerHTML = '<div style="padding:12px;color:#b00020;">No se pudo renderizar el PDF en línea.</div>';
+            console.error(err);
+          }});
+        }})();
+        </script>
+        """
+        import streamlit.components.v1 as components  # asegura el import
+        components.html(html, height=height+2, scrolling=False)
+    except Exception as e:
+        st.error(f"Error al preparar el visor PDF: {e}")
+
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -754,6 +845,18 @@ def render_sidebar():
         if st.button("Evaluación de CVs", key="sb_eval"):
             ss.section = "eval"
             ss.pipeline_filter = None
+
+        # Botón visible para todos
+        if st.button("Resultados de llamadas", key="sb_calls_view"):
+            ss.section = "calls_view"
+            ss.pipeline_filter = None
+
+        # Uploader solo visible para Supervisor/Administrador (queda “oculto” para Colaborador)
+        if ss.auth and ss.auth.get("role") in ("Supervisor", "Administrador"):
+            if st.button("Cargar transcripciones", key="sb_calls_upload"):
+                ss.section = "calls_upload"
+                ss.pipeline_filter = None
+
 
         st.markdown("#### TAREAS")
         if st.button("Todas las tareas", key="sb_task_manual"):
@@ -1853,7 +1956,261 @@ def page_agents():
                 save_agents(ss.agents)
                 st.success("Agente actualizado.")
                 st.rerun()
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
 
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
+
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
+
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
+
+# --- Callback seguro para el select de Acciones en “Resultados de llamadas”
+def _on_tx_action_change(tid: str, act_key: str):
+    action = st.session_state.get(act_key, "Selecciona…")
+    if action == "Ver":
+        st.session_state.selected_transcript_id = tid
+    elif action == "Eliminar":
+        st.session_state.confirm_delete_transcript_id = tid
+    # reset del select para que vuelva a “Selecciona…”
+    st.session_state[act_key] = "Selecciona…"
+    # st.rerun()  # <- quitar esta línea
+
+# ===================== TRANSCRIPCIONES — VER =====================
+def page_calls_view():
+    st.header("Resultados de llamadas")
+
+    if not ss.call_results:
+        st.info("Aún no hay transcripciones guardadas. (Si tienes rol de Supervisor/Administrador, usa **Cargar transcripciones** para subir archivos).")
+        return
+
+    # Filtros
+    roles = ["Todos"] + sorted(list({r.get("role","—") for r in ss.call_results}))
+    col_f1, col_f2, col_f3 = st.columns([1, 1, 1.2])
+    with col_f1:
+        sel_role = st.selectbox("Filtrar por Puesto", roles, index=0)
+    with col_f2:
+        q = st.text_input("Buscar (candidato, título o texto)…")
+    with col_f3:
+        order = st.selectbox("Orden", ["Más recientes", "Más antiguos"], index=0)
+
+    items = ss.call_results.copy()
+    if sel_role != "Todos":
+        items = [i for i in items if i.get("role") == sel_role]
+    if q:
+        ql = q.lower()
+        items = [
+            i for i in items
+            if ql in (i.get("title","").lower())
+            or ql in (i.get("candidate","").lower())
+            or ql in (i.get("text","").lower())
+        ]
+
+    items.sort(key=lambda x: x.get("created_at",""), reverse=(order=="Más recientes"))
+
+    # Cabecera
+    col_w = [2.0, 1.2, 1.2, 1.0, 1.2]
+    h_t, h_p, h_f, h_tipo, h_acc = st.columns(col_w)
+    with h_t:   st.markdown("**Candidato / Título**")
+    with h_p:   st.markdown("**Puesto**")
+    with h_f:   st.markdown("**Fecha llamada**")
+    with h_tipo:st.markdown("**Tipo**")
+    with h_acc: st.markdown("**Acciones**")
+    st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
+
+    for it in items:
+        tid = it["id"]
+        c_t, c_p, c_f, c_tipo, c_acc = st.columns(col_w)
+        with c_t:
+            title = it.get("title") or "Sin título"
+            cand  = it.get("candidate") or "—"
+            st.markdown(f"**{title}**")
+            st.caption(f"`{cand}`")
+        with c_p:
+            st.markdown(it.get("role","—"))
+        with c_f:
+            st.markdown(it.get("call_date","—"))
+        with c_tipo:
+            st.markdown((it.get("file_type","—").upper()))
+        with c_acc:
+            act_key = f"tx_action_{tid}"
+            st.selectbox(
+                "Acciones",
+                ["Selecciona…", "Ver", "Eliminar"],
+                key=act_key,
+                label_visibility="collapsed",
+                on_change=_on_tx_action_change,
+                args=(tid, act_key)
+            )
+
+        # Confirmación de eliminación
+        if ss.get("confirm_delete_transcript_id") == tid:
+            st.error(f"¿Eliminar '{it.get('file_name')}'?")
+            b1, b2, _ = st.columns([1, 1, 6])
+            with b1:
+                if st.button("Sí, eliminar", key=f"tx_del_yes_{tid}", type="primary", use_container_width=True):
+                    ss.call_results = [x for x in ss.call_results if x["id"] != tid]
+                    save_call_results(ss.call_results)
+                    ss.confirm_delete_transcript_id = None
+                    st.warning("Transcripción eliminada.")
+                    st.rerun()
+            with b2:
+                if st.button("Cancelar", key=f"tx_del_no_{tid}", use_container_width=True):
+                    ss.confirm_delete_transcript_id = None
+                    st.rerun()
+
+        st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.3;'/>", unsafe_allow_html=True)
+
+    # Panel de detalle (inline)
+    sel_id = ss.get("selected_transcript_id")
+    if sel_id:
+        it = next((x for x in ss.call_results if x["id"] == sel_id), None)
+        if it:
+            st.subheader("Detalle de transcripción")
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Candidato", it.get("candidate") or "—")
+            d2.metric("Puesto", it.get("role") or "—")
+            d3.metric("Fecha", it.get("call_date") or "—")
+
+            st.caption(f"Archivo: `{it.get('file_name','—')}`")
+            # Visor (respetando tu look & feel)
+            ext = (it.get("file_type","") or "").lower()
+            try:
+                raw = base64.b64decode(it.get("bytes_b64",""))
+            except Exception:
+                raw = b""
+
+            if ext == "pdf" and raw:
+                with st.expander("Ver PDF", expanded=True):
+                    render_pdf_viewer(raw, height=600, max_css_width=880)
+            else:
+                with st.expander("Ver texto extraído", expanded=True):
+                    st.text_area("Contenido", value=(it.get("text") or "—"), height=240, disabled=True)
+
+            if raw:
+                st.download_button(
+                    "Descargar archivo",
+                    data=raw,
+                    file_name=it.get("file_name","transcripcion"),
+                    type="secondary"
+                )
+
+            st.markdown("---")
+            if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
+                ss.selected_transcript_id = None
+                st.rerun()
+        
 # ===================== FLUJOS =====================
 def render_flow_form():
     """Renderiza el formulario de creación/edición/vista de flujos."""
@@ -2656,13 +3013,12 @@ def page_create_task():
                         pdf_bytes = base64.b64decode(context["pdf_bytes_b64"])
                         display_name = analysis_data.get("file_name", "cv.pdf")
 
+                        # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            pdf_viewer_embed(
-                                file_bytes=pdf_bytes,
-                                filename=display_name,
-                                container=st,
-                                height=400,
-                            )
+                            render_pdf_viewer(pdf_bytes, height=600, max_css_width=880)
+
+                        # --- FIN DE LA CORRECCIÓN ---
+
                     except Exception as e:
                         st.error(f"No se pudo decodificar o mostrar el PDF: {e}")
 
@@ -2784,6 +3140,8 @@ ROUTES = {
   "agent_tasks": page_agent_tasks,
   "analytics": page_analytics,
   "create_task": page_create_task,
+  "calls_view": page_calls_view,
+  "calls_upload": page_calls_upload,
 }
 
 # =========================================================
