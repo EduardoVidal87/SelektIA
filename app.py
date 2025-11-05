@@ -2707,13 +2707,12 @@ def page_create_task():
 
                         # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-    render_pdf_inline(
-        file_bytes=pdf_bytes,
-        height=500,
-        filename=display_name
-    )
-
+                            render_pdf_inline(
+                             file_bytes=pdf_bytes,
+                             height=500,
+                             filename=display_name
                             )
+
                             # 2. Usamos st.markdown, que funciona mejor en expanders
                             st.markdown(html_to_render, unsafe_allow_html=True)
                         # --- FIN DE LA CORRECCIÓN ---
