@@ -440,12 +440,19 @@ def score_fit_by_skills(jd_text, must_list, nice_list, cv_text):
     sc=int(round(100*(0.65*cov_m+0.20*cov_n+0.15*min(len(extras),5)/5)))
     return sc, {"matched_must":mm,"matched_nice":mn,"gaps_must":gm,"gaps_nice":gn,"extras":extras,"must_total":len(must),"nice_total":len(nice)}
 
-def build_analysis_text(name,ex):
-    ok_m=", ".join(ex["matched_must"]) if ex["matched_must"] else "sin must-have claros"
-    ok_n=", ".join(ex["matched_nice"]) if ex["matched_nice"] else "—"
-    gaps=", ".join(ex["gaps_must"][:3]) if ex["gaps_must"] else "sin brechas críticas"
-    extras=", ".join(ex["extras"][:3]) if ex["extras"] else "—"
-    return f"{name} evidencia buen encaje en must-have ({ok_m}). En nice-to-have: {ok_n}. Brechas: {gaps}. Extras: {extras}."
+def _safe_json_loads(raw: str) -> dict:
+    try:
+        s = (raw or "").strip()
+        # Quitar fences tipo ```json / ```markdown
+        s = re.sub(r"^\s*```(?:json|JSON|markdown)?\s*", "", s)
+        s = re.sub(r"\s*```\s*$", "", s)
+        # Asegurar que tomamos solo el primer objeto {...}
+        i, j = s.find("{"), s.rfind("}")
+        if i != -1 and j != -1 and j > i:
+            s = s[i:j+1]
+        return json.loads(s)
+    except Exception:
+        return {}
 
 # =========================================================
 # VISOR DE PDF (ACTUALIZADO)
@@ -1028,42 +1035,40 @@ def _llm_prompt_for_resume(resume_content: str, flow_desc: str, flow_expected: s
     ])
 
 def _extract_with_azure(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
-    """Intenta usar AzureChatOpenAI; si falla, devuelve {} sin romper UI."""
+    """AzureChatOpenAI sin JsonOutputParser; forzamos JSON y parseamos a mano."""
     if not _LC_AVAILABLE:
         return {}
+
     _llm_setup_credentials()
+
+    # 1) Intento con response_format JSON nativo
     try:
         llm = AzureChatOpenAI(
             azure_deployment=st.secrets["llm"]["azure_deployment"],
             api_version=st.secrets["llm"]["azure_api_version"],
-            temperature=0
+            temperature=0,
+            model_kwargs={"response_format": {"type": "json_object"}},
         )
-        parser = JsonOutputParser()
         prompt = _llm_prompt_for_resume(resume_content, flow_desc, flow_expected)
         if prompt is None:
             return {}
-        chain = prompt | llm | parser
-        out = chain.invoke({"job_description": job_description})
-        return out if isinstance(out, dict) else {}
-    except Exception as e:
-        st.warning(f"Azure LLM no disponible: {e}")
-        return {}
 
-def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
-    """Fallback con ChatOpenAI (OpenAI) si hay API Key en secrets."""
-    if not _LC_AVAILABLE:
-        return {}
-    try:
-        api_key = st.secrets["llm"]["openai_api_key"]
+        msgs = prompt.format_messages(job_description=job_description)
+        resp = llm.invoke(msgs)
+        data = _safe_json_loads(getattr(resp, "content", "") if resp else "")
+        if data:
+            return data
     except Exception:
-        return {}
+        pass  # seguimos al reintento
+
+    # 2) Reintento “duro”: instrucción de SOLO JSON (sin fences)
     try:
-        chat = ChatOpenAI(
+        llm2 = AzureChatOpenAI(
+            azure_deployment=st.secrets["llm"]["azure_deployment"],
+            api_version=st.secrets["llm"]["azure_api_version"],
             temperature=0,
-            model=LLM_IN_USE,
-            openai_api_key=api_key
         )
-        json_object_structure = """{
+        schema_text = """{
             "Name": "Full Name",
             "Last_position": "The most recent position in which the candidate worked",
             "Years_of_Experience": "Number (in years)",
@@ -1073,29 +1078,28 @@ def _extract_with_openai(job_description: str, resume_content: str, flow_desc: s
             "Additional_Notes": "Optional details inferred or contextually relevant information.",
             "Score": "0-100"
         }"""
-
-        prompt = f"""
-        You are an AI assistant. Execute the following task:
-        Task Description: {flow_desc}
-        Expected Output: {flow_expected}
-
-        Extract structured JSON from the following CV and compute a 0-100 match vs the JD.
-
-        Job description:
-        {job_description}
-
-        CV Content:
-        {resume_content}
-
-        Return JSON with this structure:
-        {json_object_structure}
-        """
-        resp = chat.invoke(prompt)
-        txt = resp.content.strip().replace('```json','').replace('```','')
-        return json.loads(txt)
-    except Exception as e:
-        st.warning(f"OpenAI LLM no disponible: {e}")
+        resp2 = llm2.invoke([
+            {
+                "role": "system",
+                "content": (
+                    "Return ONLY a valid JSON object (no markdown code fences, no extra text). "
+                    "The object must match exactly the provided schema."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Schema:\n{schema_text}\n\n"
+                    f"Task Description: {flow_desc}\nExpected Output: {flow_expected}\n\n"
+                    f"Job description:\n{job_description}\n\n"
+                    f"CV Content:\n{resume_content}"
+                ),
+            },
+        ])
+        return _safe_json_loads(getattr(resp2, "content", "") if resp2 else "")
+    except Exception:
         return {}
+
 
 def _create_llm_bar(df: pd.DataFrame):
     fig = px.bar(
