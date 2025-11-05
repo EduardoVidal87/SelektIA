@@ -2537,52 +2537,47 @@ def page_calls_view():
                     tx_text
                 )
 
-                PASS_THRESHOLD = 70
-                st.metric("Fit vs JD", f"{score}%")
-                st.progress(score/100)
+                # -------- Política de decisión (elige el preset) --------
+                POLICY = "Balanceado"   # "Estricto" | "Balanceado" | "Flexible"
 
-                # === CHECKLIST DETALLADO SEGÚN JD ===
-                st.markdown("**Checklist (según JD)**")
+                # must_ratio_ok está en 0..100 (%). Si no tienes ok_must/tot_must, se calculan.
+                try:
+                    ok_must
+                    tot_must
+                except NameError:
+                    try:
+                        ok_must = int(round((must_ratio_ok/100.0) * tot_must))
+                    except Exception:
+                        ok_must = 0
 
-                # 1) Lista de criterios (obligatorios/deseables)
-                items_must = [s for s in (must_list or []) if s.strip()]
-                items_nice = [s for s in (nice_list or []) if s.strip()]
+                if POLICY == "Estricto":
+                    PASS_THRESHOLD = 70       # fit mínimo
+                    MUST_MIN_RATIO = 75       # % mínimos de obligatorios
+                    MAX_MISS_MUST = 2         # faltantes máximos
+                    passes = (
+                        (score >= PASS_THRESHOLD) and
+                        (must_ratio_ok >= MUST_MIN_RATIO) and
+                        (len(miss_must) <= MAX_MISS_MUST)
+                    )
 
-                # Fallback: si no hay presets, parsear bullets del JD como obligatorios
-                if not items_must and not items_nice:
-                    items_must = extract_jd_items(jd_text_eval)
+                elif POLICY == "Balanceado":
+                    # Recomendado para tu caso (65% fit y 11/18 obligatorios ≈61% → PASA)
+                    PASS_THRESHOLD = 65
+                    MUST_MIN_RATIO  = 60
+                    passes = (
+                        (score >= PASS_THRESHOLD and must_ratio_ok >= MUST_MIN_RATIO)
+                        or (ok_must >= 10)   # alternativa por conteo absoluto
+                    )
 
-                rows = []
-                ok_must = ok_nice = 0
+                else:  # "Flexible"
+                    PASS_THRESHOLD = 60
+                    MUST_MIN_RATIO  = 55
+                    passes = (
+                        (score >= PASS_THRESHOLD) or
+                        (must_ratio_ok >= MUST_MIN_RATIO)
+                    )
+                # ---------------------------------------------------------
 
-                for tipo, lista in (("Obligatorio", items_must), ("Deseable", items_nice)):
-                    for it in lista:
-                        ok, hits = soft_match(it, tx_text)
-                        if tipo == "Obligatorio":
-                            ok_must += int(ok)
-                        else:
-                            ok_nice += int(ok)
-                        rows.append({
-                            "Tipo": tipo,
-                            "Criterio": it,
-                            "Cumple": "✅" if ok else "❌",
-                            "Evidencia (palabras clave)": ", ".join(hits) if hits else "—"
-                        })
-
-                if rows:
-                    df_chk = pd.DataFrame(rows)
-                    st.dataframe(df_chk, use_container_width=True, hide_index=True)
-
-                # 2) Resumen / Justificación (por qué pasa o no)
-                tot_must, tot_nice = len(items_must), len(items_nice)
-                miss_must = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="❌"][:3]
-                hit_must  = [r["Criterio"] for r in rows if r["Tipo"]=="Obligatorio" and r["Cumple"]=="✅"][:3]
-                hit_nice  = [r["Criterio"] for r in rows if r["Tipo"]=="Deseable" and r["Cumple"]=="✅"][:2]
-
-                # Regla de decisión (ajústala si quieres)
-                PASS_THRESHOLD = 70  # ya la usas para el %; mantenemos consistencia
-                must_ratio_ok = (ok_must / max(1, tot_must)) * 100
-                passes = (score >= PASS_THRESHOLD) and (must_ratio_ok >= 70) and (len(miss_must) <= 2)
 
                 st.markdown("**Resumen / Justificación**")
                 if passes:
