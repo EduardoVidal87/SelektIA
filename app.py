@@ -18,38 +18,6 @@ try:
     load_dotenv()
 except Exception:
     load_dotenv = lambda: None
-# ===== JD GLOBAL (compartido entre páginas) =====
-_JD_STATE_PATH = os.path.join("data", "_jd_current.json")
-
-def _ensure_data_dir():
-    os.makedirs("data", exist_ok=True)
-
-def set_current_jd(jd_text: str):
-    """Guarda el JD actual en disco y en session_state."""
-    jd_text = (jd_text or "").strip()
-    _ensure_data_dir()
-    try:
-        with open(_JD_STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"jd": jd_text}, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-    st.session_state["jd_current"] = jd_text
-
-def get_current_jd() -> str:
-    """Obtiene el JD actual; primero session_state y si no, disco."""
-    jd = (st.session_state.get("jd_current", "") if "jd_current" in st.session_state else "").strip()
-    if jd:
-        return jd
-    try:
-        with open(_JD_STATE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            jd = (data.get("jd", "") or "").strip()
-            if jd:
-                st.session_state["jd_current"] = jd
-            return jd
-    except Exception:
-        return ""
-# ===== FIN JD GLOBAL =====  
 
 try:
     from langchain_core.output_parsers import JsonOutputParser
@@ -1133,152 +1101,40 @@ def _extract_with_azure(job_description: str, resume_content: str, flow_desc: st
         return {}
 
 
-def _results_to_df(metas: list) -> pd.DataFrame:
-    rows = []
-    for m in metas or []:
+def _create_llm_bar(df: pd.DataFrame):
+    fig = px.bar(
+        df,
+        x='file_name',
+        y='Score',
+        text='Score',
+        title='Comparativa de Puntajes (LLM)',
+        color_discrete_sequence=PLOTLY_GREEN_SEQUENCE
+    )
+    for _, row in df.iterrows():
+        fig.add_annotation(
+            x=row['file_name'],
+            y=row['Score'],
+            text=row.get('Name',''),
+            showarrow=True, arrowhead=1, ax=0, ay=-20
+        )
+    fig.update_layout(
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TITLE_DARK)
+    )
+    return fig
+
+def _results_to_df(results: list) -> pd.DataFrame:
+    if not results:
+        return pd.DataFrame()
+    df = pd.DataFrame(results).copy()
+    if "Score" in df.columns:
         try:
-            rows.append({
-                "file_name": m.get("file_name", ""),
-                "Name": m.get("Name", ""),
-                "Score": int(m.get("Score", 0)),
-            })
-        except Exception:
-            rows.append({
-                "file_name": m.get("file_name", ""),
-                "Name": m.get("Name", ""),
-                "Score": 0,
-            })
-    return pd.DataFrame(rows)
-
-# ========= LLM: evaluación de TRANSCRIPCIONES vs JD =========
-
-def _get_jd_for_role(role_name: str) -> str:
-    """
-    Busca primero en ss.workflows el JD más reciente para ese 'role'.
-    Si no hay, usa el JD de 'Puestos'. Si tampoco hay, devuelve "".
-    """
-    try:
-        # 1) workflow más nuevo con mismo role
-        wfs = [w for w in ss.workflows if w.get("role") == role_name and w.get("jd_text")]
-        wfs.sort(key=lambda w: w.get("created_at",""), reverse=True)
-        if wfs:
-            return (wfs[0].get("jd_text") or "").strip()
-    except Exception:
-        pass
-
-    # 2) JD desde Puestos
-    try:
-        pos = next((p for p in ss.positions if p.get("Puesto") == role_name), None)
-        if pos and pos.get("JD"):
-            return (pos["JD"] or "").strip()
-    except Exception:
-        pass
-
-    return ""
-
-def _tx_eval_prompt(jd_text: str, transcript_text: str):
-    """
-    Prompt estructurado con parser JSON para evitar el error de '```markdown'.
-    """
-    if not _LC_AVAILABLE:
-        return None, None
-    parser = JsonOutputParser()
-    fmt = parser.get_format_instructions()
-
-    system_tmpl = (
-        "Eres un evaluador de entrevistas/llamadas para reclutamiento. "
-        "Debes decidir si el/la postulante pasa a la siguiente etapa, comparando "
-        "la TRANSCRIPCIÓN con el JD. Devuelve SOLO JSON válido, sin Markdown, sin fences.\n\n"
-        f"{fmt}"
-    )
-    human_tmpl = (
-        "JD:\n{jd}\n\n"
-        "TRANSCRIPCIÓN:\n{tx}\n\n"
-        "Devuelve un JSON con:\n"
-        '{\n'
-        '  "Pass": true|false,\n'
-        '  "Overall_Score": 0-100,\n'
-        '  "Decision": "Pasa" | "No pasa",\n'
-        '  "Summary": "2-4 líneas con la justificación",\n'
-        '  "Checklist": [\n'
-        '     {"criterion": "texto del criterio", "evidence_found": true|false, "evidence": "frase o referencia breve"},\n'
-        '     ...\n'
-        '  ]\n'
-        '}\n'
-        "Reglas: Si falta evidencia para un criterio, marca 'evidence_found': false y explica en 'evidence'."
-    )
-
-    prompt = ChatPromptTemplate.from_messages([
-        SystemMessagePromptTemplate.from_template(system_tmpl),
-        HumanMessagePromptTemplate.from_template(human_tmpl),
-    ])
-    return prompt, parser
-
-def _eval_transcript_with_azure(jd_text: str, transcript_text: str) -> dict:
-    if not _LC_AVAILABLE:
-        return {}
-    _llm_setup_credentials()
-    try:
-        prompt, parser = _tx_eval_prompt(jd_text, transcript_text)
-        if prompt is None:
-            return {}
-        llm = AzureChatOpenAI(
-            azure_deployment=st.secrets["llm"]["azure_deployment"],
-            api_version=st.secrets["llm"]["azure_api_version"],
-            temperature=0
-        )
-        chain = prompt | llm | parser
-        out = chain.invoke({"jd": jd_text, "tx": transcript_text})
-        return out if isinstance(out, dict) else {}
-    except Exception as e:
-        # Evita romper la UI si Azure devuelve fences
-        st.warning(f"Azure (Transcripción) no disponible: {e}")
-        return {}
-
-def _eval_transcript_with_openai(jd_text: str, transcript_text: str) -> dict:
-    if not _LC_AVAILABLE:
-        return {}
-    try:
-        api_key = st.secrets["llm"]["openai_api_key"]
-    except Exception:
-        return {}
-    try:
-        chat = ChatOpenAI(temperature=0, model=LLM_IN_USE, openai_api_key=api_key)
-        prompt = (
-            "Eres un evaluador de entrevistas/llamadas. Devuelve SOLO JSON válido, sin ```.\n\n"
-            "Estructura:\n"
-            '{ "Pass": true|false, "Overall_Score": 0-100, "Decision": "Pasa"|"No pasa", '
-            '"Summary": "…", "Checklist":[{"criterion":"…","evidence_found":true|false,"evidence":"…"}] }\n\n'
-            f"JD:\n{jd_text}\n\nTRANSCRIPCIÓN:\n{transcript_text}\n"
-        )
-        resp = chat.invoke(prompt)
-        txt = resp.content.strip().replace("```json","").replace("```","")
-        return json.loads(txt)
-    except Exception as e:
-        st.warning(f"OpenAI (Transcripción) no disponible: {e}")
-        return {}
-
-def eval_transcript_any(jd_text: str, transcript_text: str) -> dict:
-    """
-    Wrapper: intenta Azure primero, luego OpenAI. Devuelve dict con claves
-    'Pass', 'Overall_Score', 'Decision', 'Summary', 'Checklist'.
-    """
-    meta = _eval_transcript_with_azure(jd_text, transcript_text)
-    if not meta:
-        meta = _eval_transcript_with_openai(jd_text, transcript_text)
-    if not meta:
-        meta = {
-            "Pass": False, "Overall_Score": 0, "Decision": "No pasa",
-            "Summary": "La IA no pudo evaluar la transcripción.",
-            "Checklist": []
-        }
-    # Normaliza campos mínimos
-    meta["Pass"] = bool(meta.get("Pass", False))
-    if "Decision" not in meta:
-        meta["Decision"] = "Pasa" if meta["Pass"] else "No pasa"
-    return meta
-# ========= FIN LLM: evaluación de TRANSCRIPCIONES =========
-
+            df["Score"] = df["Score"].astype(int)
+        except:
+            pass
+        df = df.sort_values(by="Score", ascending=False)
+    return df
 
 # ===================== PUESTOS =====================
 def render_position_form():
@@ -1472,7 +1328,7 @@ def page_puestos():
                     on_change=_handle_position_action_change,
                     args=(pos_id,)
                 )
-               
+
             # Confirmación de eliminación
             if ss.get("confirm_delete_position_id") == pos_id:
                 st.error(f"¿Seguro que quieres eliminar el puesto **{pos.get('Puesto')}**?")
@@ -1578,9 +1434,6 @@ def page_eval():
             ss.eval_flow_desc     = selected_flow_data.get("description", "")
             ss.eval_flow_expected = selected_flow_data.get("expected_output", "")
             ss.eval_jd_llm        = selected_flow_data.get("jd_text", "JD no encontrado.")
-            # ↙ Guarda el JD vigente para usarlo luego en Transcripciones
-            set_current_jd(ss.eval_jd_llm)
-
         else:
             ss.eval_flow_puesto   = "N/A"
             ss.eval_flow_desc     = "N/A"
@@ -2167,6 +2020,77 @@ def page_calls_upload():
             st.success(f"Se guardaron {len(new_items)} transcripción(es).")
             st.rerun()
 
+# ===================== TRANSCRIPCIONES — SUBIR =====================
+def page_calls_upload():
+    st.header("Cargar transcripciones de llamadas")
+
+    # Contexto: puesto (desde 'Puestos') para etiquetar
+    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
+    if not pos_list:
+        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
+        return
+
+    with st.form("upload_call_tx_form", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
+            candidate = st.text_input("Nombre del candidato (opcional)")
+        with c2:
+            phone = st.text_input("Teléfono (opcional)")
+            call_dt = st.date_input("Fecha de la llamada", value=date.today())
+
+        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
+
+        files = st.file_uploader(
+            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True
+        )
+
+        submitted = st.form_submit_button("Guardar transcripciones")
+        if submitted:
+            if not files:
+                st.error("Debes adjuntar al menos un archivo.")
+                return
+
+            new_items = []
+            for f in files:
+                raw = f.read(); f.seek(0)
+                suffix = Path(f.name).suffix.lower()
+                text = extract_text_from_file(f)  # ya existente en tu app
+                item = {
+                    "id": str(uuid.uuid4()),
+                    "title": (candidate or Path(f.name).stem),
+                    "candidate": candidate or "",
+                    "phone": phone or "",
+                    "role": sel_role,
+                    "call_date": call_dt.isoformat(),
+                    "file_name": f.name,
+                    "file_type": suffix.replace(".", ""),
+                    "text": text or "",
+                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
+                    "notes": notes or "",
+                    "created_at": datetime.now().isoformat(),
+                    "source": "Manual"
+                }
+                new_items.append(item)
+
+            ss.call_results = (ss.call_results or []) + new_items
+            save_call_results(ss.call_results)
+            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
+            st.rerun()
+
+# --- Callback seguro para el select de Acciones en “Resultados de llamadas”
+def _on_tx_action_change(tid: str, act_key: str):
+    action = st.session_state.get(act_key, "Selecciona…")
+    if action == "Ver":
+        st.session_state.selected_transcript_id = tid
+    elif action == "Eliminar":
+        st.session_state.confirm_delete_transcript_id = tid
+    # reset del select para que vuelva a “Selecciona…”
+    st.session_state[act_key] = "Selecciona…"
+    # st.rerun()  # <- quitar esta línea
+
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
     st.header("Resultados de llamadas")
@@ -2241,8 +2165,6 @@ def page_calls_view():
             with b1:
                 if st.button("Sí, eliminar", key=f"tx_del_yes_{tid}", type="primary", use_container_width=True):
                     ss.call_results = [x for x in ss.call_results if x["id"] != tid]
-                    if ss.get("selected_transcript_id") == tid:
-                        ss.selected_transcript_id = None
                     save_call_results(ss.call_results)
                     ss.confirm_delete_transcript_id = None
                     st.warning("Transcripción eliminada.")
@@ -2266,7 +2188,7 @@ def page_calls_view():
             d3.metric("Fecha", it.get("call_date") or "—")
 
             st.caption(f"Archivo: `{it.get('file_name','—')}`")
-            # Visor
+            # Visor (respetando tu look & feel)
             ext = (it.get("file_type","") or "").lower()
             try:
                 raw = base64.b64decode(it.get("bytes_b64",""))
@@ -2288,37 +2210,10 @@ def page_calls_view():
                     type="secondary"
                 )
 
-            # --- Evaluación IA vs JD (DENTRO del detalle) ---
-            st.markdown("### Evaluación IA vs JD")
-
-            detail_id = it.get("id") or it.get("tid") or it.get("uid")
-
-            if st.button("Evaluar esta transcripción", key=f"eval_now_{str(detail_id)}"):
-                jd_text = _get_jd_for_role(it.get("role", ""))
-                if not jd_text.strip():
-                    st.warning("No se encontró un JD para este puesto.")
-                else:
-                    res = eval_transcript_any(jd_text, it.get("text", ""))
-                    it["llm_tx_eval"] = res
-
-                    # Persistir en storage
-                    for k, x in enumerate(ss.call_results):
-                        xid = x.get("id") or x.get("tid") or x.get("uid")
-                        if xid == detail_id:
-                            ss.call_results[k] = it
-                            save_call_results(ss.call_results)
-                            break
-
-            if it.get("llm_tx_eval"):
-                ev = it["llm_tx_eval"]
-                cols = st.columns(3)
-                cols[0].metric("Decisión", "Pasa" if ev.get("Pass") else "No pasa")
-                cols[1].metric("Score", f"{ev.get('Overall_Score', 0)}%")
-                cols[2].write(ev.get("Summary", ""))
-                with st.expander("Checklist (evidencias)"):
-                    for ch in ev.get("Checklist", []):
-                        ok = "✅" if ch.get("evidence_found") else "❌"
-                        st.write(f"{ok} **{ch.get('criterion','')}** — {ch.get('evidence','—')}")
+            st.markdown("---")
+            if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
+                ss.selected_transcript_id = None
+                st.rerun()
         
 # ===================== FLUJOS =====================
 def render_flow_form():
