@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from PyPDF2 import PdfReader
-import streamlit.components.v1 as components   # ← AÑADIR
+import streamlit.components.v1 as components 
 
 
 # ====== Paquetes de LLM para la sección de 'Evaluación de CVs' ======
