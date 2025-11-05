@@ -2461,7 +2461,7 @@ def page_calls_view():
                     file_name=it.get("file_name","transcripcion"),
                     type="secondary"
                 )
- # === EVALUACIÓN SEGÚN JD (debajo del visor) ===
+# === EVALUACIÓN SEGÚN JD (debajo del visor) ===
 st.markdown("#### Evaluación — Fit con JD")
 
 # 1) Tomar JD desde el flujo más reciente que coincida con el Puesto de la transcripción.
