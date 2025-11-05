@@ -2083,9 +2083,9 @@ def _on_tx_action_change(tid: str, act_key: str):
         st.session_state.selected_transcript_id = tid
     elif action == "Eliminar":
         st.session_state.confirm_delete_transcript_id = tid
-    # reset del select (evita el error de Streamlit)
+    # reset del select para que vuelva a “Selecciona…”
     st.session_state[act_key] = "Selecciona…"
-    st.rerun()
+    # st.rerun()  # <- quitar esta línea
 
 # ===================== TRANSCRIPCIONES — VER =====================
 def page_calls_view():
