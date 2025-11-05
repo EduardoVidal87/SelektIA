@@ -2414,24 +2414,6 @@ if it.get("llm_tx_eval"):
         for ch in ev.get("Checklist", []):
             ok = "✅" if ch.get("evidence_found") else "❌"
             st.write(f"{ok} **{ch.get('criterion','')}** — {ch.get('evidence','—')}")
-
-
-# Mostrar si ya hay resultado
-if it.get("llm_tx_eval"):
-    ev = it["llm_tx_eval"]
-    cols = st.columns(3)
-    cols[0].metric("Decisión", "Pasa" if ev.get("Pass") else "No pasa")
-    cols[1].metric("Score", f"{ev.get('Overall_Score', 0)}%")
-    cols[2].write(ev.get("Summary",""))
-    with st.expander("Checklist (evidencias)"):
-        for ch in ev.get("Checklist", []):
-            ok = "✅" if ch.get("evidence_found") else "❌"
-            st.write(f"{ok} **{ch.get('criterion','')}** — {ch.get('evidence','—')}")
-
-            st.markdown("---")
-            if st.button("Cerrar detalle", key=f"tx_close_{sel_id}"):
-                ss.selected_transcript_id = None
-                st.rerun()
         
 # ===================== FLUJOS =====================
 def render_flow_form():
