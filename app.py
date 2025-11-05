@@ -2168,23 +2168,6 @@ def page_calls_upload():
             st.rerun()
 
 # ===================== TRANSCRIPCIONES — VER =====================
-# --- Handler de acciones en la lista de transcripciones ---
-def _on_tx_action_change(tid: str, act_key: str):
-    import streamlit as st
-    from streamlit import session_state as ss
-
-    action = st.session_state.get(act_key, "Selecciona…")
-    if action == "Ver":
-        ss.selected_transcript_id = tid
-        st.session_state[act_key] = "Selecciona…"
-        st.rerun()
-    elif action == "Eliminar":
-        ss.confirm_delete_transcript_id = tid
-        st.session_state[act_key] = "Selecciona…"
-        st.rerun()
-    else:
-        return
-
 def page_calls_view():
     st.header("Resultados de llamadas")
 
