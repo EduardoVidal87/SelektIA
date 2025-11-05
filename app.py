@@ -1100,6 +1100,9 @@ def _extract_with_azure(job_description: str, resume_content: str, flow_desc: st
     except Exception:
         return {}
 
+def _extract_with_openai(job_description: str, resume_content: str, flow_desc: str, flow_expected: str) -> dict:
+    # Fallback temporal: no usa OpenAI; solo evita NameError si Azure no devuelve nada.
+    return {}
 
 def _create_llm_bar(df: pd.DataFrame):
     fig = px.bar(
@@ -2020,78 +2023,25 @@ def page_calls_upload():
             st.success(f"Se guardaron {len(new_items)} transcripción(es).")
             st.rerun()
 
-# ===================== TRANSCRIPCIONES — SUBIR =====================
-def page_calls_upload():
-    st.header("Cargar transcripciones de llamadas")
-
-    # Contexto: puesto (desde 'Puestos') para etiquetar
-    pos_list = [p.get("Puesto") for p in ss.positions if p.get("Puesto")]
-    if not pos_list:
-        st.info("Primero crea al menos un Puesto en la pestaña **Puestos**.")
-        return
-
-    with st.form("upload_call_tx_form", clear_on_submit=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            sel_role = st.selectbox("Puesto asociado*", options=pos_list, index=0)
-            candidate = st.text_input("Nombre del candidato (opcional)")
-        with c2:
-            phone = st.text_input("Teléfono (opcional)")
-            call_dt = st.date_input("Fecha de la llamada", value=date.today())
-
-        notes = st.text_area("Notas internas (opcional)", placeholder="Observaciones de la llamada, acuerdos, próximos pasos...", height=100)
-
-        files = st.file_uploader(
-            "Sube 1 o más transcripciones (PDF / DOCX / TXT)",
-            type=["pdf", "docx", "txt"],
-            accept_multiple_files=True
-        )
-
-        submitted = st.form_submit_button("Guardar transcripciones")
-        if submitted:
-            if not files:
-                st.error("Debes adjuntar al menos un archivo.")
-                return
-
-            new_items = []
-            for f in files:
-                raw = f.read(); f.seek(0)
-                suffix = Path(f.name).suffix.lower()
-                text = extract_text_from_file(f)  # ya existente en tu app
-                item = {
-                    "id": str(uuid.uuid4()),
-                    "title": (candidate or Path(f.name).stem),
-                    "candidate": candidate or "",
-                    "phone": phone or "",
-                    "role": sel_role,
-                    "call_date": call_dt.isoformat(),
-                    "file_name": f.name,
-                    "file_type": suffix.replace(".", ""),
-                    "text": text or "",
-                    "bytes_b64": base64.b64encode(raw).decode("utf-8"),
-                    "notes": notes or "",
-                    "created_at": datetime.now().isoformat(),
-                    "source": "Manual"
-                }
-                new_items.append(item)
-
-            ss.call_results = (ss.call_results or []) + new_items
-            save_call_results(ss.call_results)
-            st.success(f"Se guardaron {len(new_items)} transcripción(es).")
-            st.rerun()
-
-# --- Callback seguro para el select de Acciones en “Resultados de llamadas”
-def _on_tx_action_change(tid: str, act_key: str):
-    action = st.session_state.get(act_key, "Selecciona…")
-    if action == "Ver":
-        st.session_state.selected_transcript_id = tid
-    elif action == "Eliminar":
-        st.session_state.confirm_delete_transcript_id = tid
-    # reset del select para que vuelva a “Selecciona…”
-    st.session_state[act_key] = "Selecciona…"
-    # st.rerun()  # <- quitar esta línea
-
 # ===================== TRANSCRIPCIONES — VER =====================
+# === Helper de acciones para Transcripciones (Calls View) ===
+def _on_tx_action_change(tid: str, act_key: str):
+    # Mantén el mismo literal que usas en el selectbox: "Selecciona..."
+    action = st.session_state.get(act_key, "Selecciona...")
+
+    if action == "Ver":
+        # Abre el panel de detalle y limpia cualquier confirm de borrado
+        st.session_state.selected_transcript_id = tid
+        st.session_state.confirm_delete_transcript_id = None
+
+    elif action == "Eliminar":
+        # Dispara el estado de confirmación de borrado y cierra detalle
+        st.session_state.confirm_delete_transcript_id = tid
+        st.session_state.selected_transcript_id = None
+
+    # Devolver el select al valor neutro (sin st.rerun dentro del callback)
+    st.session_state[act_key] = "Selecciona..."
+
 def page_calls_view():
     st.header("Resultados de llamadas")
 
@@ -2151,7 +2101,7 @@ def page_calls_view():
             act_key = f"tx_action_{tid}"
             st.selectbox(
                 "Acciones",
-                ["Selecciona…", "Ver", "Eliminar"],
+                ["Selecciona...", "Ver", "Eliminar"],
                 key=act_key,
                 label_visibility="collapsed",
                 on_change=_on_tx_action_change,
@@ -2777,38 +2727,39 @@ def page_create_task():
     st.markdown("<hr style='border:1px solid #E3EDF6; opacity:.6;'/>", unsafe_allow_html=True)
 
     def _handle_action_change(task_id):
-        selectbox_key = f"accion_{task_id}"
-        if selectbox_key not in ss:
-            return
-        action = ss[selectbox_key]
-        task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
-        if not task_to_update:
-            return
+    selectbox_key = f"accion_{task_id}"
+    if selectbox_key not in ss:
+        return
+    action = ss[selectbox_key]
+    task_to_update = next((t for t in ss.tasks if t.get("id") == task_id), None)
+    if not task_to_update:
+        return
 
-        ss.confirm_delete_id = None
-        ss.show_assign_for = None
+    # Reset de estados de UI asociados
+    ss.confirm_delete_id = None
+    ss.show_assign_for = None
+    ss.expanded_task_id = None
 
-        if action == "Ver detalle":
-            ss.expanded_task_id = task_id
-        elif action == "Asignar tarea":
-            ss.expanded_task_id = None
-            ss.show_assign_for = task_id
-        elif action == "Tomar tarea":
-            ss.expanded_task_id = None
-            current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
-            task_to_update["assigned_to"] = current_user
-            task_to_update["status"] = "En Proceso"
-            save_tasks(ss.tasks)
-            st.toast("Tarea tomada.")
-            st.rerun()
-        elif action == "Eliminar":
-            ss.expanded_task_id = None
-            ss.confirm_delete_id = task_id
-        else:
-            ss.expanded_task_id = None
+    if action == "Ver detalle":
+        ss.expanded_task_id = task_id
 
-        if action != "Selecciona…":
-            st.session_state[selectbox_key] = "Selecciona…"
+    elif action == "Asignar tarea":
+        ss.show_assign_for = task_id
+
+    elif action == "Tomar tarea":
+        current_user = (ss.auth["name"] if ss.get("auth") else "Admin")
+        task_to_update["assigned_to"] = current_user
+        task_to_update["status"] = "En Proceso"
+        save_tasks(ss.tasks)
+        st.toast("Tarea tomada.")  # Streamlit re-ejecuta automáticamente tras el callback
+
+    elif action == "Eliminar":
+        ss.confirm_delete_id = task_id
+
+    # Devolver el select al valor neutro
+    if action != "Selecciona...":
+        st.session_state[selectbox_key] = "Selecciona..."
+
 
     if tasks_to_show:
         for task in tasks_to_show:
@@ -2840,7 +2791,7 @@ def page_create_task():
                 selectbox_key = f"accion_{t_id}"
                 st.selectbox(
                     "Acciones",
-                    ["Selecciona…", "Ver detalle", "Asignar tarea", "Tomar tarea", "Eliminar"],
+                    ["Selecciona...", "Ver detalle", "Asignar tarea", "Tomar tarea", "Eliminar"],
                     key=selectbox_key,
                     label_visibility="collapsed",
                     on_change=_handle_action_change,
