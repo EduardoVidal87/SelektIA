@@ -458,55 +458,71 @@ def pdf_viewer_embed(file_bytes: bytes, filename: str, height=520):
         # Si falla, retorna un HTML de error
         return f'<div style="color: red; padding: 10px;">Error al procesar el PDF: {e}</div>'
 
-def render_pdf_inline(file_bytes: bytes, height: int = 520, filename: str = "cv.pdf"):
+def render_pdf_viewer(file_bytes: bytes, height: int = 650):
     """
-    Visor robusto de PDF usando Blob URL (JS) dentro de components.html.
-    Evita data: URIs que se bloquean en iframes sandbox.
+    Visor inline con pdf.js (sin iframes ni blob:), compatible con el sandbox de Streamlit.
+    Renderiza todas las páginas en <canvas>.
     """
     try:
         b64 = base64.b64encode(file_bytes).decode("utf-8")
         html = f"""
-        <div style="border:1.5px solid #E3EDF6;border-radius:10px;overflow:hidden;">
-          <div id="pdf_container" style="width:100%;height:{height}px;"></div>
-          <div id="pdf_link" style="padding:8px 10px;text-align:right;font-size:12px;"></div>
+        <div id="pdfjs_container" style="width:100%;height:{height}px;overflow:auto;border:1.5px solid #E3EDF6;border-radius:10px;background:#fff">
+          <div id="pdfjs_pages" style="display:flex;flex-direction:column;gap:12px;padding:8px 12px;"></div>
         </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
         <script>
-          (function(){{
-            const b64 = "{b64}";
-            function b64ToBytes(b64) {{
-              const bin = atob(b64);
-              const len = bin.length;
-              const bytes = new Uint8Array(len);
-              for (let i=0; i<len; i++) bytes[i] = bin.charCodeAt(i);
-              return bytes;
-            }}
-            try {{
-              const bytes = b64ToBytes(b64);
-              const blob  = new Blob([bytes], {{type: "application/pdf"}});
-              const url   = URL.createObjectURL(blob);
+        (function(){{
+          const raw = atob("{b64}");
+          const len = raw.length;
+          const bytes = new Uint8Array(len);
+          for (let i=0;i<len;i++) bytes[i] = raw.charCodeAt(i);
 
-              const iframe = document.createElement("iframe");
-              iframe.src = url + "#toolbar=0&navpanes=0&view=FitH";
-              iframe.style.width  = "100%";
-              iframe.style.height = "{height}px";
-              iframe.style.border = "0";
-              document.getElementById("pdf_container").appendChild(iframe);
+          const container = document.getElementById("pdfjs_pages");
+          const DPR = window.devicePixelRatio || 1;
 
-              const a = document.createElement("a");
-              a.href = url; a.target = "_blank"; a.rel = "noopener";
-              a.textContent = "Abrir en pestaña nueva";
-              document.getElementById("pdf_link").appendChild(a);
-            }} catch (e) {{
-              document.getElementById("pdf_container").innerHTML =
-                '<div style="padding:12px;color:#b00020;">No se pudo renderizar el PDF en línea.</div>';
+          // worker de pdf.js
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+          const loadingTask = pdfjsLib.getDocument({{ data: bytes }});
+          loadingTask.promise.then(function(pdf) {{
+            function renderPage(n) {{
+              pdf.getPage(n).then(function(page) {{
+                // Escala dinámica al ancho del contenedor
+                const baseViewport = page.getViewport({{ scale: 1 }});
+                const maxWidth = Math.max(container.clientWidth - 24, 320);
+                const scale = Math.min(1.6, Math.max(0.8, maxWidth / baseViewport.width));
+                const vpCSS = page.getViewport({{ scale }});
+                const vp = page.getViewport({{ scale: scale * DPR }});
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.style.width = '100%';
+                canvas.style.height = vpCSS.height + 'px';
+                canvas.width = Math.floor(vp.width);
+                canvas.height = Math.floor(vp.height);
+                canvas.style.border = '1px solid #E3EDF6';
+                canvas.style.borderRadius = '6px';
+                container.appendChild(canvas);
+
+                const renderContext = {{
+                  canvasContext: ctx,
+                  viewport: vp
+                }};
+                page.render(renderContext);
+              }});
             }}
-          }})();
+            for (let n=1; n<=pdf.numPages; n++) renderPage(n);
+          }}).catch(function(err){{
+            container.innerHTML = '<div style="padding:12px;color:#b00020;">No se pudo renderizar el PDF en línea.</div>';
+            console.error(err);
+          }});
+        }})();
         </script>
         """
-        components.html(html, height=height+52, scrolling=False)
+        components.html(html, height=height+2, scrolling=False)
     except Exception as e:
         st.error(f"Error al preparar el visor PDF: {e}")
-        
 
 def _extract_docx_bytes(b: bytes) -> str:
     try:
@@ -2707,14 +2723,11 @@ def page_create_task():
 
                         # --- INICIO DE LA CORRECCIÓN ---
                         with st.expander("Visualizar CV (PDF)", expanded=False):
-                            render_pdf_inline(
-                             file_bytes=pdf_bytes,
-                             height=500,
-                             filename=display_name
-                            )
+                            render_pdf_viewer(
+                                file_bytes=pdf_bytes,
+                                height=600
+                           )
 
-                            # 2. Usamos st.markdown, que funciona mejor en expanders
-                            st.markdown(html_to_render, unsafe_allow_html=True)
                         # --- FIN DE LA CORRECCIÓN ---
 
                     except Exception as e:
